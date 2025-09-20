@@ -1,0 +1,101 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11.2%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11.2%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11.2%;
+
+    --primary: 265 89% 62%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 217 91% 60%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 265 89% 94%;
+    --accent-foreground: 265 89% 62%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 265 89% 62%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 265 57% 20%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 265 57% 25%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 265 57% 30%;
+    --sidebar-ring: 217 91% 60%;
+  }
+
+  .dark {
+    --background: 265 57% 10%;
+    --foreground: 210 40% 98%;
+
+    --card: 265 57% 15%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 265 57% 15%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 265 89% 62%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 265 57% 20%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 265 89% 30%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 265 57% 20%;
+    --input: 265 57% 20%;
+    --ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .stats-card {
+    @apply rounded-xl bg-white shadow-sm p-6 border border-border transition-all duration-200 hover:shadow-md;
+  }
+  
+  .dashboard-card {
+    @apply bg-white rounded-xl border border-border shadow-sm overflow-hidden;
+  }
+
+  .hover-scale {
+    @apply transition-transform duration-200 hover:scale-[1.01];
+  }
+}
