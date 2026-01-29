@@ -1,252 +1,135 @@
 
 
-# Plan: Move Filters into Table Headers
+# Plan: Fix Import Mapping and Header Filter Issues
 
-## Overview
+## Issues Identified
 
-This plan removes the external filter bar and integrates filtering directly into the table column headers. Clicking on a column header will open a dropdown with filter options for that column, combining sorting and filtering in one place.
+### Issue 1: Industry Data Not Being Imported Correctly
+**Root Cause**: The CSV file has TWO columns with similar names:
+- Column 6: `Organization - Industry` - Contains data like "Government administration", "Utilities"
+- Column 28: `Organization - Industry` - Duplicate column, appears empty
+
+The import function correctly references `record["Organization - Industry"]`, but only 1 of 1,099 records has industry populated in the database. This suggests a parsing issue with the duplicate column names overwriting each other.
+
+### Issue 2: Employees Column Not Searchable/Filterable
+**Root Cause**: The CSV has:
+- `Organization - Number of employees` (lowercase 'e') - Contains values like "0", "3500"
+
+But the import function looks for:
+- `record["Organization - Number of Employees"]` (uppercase 'E')
+
+This case sensitivity mismatch means `employee_range` is always NULL.
+
+### Issue 3: Filter Options Empty
+Since the data wasn't imported correctly, the filter options for Industry and Employees show no values to select from.
 
 ---
 
-## Current vs New Approach
+## Solution
 
-### Before (Current)
-```text
-+----------------------------------------------------------+
-| Search: [___________]  [Country v] [Industry v] [Labels v]|
-+----------------------------------------------------------+
-| Name        | Industry    | Country   | Connection        |
-| Acme Corp   | Technology  | USA       | Strong            |
-| Beta Inc    | Finance     | UK        | Weak              |
-+----------------------------------------------------------+
+### Step 1: Fix Import Function Column Mappings
+
+Update the import function to:
+1. Handle duplicate CSV column names by taking the first non-empty value
+2. Fix case sensitivity for employee column
+3. Create meaningful employee_range values from raw employee count
+
+**Current mapping (broken):**
+```javascript
+industry: record["Organization - Industry"], // Gets overwritten by duplicate column
+employee_range: record["Organization - Number of Employees"], // Wrong case
 ```
 
-### After (New)
-```text
-+----------------------------------------------------------+
-| Search: [___________]                    [Columns Settings]|
-+----------------------------------------------------------+
-| Name [v]     | Industry [v]  | Country [v] | Connection [v]|
-|   Sort A-Z   |   Sort A-Z    |   Sort A-Z  |   Sort A-Z    |
-|   Sort Z-A   |   Sort Z-A    |   Sort Z-A  |   Sort Z-A    |
-|   --------   |   --------    |   --------  |   --------    |
-|   [ ] All    |   [ ] All     |   [ ] All   |   [ ] All     |
-|   [x] Tech   |   [x] Ireland |   [x] Strong|               |
-|   [ ] Fin.   |   [ ] USA     |   [ ] Weak  |               |
-+----------------------------------------------------------+
-| Acme Corp    | Technology   | USA        | Strong          |
-| Beta Inc     | Finance      | UK         | Weak            |
-+----------------------------------------------------------+
+**Fixed mapping:**
+```javascript
+// Use the first Industry column's value (before it gets overwritten)
+industry: record["Organization - Industry (column 6)"], 
+// Fix case to match CSV header exactly  
+employee_range: createEmployeeRange(record["Organization - Number of employees"]),
 ```
 
----
+### Step 2: Parse Duplicate Headers Correctly
 
-## What We'll Build
+Modify the CSV parsing to handle duplicate column names by appending an index or keeping track of the first occurrence.
 
-### 1. FilterableTableHeader Component
-A new component that renders as a table header cell with:
-- Column label with dropdown trigger (chevron icon)
-- Popover with sort options (A-Z, Z-A)
-- Multi-select checkboxes for filtering values
-- Clear filter button
-- Visual indicator when filter is active
+### Step 3: Create Employee Range from Count
 
-### 2. Updated DataTable Component
-Modify the DataTable to accept a more flexible header definition that can include filterable headers.
+Since the CSV has raw employee counts, create readable ranges:
+- 0-10: "1-10"
+- 11-50: "11-50"  
+- 51-200: "51-200"
+- 201-500: "201-500"
+- 501-1000: "501-1000"
+- 1001+: "1000+"
 
-### 3. Simplified Filter Bar
-Keep only:
-- Search input (with debouncing)
-- Column selector button
-- Clear all filters button (shown when any header filter is active)
+### Step 4: Re-import Data
+
+After fixing the import function, re-import the CSV to populate Industry and Employee Range correctly.
 
 ---
 
-## Technical Implementation
+## Technical Details
 
-### New Component: FilterableTableHeader
+### Updated Import Function
 
 ```typescript
-interface FilterableTableHeaderProps {
-  label: string;
-  columnId: string;
-  // Sorting
-  sortable?: boolean;
-  currentSort?: { column: string; direction: "asc" | "desc" } | null;
-  onSort?: (direction: "asc" | "desc") => void;
-  // Filtering  
-  filterable?: boolean;
-  filterOptions?: { label: string; value: string }[];
-  selectedFilterValues?: string[];
-  onFilterChange?: (values: string[]) => void;
+// Handle duplicate columns by tracking occurrences
+const headerOccurrences: Record<string, number> = {};
+const uniqueHeaders = headers.map((header) => {
+  if (headerOccurrences[header] !== undefined) {
+    headerOccurrences[header]++;
+    return `${header}_${headerOccurrences[header]}`;
+  }
+  headerOccurrences[header] = 0;
+  return header;
+});
+
+// Map with correct column names (case-sensitive)
+const company = {
+  industry: record["Organization - Industry"] || null,
+  employee_range: createEmployeeRange(
+    parseInt(record["Organization - Number of employees"]) || 0
+  ),
+  // ... rest of mappings
+};
+
+function createEmployeeRange(count: number): string | null {
+  if (!count || count === 0) return null;
+  if (count <= 10) return "1-10";
+  if (count <= 50) return "11-50";
+  if (count <= 200) return "51-200";
+  if (count <= 500) return "201-500";
+  if (count <= 1000) return "501-1000";
+  return "1000+";
 }
 ```
 
-### Column Definition Updates
-
-Each column will optionally include filter configuration:
-
-```typescript
-{
-  id: "country",
-  accessorKey: "country",
-  header: <FilterableTableHeader
-    label="Country"
-    columnId="country"
-    sortable={true}
-    filterable={true}
-    filterOptions={countryOptions}
-    selectedFilterValues={filters.countries}
-    onFilterChange={(values) => setFilters({ ...filters, countries: values })}
-  />,
-  cell: (company) => ...
-}
-```
-
 ---
-
-## Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/components/customers/FilterableTableHeader.tsx` | Header cell with sort + filter dropdown |
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/customers/OrganisationsTab.tsx` | Replace external filters with header filters |
-| `src/components/customers/CustomersTab.tsx` | Replace external filters with header filters |
-| `src/components/customers/CRMDataFilters.tsx` | Simplify to just search + column selector |
-
-## Files to Keep (unchanged)
-
-- `src/components/customers/MultiSelectFilter.tsx` - Reuse internally
-- `src/components/customers/ColumnSelector.tsx` - Still needed
-- `src/hooks/useColumnPreferences.ts` - Still needed
-
----
-
-## FilterableTableHeader Design
-
-### Visual States
-
-**Default (no filter active):**
-```text
-+------------------+
-| Country     [v]  |
-+------------------+
-```
-
-**Filter active (highlighted):**
-```text
-+------------------+
-| Country (2) [v]  |  <- Shows count of selected
-+------------------+
-```
-
-### Dropdown Contents
-
-```text
-+----------------------+
-| Sort A-Z             |
-| Sort Z-A             |
-|----------------------|
-| [ ] Select all       |
-|----------------------|
-| [x] Ireland          |
-| [x] UK               |
-| [ ] USA              |
-| [ ] Germany          |
-|----------------------|
-| Clear filter         |
-+----------------------+
-```
-
----
-
-## Which Columns Get Filters
-
-### Organisations Tab
-| Column | Sortable | Filterable | Filter Type |
-|--------|----------|------------|-------------|
-| Name | Yes | No | - |
-| Labels | No | Yes | Multi-select |
-| Address | No | No | - |
-| Website | No | No | - |
-| LinkedIn | No | No | - |
-| Industry | Yes | Yes | Multi-select |
-| Revenue | Yes | Yes | Range select |
-| Funding | Yes | No | - |
-| Employees | No | Yes | Multi-select |
-| Contacts | Yes | No | - |
-| Next Activity | Yes | No | - |
-| Done Activities | Yes | No | - |
-| Emails | Yes | No | - |
-| Description | No | No | - |
-| Founded | Yes | No | - |
-| Domains | No | No | - |
-| Categories | No | Yes | Multi-select |
-| Connection | Yes | Yes | Multi-select |
-| Country | Yes | Yes | Multi-select |
-| Last Interaction | Yes | No | - |
-
-### Customers Tab
-| Column | Sortable | Filterable | Filter Type |
-|--------|----------|------------|-------------|
-| Name | Yes | No | - |
-| Connection | Yes | Yes | Multi-select |
-| Email | No | No | - |
-| Company | No | Yes | Multi-select |
-| Description | No | No | - |
-| Job Title | Yes | Yes | Multi-select |
-| Function | No | Yes | Multi-select |
-| Labels | No | Yes | Multi-select |
-| Emails | Yes | No | - |
-| Phone | No | No | - |
-| Location | No | Yes | Multi-select |
-| Facebook | No | No | - |
-| Instagram | No | No | - |
-| LinkedIn | No | No | - |
-| Marketing Status | No | Yes | Multi-select |
-| Last Activity | Yes | No | - |
-| Seniority | No | Yes | Multi-select |
-| Interest | No | Yes | Multi-select |
-| LQS | Yes | No | - |
+| `supabase/functions/import-companies/index.ts` | Fix column name case sensitivity, add employee range calculation |
 
 ---
 
 ## Implementation Steps
 
-1. **Create FilterableTableHeader** - Build the new header component with popover, sort buttons, and multi-select filter
-2. **Update OrganisationsTab** - Remove CRMDataFilters usage, update column headers to use FilterableTableHeader
-3. **Update CustomersTab** - Same changes as OrganisationsTab
-4. **Simplify CRMDataFilters** - Remove filter dropdowns, keep only search and children slot
-5. **Test** - Verify filtering and sorting work correctly from headers
+1. Update import function to fix case-sensitive column name matching
+2. Add logic to handle duplicate header columns
+3. Add `createEmployeeRange()` function to convert raw counts to ranges
+4. Deploy updated edge function
+5. Re-import organisations CSV with `clearExisting: true`
+6. Verify Industry and Employees filters now show options
 
 ---
 
-## User Experience
+## After Fix
 
-### Filtering Workflow
-1. Click column header dropdown arrow
-2. See sort options at top
-3. See available filter values as checkboxes
-4. Check/uncheck values to filter
-5. Close popover - filter applies immediately
-6. Header shows badge with count of active filters
+The table headers will correctly show:
+- **Industry filter**: Government administration, Utilities, Financial services, etc.
+- **Employees filter**: 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+
 
-### Clear Filters
-- Click "Clear filter" within any column dropdown
-- Or use "Clear all" button in search bar area to reset all filters
-
----
-
-## Summary
-
-- Remove external filter bar with dropdown buttons
-- Move filtering into each column header
-- Keep search input and column selector in simplified toolbar
-- Each filterable column header has a popover with sort + filter options
-- Visual indicator shows when a column has active filters
+And clicking on these column headers will display the searchable multi-select filter with actual values from your data.
 
