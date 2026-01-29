@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, X, Filter } from "lucide-react";
+import { useDebounce } from "@/hooks/useDebounce";
 
 export interface FilterOption {
   label: string;
@@ -33,6 +35,29 @@ export function DataFilters({
   onClearFilters,
   hasActiveFilters,
 }: DataFiltersProps) {
+  // Local state for immediate UI feedback
+  const [localSearch, setLocalSearch] = useState(searchValue);
+  
+  // Debounce the search value - only trigger callback after 300ms of no typing
+  const debouncedSearch = useDebounce(localSearch, 300);
+
+  // Sync local state when external value changes (e.g., clear filters)
+  useEffect(() => {
+    setLocalSearch(searchValue);
+  }, [searchValue]);
+
+  // Trigger the actual search when debounced value changes
+  useEffect(() => {
+    if (debouncedSearch !== searchValue) {
+      onSearchChange(debouncedSearch);
+    }
+  }, [debouncedSearch, searchValue, onSearchChange]);
+
+  const handleClearSearch = () => {
+    setLocalSearch("");
+    onSearchChange("");
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -43,15 +68,15 @@ export function DataFilters({
             type="search"
             placeholder={searchPlaceholder}
             className="pl-8 w-full"
-            value={searchValue}
-            onChange={(e) => onSearchChange(e.target.value)}
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
           />
-          {searchValue && (
+          {localSearch && (
             <Button
               variant="ghost"
               size="icon"
               className="absolute right-0 top-0 h-9 w-9"
-              onClick={() => onSearchChange("")}
+              onClick={handleClearSearch}
             >
               <X className="h-4 w-4" />
               <span className="sr-only">Clear search</span>
