@@ -157,6 +157,29 @@ export function useCreateContact() {
   });
 }
 
+export function useUpdateContact() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Contact> & { id: string }) => {
+      const { data, error } = await supabase
+        .from("contacts")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-filter-options"] });
+      queryClient.invalidateQueries({ queryKey: ["company-contacts"] });
+    },
+  });
+}
+
 export function useContactsByCompany(companyId: string | null) {
   return useQuery({
     queryKey: ["company-contacts", companyId],
