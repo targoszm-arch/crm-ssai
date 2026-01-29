@@ -1,109 +1,113 @@
 
-# Plan: Fix "Link to Contact" Empty Dropdown
+# Plan: Fix AI Contact Enrichment
 
-## Problem Analysis
+## Problem Summary
 
-The "Link to contact" dropdown shows empty because:
+The AI enrichment feature doesn't add any data because:
 
-1. **RLS policies require authentication** - The security fix we applied earlier restricts the `contacts` table to authenticated users only
-2. **No authentication in the app** - The application has no login/signup functionality
-3. **Anonymous requests fail** - The Supabase client uses the anonymous key, which the RLS policies now reject
+1. **GPT-4o-mini cannot search the web** - It relies solely on training data
+2. **Contacts have minimal data** - Often just a name with no email, company, or LinkedIn
+3. **Only empty fields get updated** - When AI returns nulls (which it does without context), nothing gets saved
+4. **Toast shows "Updated 0 fields"** - Technically works, but user sees no changes
 
-## Solution Options
+## Solution
 
-I'll present two options and let you choose:
-
----
-
-### Option A: Revert to Public Access (Quick Fix)
-
-Undo the RLS policy change for the `contacts` table so data is accessible without login.
-
-| Pros | Cons |
-|------|------|
-| Fast, 1 migration | Security vulnerability returns |
-| No code changes | Not recommended for production |
-
----
-
-### Option B: Add User Authentication (Recommended)
-
-Implement a proper authentication system with login/signup pages.
-
-| Pros | Cons |
-|------|------|
-| Secure by design | More work (3-4 files) |
-| Follows best practices | Users need to log in |
-| Enables per-user data later | - |
-
----
-
-## Recommended: Option B - Add Authentication
-
-### Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/pages/Auth.tsx` | Login and signup page with email/password |
-| `src/hooks/useAuth.ts` | Authentication state management hook |
-| `src/components/auth/AuthGuard.tsx` | Wrapper to protect routes requiring login |
-
-### Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/App.tsx` | Add auth route, wrap protected routes with AuthGuard |
+Improve the enrichment logic to:
+1. Use available data more intelligently (extract company from email domain)
+2. Make the AI more creative with inferences
+3. Allow overwriting existing fields when user explicitly requests enrichment
+4. Add better feedback about what happened
 
 ---
 
 ## Implementation Details
 
-### 1. Authentication Page (`src/pages/Auth.tsx`)
+### 1. Improve the Edge Function Prompt
 
-A simple login/signup form with:
-- Email and password fields
-- Toggle between login and signup modes
-- Error handling and loading states
-- Redirect to dashboard on success
+| Current Issue | Fix |
+|--------------|-----|
+| AI asked to only provide facts | Allow reasonable inferences based on role patterns |
+| No email domain parsing | Extract company name from email domain (e.g., `@bayer.com` -> Bayer) |
+| Returns null if uncertain | Provide best-effort guesses with confidence indicators |
 
-### 2. Auth Hook (`src/hooks/useAuth.ts`)
+### 2. Update Enrichment Logic
+
+| Current Behavior | New Behavior |
+|-----------------|--------------|
+| Only updates empty fields | Option to update all fields OR force enrichment |
+| Silent failure when all nulls | Return helpful message about why no data found |
+| No validation of inputs | Warn if contact has insufficient data for enrichment |
+
+### 3. Better User Feedback
+
+| Scenario | Current Feedback | New Feedback |
+|----------|-----------------|--------------|
+| No email, no LinkedIn | "Updated 0 fields" | "Add email or LinkedIn for better results" |
+| Email found, fields enriched | "Updated 3 fields" | "Updated: seniority_level, function, pain_point" |
+| All fields already filled | "Updated 0 fields" | "All fields already populated" |
+
+---
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `supabase/functions/enrich-contact/index.ts` | Improved prompt, email domain parsing, better response handling |
+
+---
+
+## Updated Edge Function Logic
 
 ```text
-- Track current user session
-- Listen for auth state changes
-- Provide signIn, signUp, signOut functions
-- Auto-refresh on page load
+1. Extract company from email domain if company not linked
+   - "john@microsoft.com" -> infer "Microsoft"
+   
+2. Build richer context for OpenAI
+   - Include inferred company
+   - Use more directive prompting
+   
+3. Change AI instructions
+   - "Make reasonable professional inferences"
+   - "For a Sales Director at a tech company, typical function is Sales"
+   
+4. Update response handling
+   - If contact has no email AND no LinkedIn AND no company:
+     Return { success: true, message: "Need more data", enrichedFields: [] }
+   - If AI returns data:
+     Always update (don't check if field is empty)
 ```
 
-### 3. Auth Guard Component
-
-- Checks if user is authenticated
-- Shows loading state while checking
-- Redirects to /auth if not logged in
-- Renders children if authenticated
-
-### 4. App.tsx Updates
-
-- Add `/auth` route for login page
-- Wrap existing routes with AuthGuard
-- Auth callback route remains public
-
 ---
 
-## After Implementation
+## Example Improved Prompt
 
-Once logged in, the Supabase client will automatically include the user's JWT token in requests, allowing the RLS policies to pass and showing contacts in the dropdown.
+```text
+Given this contact:
+- Name: John Smith  
+- Email: john.smith@salesforce.com (Company: Salesforce)
+- Title: VP of Sales
 
----
+Infer professional details. Make reasonable assumptions based on:
+- Email domain suggests company type
+- Job title indicates seniority and function
+- Industry patterns for similar roles
 
-## Technical Notes
-
-- Uses Supabase's built-in `auth.signInWithPassword()` and `auth.signUp()`
-- Session is persisted in localStorage automatically
-- Token refresh is handled by the Supabase client
+{
+  "seniority_level": "VP",  // Inferred from "VP of Sales" title
+  "function": "Sales",       // Inferred from "VP of Sales"
+  "buying_signals": "As a VP of Sales at an enterprise SaaS company...",
+  "interest_level": "High",  // VPs have budget authority
+  ...
+}
+```
 
 ---
 
 ## Summary
 
-The dropdown is empty because there's no logged-in user, and the new security policies require authentication. We need to add a login system so users can authenticate before accessing CRM data.
+| Change | Impact |
+|--------|--------|
+| Parse email domains | Extract company context from `@company.com` |
+| Better prompting | AI makes reasonable inferences instead of returning nulls |
+| Force update mode | Allow refreshing existing data when explicitly requested |
+| User feedback | Clear messages about what was/wasn't enriched and why |
