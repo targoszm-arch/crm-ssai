@@ -40,9 +40,22 @@ serve(async (req) => {
 
     // Parse CSV
     const lines = csvData.split("\n");
-    const headers = parseCSVLine(lines[0]);
+    const rawHeaders = parseCSVLine(lines[0]);
     
-    console.log("CSV Headers:", headers.slice(0, 15));
+    // Handle duplicate column names by appending occurrence index
+    const headerOccurrences: Record<string, number> = {};
+    const headers = rawHeaders.map((header) => {
+      const trimmedHeader = header.trim();
+      if (headerOccurrences[trimmedHeader] !== undefined) {
+        headerOccurrences[trimmedHeader]++;
+        return `${trimmedHeader}_${headerOccurrences[trimmedHeader]}`;
+      }
+      headerOccurrences[trimmedHeader] = 0;
+      return trimmedHeader;
+    });
+    
+    console.log("CSV Headers (first 15):", headers.slice(0, 15));
+    console.log("Total headers:", headers.length);
     
     const companies = [];
     const errors = [];
@@ -58,6 +71,17 @@ serve(async (req) => {
           record[header] = values[index] || null;
         });
 
+        // Get industry - prefer first occurrence (non-duplicate), fallback to duplicate if first is empty
+        const industry = record["Organization - Industry"] || record["Organization - Industry_1"] || null;
+        
+        // Get employee count with correct case (lowercase 'e' in 'employees')
+        const rawEmployeeCount = record["Organization - Number of employees"] || 
+                                  record["Organization - Number of Employees"] || 
+                                  record["Organization - Number of employees_1"] || null;
+        
+        const employeeCount = parseEmployeeCount(rawEmployeeCount);
+        const employeeRange = createEmployeeRange(employeeCount);
+
         // Map all CSV columns to database columns
         const company = {
           company_name: record["Organization - Name"] || record["Record"] || "Unknown",
@@ -65,11 +89,11 @@ serve(async (req) => {
           address: record["Organization - Address"] || null,
           website: record["Organization - Website"] || null,
           linkedin_url: record["Organization - LinkedIn profile"] || record["LinkedIn"] || null,
-          industry: record["Organization - Industry"] || null,
+          industry: industry,
           annual_turnover: parseRevenue(record["Organization - Annual revenue"]),
           funding_raised: parseFunding(record["Organization - Total Funding"] || record["Funding raised"]),
-          employee_count: parseEmployeeCount(record["Organization - Number of employees"]),
-          employee_range: record["Organization - Number of Employees"] || record["Employee range"] || null,
+          employee_count: employeeCount,
+          employee_range: employeeRange,
           people_count: parseInt(record["Organization - People"]) || 0,
           next_activity_date: parseTimestamp(record["Organization - Next activity date"]),
           done_activities: parseInt(record["Organization - Done activities"]) || 0,
@@ -84,6 +108,13 @@ serve(async (req) => {
           last_interaction: parseTimestamp(record["Organization - Last activity date"]),
           stage: mapLabel(record["Organization - Labels"]),
         };
+
+        // Log first record for debugging
+        if (i === 1) {
+          console.log("First record industry:", industry);
+          console.log("First record employee_count:", employeeCount);
+          console.log("First record employee_range:", employeeRange);
+        }
 
         // Skip records without a name
         if (company.company_name && company.company_name !== "Unknown" && company.company_name !== "-") {
@@ -190,6 +221,16 @@ function parseEmployeeCount(count: string | null): number | null {
   if (!count) return null;
   const parsed = parseInt(count.replace(/,/g, ""));
   return isNaN(parsed) ? null : parsed;
+}
+
+function createEmployeeRange(count: number | null): string | null {
+  if (!count || count === 0) return null;
+  if (count <= 10) return "1-10";
+  if (count <= 50) return "11-50";
+  if (count <= 200) return "51-200";
+  if (count <= 500) return "201-500";
+  if (count <= 1000) return "501-1000";
+  return "1000+";
 }
 
 function parseTimestamp(dateStr: string | null): string | null {
