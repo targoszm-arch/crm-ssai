@@ -1,1 +1,7 @@
 project_id = "getqcxnjsohtlagscmfc"
+
+[functions.import-companies]
+verify_jwt = false
+
+[functions.import-contacts]
+verify_jwt = false
