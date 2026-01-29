@@ -30,6 +30,9 @@ export interface ContactFilters {
   seniorityLevels?: string[];
   marketingStatuses?: string[];
   labels?: string[];
+  functions?: string[];
+  interestLevels?: string[];
+  connectionStrengths?: string[];
 }
 
 export interface ContactSorting {
@@ -66,6 +69,30 @@ export function useContacts(
         query = query.in("title", filters.titles);
       }
 
+      if (filters.seniorityLevels && filters.seniorityLevels.length > 0) {
+        query = query.in("seniority_level", filters.seniorityLevels);
+      }
+
+      if (filters.marketingStatuses && filters.marketingStatuses.length > 0) {
+        query = query.in("marketing_status", filters.marketingStatuses);
+      }
+
+      if (filters.labels && filters.labels.length > 0) {
+        query = query.in("labels", filters.labels);
+      }
+
+      if (filters.functions && filters.functions.length > 0) {
+        query = query.in("function", filters.functions);
+      }
+
+      if (filters.interestLevels && filters.interestLevels.length > 0) {
+        query = query.in("interest_level", filters.interestLevels);
+      }
+
+      if (filters.connectionStrengths && filters.connectionStrengths.length > 0) {
+        query = query.in("connection_strength", filters.connectionStrengths);
+      }
+
       // Apply sorting
       if (sorting.column) {
         query = query.order(sorting.column, { ascending: sorting.direction === "asc" });
@@ -86,7 +113,7 @@ export function useContactFilterOptions() {
     queryKey: ["contact-filter-options"],
     queryFn: async () => {
       const [contactsResult, companiesResult] = await Promise.all([
-        supabase.from("contacts").select("work_location, title, seniority_level, marketing_status, labels"),
+        supabase.from("contacts").select("work_location, title, seniority_level, marketing_status, labels, function, interest_level, connection_strength"),
         supabase.from("companies").select("id, company_name"),
       ]);
 
@@ -98,9 +125,12 @@ export function useContactFilterOptions() {
       const seniorityLevels = [...new Set(contactsResult.data?.map((c) => c.seniority_level).filter(Boolean))] as string[];
       const marketingStatuses = [...new Set(contactsResult.data?.map((c) => c.marketing_status).filter(Boolean))] as string[];
       const labels = [...new Set(contactsResult.data?.map((c) => c.labels).filter(Boolean))] as string[];
+      const functions = [...new Set(contactsResult.data?.map((c) => c.function).filter(Boolean))] as string[];
+      const interestLevels = [...new Set(contactsResult.data?.map((c) => c.interest_level).filter(Boolean))] as string[];
+      const connectionStrengths = [...new Set(contactsResult.data?.map((c) => c.connection_strength).filter(Boolean))] as string[];
       const companies = companiesResult.data || [];
 
-      return { workLocations, titles, seniorityLevels, marketingStatuses, labels, companies };
+      return { workLocations, titles, seniorityLevels, marketingStatuses, labels, functions, interestLevels, connectionStrengths, companies };
     },
   });
 }

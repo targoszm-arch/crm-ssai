@@ -1,25 +1,15 @@
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, X, Filter } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
-import { MultiSelectFilter, MultiSelectOption } from "./MultiSelectFilter";
-
-export interface MultiSelectFilterConfig {
-  key: string;
-  label: string;
-  options: MultiSelectOption[];
-  selectedValues: string[];
-  onChange: (values: string[]) => void;
-}
 
 interface CRMDataFiltersProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
-  filters: MultiSelectFilterConfig[];
-  onClearFilters: () => void;
-  hasActiveFilters: boolean;
+  onClearFilters?: () => void;
+  hasActiveFilters?: boolean;
   children?: React.ReactNode;
 }
 
@@ -27,9 +17,8 @@ export function CRMDataFilters({
   searchValue,
   onSearchChange,
   searchPlaceholder = "Search...",
-  filters,
   onClearFilters,
-  hasActiveFilters,
+  hasActiveFilters = false,
   children,
 }: CRMDataFiltersProps) {
   const [localSearch, setLocalSearch] = useState(searchValue);
@@ -49,11 +38,6 @@ export function CRMDataFilters({
     setLocalSearch("");
     onSearchChange("");
   };
-
-  const activeFilterCount = filters.reduce(
-    (count, f) => count + (f.selectedValues.length > 0 ? 1 : 0),
-    0
-  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -81,33 +65,13 @@ export function CRMDataFilters({
           )}
         </div>
 
-        {/* Filter Dropdowns */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <Filter className="h-4 w-4" />
-            {activeFilterCount > 0 && (
-              <span className="text-xs font-medium">({activeFilterCount})</span>
-            )}
-          </div>
-          
-          {filters.map((filter) => (
-            <MultiSelectFilter
-              key={filter.key}
-              label={filter.label}
-              options={filter.options}
-              selectedValues={filter.selectedValues}
-              onChange={filter.onChange}
-              className="w-[160px]"
-            />
-          ))}
-
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={onClearFilters}>
-              <X className="mr-1 h-3 w-3" />
-              Clear all
-            </Button>
-          )}
-        </div>
+        {/* Clear filters button */}
+        {hasActiveFilters && onClearFilters && (
+          <Button variant="ghost" size="sm" onClick={onClearFilters}>
+            <X className="mr-1 h-3 w-3" />
+            Clear all filters
+          </Button>
+        )}
 
         {/* Additional actions (like column selector) */}
         {children && (

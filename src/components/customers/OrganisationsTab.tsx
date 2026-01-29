@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import { DataTable } from "@/components/ui/data-table";
-import { CRMDataFilters, MultiSelectFilterConfig } from "./CRMDataFilters";
+import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
+import { FilterableTableHeader } from "./FilterableTableHeader";
 import { useCompanies, useCompanyFilterOptions, Company, CompanyFilters, CompanySorting } from "@/hooks/useCompanies";
 import { useColumnPreferences, ColumnDefinition } from "@/hooks/useColumnPreferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Eye } from "lucide-react";
+import { ExternalLink, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OrganisationDetail } from "./OrganisationDetail";
@@ -73,7 +74,6 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
   
   const {
     columns: columnPrefs,
-    visibleColumns,
     isVisible,
     toggleColumn,
     moveColumnUp,
@@ -81,55 +81,46 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
     resetToDefault,
   } = useColumnPreferences("organisations", ORGANISATION_COLUMNS);
 
-  const filterConfig: MultiSelectFilterConfig[] = useMemo(() => [
-    {
-      key: "country",
-      label: "Country",
-      options: (filterOptions?.countries || []).map((c) => ({ label: c, value: c })),
-      selectedValues: filters.countries || [],
-      onChange: (values) => setFilters((prev) => ({ ...prev, countries: values.length ? values : undefined })),
-    },
-    {
-      key: "employees",
-      label: "Employees",
-      options: (filterOptions?.employeeRanges || []).map((e) => ({ label: e, value: e })),
-      selectedValues: filters.employeeRanges || [],
-      onChange: (values) => setFilters((prev) => ({ ...prev, employeeRanges: values.length ? values : undefined })),
-    },
-    {
-      key: "industry",
-      label: "Industry",
-      options: (filterOptions?.industries || []).map((i) => ({ label: i, value: i })),
-      selectedValues: filters.industries || [],
-      onChange: (values) => setFilters((prev) => ({ ...prev, industries: values.length ? values : undefined })),
-    },
-    {
-      key: "labels",
-      label: "Labels",
-      options: (filterOptions?.labels || []).map((l) => ({ label: l, value: l })),
-      selectedValues: filters.labels || [],
-      onChange: (values) => setFilters((prev) => ({ ...prev, labels: values.length ? values : undefined })),
-    },
-  ], [filters, filterOptions]);
+  // Build filter options for each filterable column
+  const countryOptions = useMemo(() => 
+    (filterOptions?.countries || []).map((c) => ({ label: c, value: c })),
+    [filterOptions?.countries]
+  );
+
+  const employeeOptions = useMemo(() => 
+    (filterOptions?.employeeRanges || []).map((e) => ({ label: e, value: e })),
+    [filterOptions?.employeeRanges]
+  );
+
+  const industryOptions = useMemo(() => 
+    (filterOptions?.industries || []).map((i) => ({ label: i, value: i })),
+    [filterOptions?.industries]
+  );
+
+  const labelsOptions = useMemo(() => 
+    (filterOptions?.labels || []).map((l) => ({ label: l, value: l })),
+    [filterOptions?.labels]
+  );
+
+  const connectionOptions = useMemo(() => [
+    { label: "Very strong", value: "Very strong" },
+    { label: "Strong", value: "Strong" },
+    { label: "Good", value: "Good" },
+    { label: "Weak", value: "Weak" },
+    { label: "Very weak", value: "Very weak" },
+  ], []);
 
   const hasActiveFilters = Boolean(
     filters.search || 
     (filters.countries && filters.countries.length > 0) ||
     (filters.employeeRanges && filters.employeeRanges.length > 0) ||
     (filters.industries && filters.industries.length > 0) ||
-    (filters.labels && filters.labels.length > 0)
+    (filters.labels && filters.labels.length > 0) ||
+    (filters.connectionStrengths && filters.connectionStrengths.length > 0)
   );
 
-  const handleSort = (column: keyof Company) => {
-    setSorting((prev) => ({
-      column,
-      direction: prev.column === column && prev.direction === "asc" ? "desc" : "asc",
-    }));
-  };
-
-  const getSortIcon = (column: keyof Company) => {
-    if (sorting.column !== column) return <ArrowUpDown className="ml-1 h-3 w-3" />;
-    return sorting.direction === "asc" ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  const handleSort = (column: string, direction: "asc" | "desc") => {
+    setSorting({ column: column as keyof Company, direction });
   };
 
   const handleViewCompany = (company: Company) => {
@@ -147,9 +138,13 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
       id: "company_name",
       accessorKey: "company_name",
       header: (
-        <Button variant="ghost" className="p-0 h-auto font-medium" onClick={() => handleSort("company_name")}>
-          Name {getSortIcon("company_name")}
-        </Button>
+        <FilterableTableHeader
+          label="Name"
+          columnId="company_name"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("company_name", dir)}
+        />
       ),
       cell: (company: Company) => (
         <div className="flex items-center gap-2">
@@ -165,7 +160,16 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
     {
       id: "labels",
       accessorKey: "labels",
-      header: "Labels",
+      header: (
+        <FilterableTableHeader
+          label="Labels"
+          columnId="labels"
+          filterable
+          filterOptions={labelsOptions}
+          selectedFilterValues={filters.labels || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, labels: values.length ? values : undefined }))}
+        />
+      ),
       cell: (company: Company) => company.labels ? <Badge variant="secondary">{company.labels}</Badge> : "-",
     },
     {
@@ -197,49 +201,118 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
     {
       id: "industry",
       accessorKey: "industry",
-      header: "Industry",
+      header: (
+        <FilterableTableHeader
+          label="Industry"
+          columnId="industry"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("industry", dir)}
+          filterable
+          filterOptions={industryOptions}
+          selectedFilterValues={filters.industries || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, industries: values.length ? values : undefined }))}
+        />
+      ),
       cell: (company: Company) => <span className="text-sm">{company.industry || "-"}</span>,
     },
     {
       id: "annual_turnover",
       accessorKey: "annual_turnover",
-      header: "Revenue",
+      header: (
+        <FilterableTableHeader
+          label="Revenue"
+          columnId="annual_turnover"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("annual_turnover", dir)}
+        />
+      ),
       cell: (company: Company) => <span className="text-sm">{company.annual_turnover ? `$${(company.annual_turnover / 1000000).toFixed(1)}M` : "-"}</span>,
     },
     {
       id: "funding_raised",
       accessorKey: "funding_raised",
-      header: "Funding",
+      header: (
+        <FilterableTableHeader
+          label="Funding"
+          columnId="funding_raised"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("funding_raised", dir)}
+        />
+      ),
       cell: (company: Company) => <span className="text-sm">{company.funding_raised ? `$${(company.funding_raised / 1000000).toFixed(1)}M` : "-"}</span>,
     },
     {
       id: "employee_range",
       accessorKey: "employee_range",
-      header: "Employees",
+      header: (
+        <FilterableTableHeader
+          label="Employees"
+          columnId="employee_range"
+          filterable
+          filterOptions={employeeOptions}
+          selectedFilterValues={filters.employeeRanges || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, employeeRanges: values.length ? values : undefined }))}
+        />
+      ),
       cell: (company: Company) => <span className="text-sm">{company.employee_range || "-"}</span>,
     },
     {
       id: "people_count",
       accessorKey: "people_count",
-      header: "Contacts",
+      header: (
+        <FilterableTableHeader
+          label="Contacts"
+          columnId="people_count"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("people_count", dir)}
+        />
+      ),
       cell: (company: Company) => <span className="text-sm">{company.people_count ?? "-"}</span>,
     },
     {
       id: "next_activity_date",
       accessorKey: "next_activity_date",
-      header: "Next Activity",
+      header: (
+        <FilterableTableHeader
+          label="Next Activity"
+          columnId="next_activity_date"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("next_activity_date", dir)}
+        />
+      ),
       cell: (company: Company) => <span className="text-sm">{company.next_activity_date ? format(new Date(company.next_activity_date), "MMM d") : "-"}</span>,
     },
     {
       id: "done_activities",
       accessorKey: "done_activities",
-      header: "Done",
+      header: (
+        <FilterableTableHeader
+          label="Done"
+          columnId="done_activities"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("done_activities", dir)}
+        />
+      ),
       cell: (company: Company) => <span className="text-sm">{company.done_activities ?? "-"}</span>,
     },
     {
       id: "email_messages_count",
       accessorKey: "email_messages_count",
-      header: "Emails",
+      header: (
+        <FilterableTableHeader
+          label="Emails"
+          columnId="email_messages_count"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("email_messages_count", dir)}
+        />
+      ),
       cell: (company: Company) => <span className="text-sm">{company.email_messages_count ?? "-"}</span>,
     },
     {
@@ -251,7 +324,15 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
     {
       id: "foundation_date",
       accessorKey: "foundation_date",
-      header: "Founded",
+      header: (
+        <FilterableTableHeader
+          label="Founded"
+          columnId="foundation_date"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("foundation_date", dir)}
+        />
+      ),
       cell: (company: Company) => <span className="text-sm">{company.foundation_date ? new Date(company.foundation_date).getFullYear() : "-"}</span>,
     },
     {
@@ -270,25 +351,49 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
       id: "connection_strength",
       accessorKey: "connection_strength",
       header: (
-        <Button variant="ghost" className="p-0 h-auto font-medium" onClick={() => handleSort("connection_strength")}>
-          Connection {getSortIcon("connection_strength")}
-        </Button>
+        <FilterableTableHeader
+          label="Connection"
+          columnId="connection_strength"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("connection_strength", dir)}
+          filterable
+          filterOptions={connectionOptions}
+          selectedFilterValues={filters.connectionStrengths || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, connectionStrengths: values.length ? values : undefined }))}
+        />
       ),
       cell: (company: Company) => getConnectionStrengthBadge(company.connection_strength),
     },
     {
       id: "country",
       accessorKey: "country",
-      header: "Country",
+      header: (
+        <FilterableTableHeader
+          label="Country"
+          columnId="country"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("country", dir)}
+          filterable
+          filterOptions={countryOptions}
+          selectedFilterValues={filters.countries || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, countries: values.length ? values : undefined }))}
+        />
+      ),
       cell: (company: Company) => <span className="text-sm">{company.country || "-"}</span>,
     },
     {
       id: "last_interaction",
       accessorKey: "last_interaction",
       header: (
-        <Button variant="ghost" className="p-0 h-auto font-medium" onClick={() => handleSort("last_interaction")}>
-          Last Interaction {getSortIcon("last_interaction")}
-        </Button>
+        <FilterableTableHeader
+          label="Last Interaction"
+          columnId="last_interaction"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("last_interaction", dir)}
+        />
       ),
       cell: (company: Company) => (
         <span className="text-sm">
@@ -326,7 +431,6 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
         searchValue={filters.search || ""}
         onSearchChange={(value) => setFilters((prev) => ({ ...prev, search: value }))}
         searchPlaceholder="Search organisations..."
-        filters={filterConfig}
         onClearFilters={() => setFilters({})}
         hasActiveFilters={hasActiveFilters}
       >
