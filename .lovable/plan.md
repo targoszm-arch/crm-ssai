@@ -1,97 +1,149 @@
 
 
-# Plan: Create Relationship Between Organisations & Customers
+# Plan: Fix Bugs and Replace Data with New CSV Files
 
-## The Issue
+## Issues Identified
 
-Your CSV file only contained **company/organisation data** (names, domains, connection strength, etc.) - not individual contact/customer data. That's why:
+### Bug 1: "View" Button on Organisations Tab Not Showing Contacts
+**Root Cause:** The `useContactsByCompany` hook in `OrganisationDetail.tsx` is working correctly, but I need to verify the query is properly linking to the company. The foreign key relationship exists (`fk_contacts_company`) but the current sample contacts may not be linked to the correct company IDs.
 
-- **Organisations tab**: Shows 2,038 companies (correctly imported)
-- **Customers tab**: Shows 0 contacts (expected - no contact data in CSV)
+### Bug 2: Search Filter Triggers on Every Keystroke
+**Root Cause:** The search input in `DataFilters.tsx` directly updates the filter state on every `onChange` event without debouncing. This causes a new API query with each keystroke.
 
-The `contacts` table needs individual people (first name, last name, email, phone) to be populated separately.
-
----
-
-## What We'll Fix
-
-### 1. Create Proper Database Relationship
-Add a foreign key constraint linking contacts to companies:
-
-```sql
-ALTER TABLE contacts 
-ADD CONSTRAINT fk_contacts_company 
-FOREIGN KEY (company_id) REFERENCES companies(id) 
-ON DELETE SET NULL;
-```
-
-### 2. Add Sample Contacts for Testing
-Insert sample contacts linked to your imported companies so you can see the relationship working:
-
-| First Name | Last Name | Email | Company |
-|------------|-----------|-------|---------|
-| John | Smith | john@heygen.com | HeyGen |
-| Sarah | Connor | sarah@gamma.app | Gamma |
-| Mike | Johnson | mike@revolut.com | Revolut |
-| Emma | Williams | emma@shopify.com | Shopify |
-| David | Brown | david@vercel.com | Vercel |
-
-### 3. Enhance Organisation Detail View
-When clicking an organisation, show:
-- Company details
-- List of linked contacts/customers
-- Ability to add new contacts to that organisation
-
-### 4. Add Contact Creation with Company Selection
-Update the "Add New" button functionality:
-- Form to add new contact
-- Dropdown to select which company they belong to
-- Pre-populate company when adding from organisation detail
+### Data Replacement Requirement
+You want to replace the existing data with the two new CSV files:
+- `organizations-27348383-8.csv` (~1,100 organisations)
+- `people-27348383-7.csv` (~1,597 people/customers)
 
 ---
 
-## UI Improvements
+## CSV Column Mapping
 
-### Organisation Row Actions
-Add a "View Contacts" action on each organisation row to see linked customers.
+### Organisations CSV (organizations-27348383-8.csv)
 
-### Customer Row Enhancement
-Show the linked company name prominently (already partially implemented).
+| CSV Column | Database Column | Notes |
+|------------|-----------------|-------|
+| Organization - Name | company_name | Required |
+| Organization - Labels | stage | Map labels to stage |
+| Organization - Country of Address | country | |
+| Organization - Website | website | New column needed |
+| Organization - LinkedIn profile | linkedin_url | |
+| Organization - Industry | industry | |
+| Organization - Annual revenue | annual_turnover | Parse to numeric |
+| Organization - Number of employees | employee_count | Parse to integer |
+| Organization - ID | client_id | External ID reference |
+| Organization - Last activity date | last_interaction | |
+| Organization - Address | description | Use as location/description |
+| Organization - Description | description | Company description |
+| Organization - Year Founded | foundation_date | |
+| Organization - Total Funding | funding_raised | Parse to numeric |
+| Organization - Number of Employees | employee_range | Text range |
 
-### Add Contact Modal
-Create a form with:
-- First Name, Last Name, Email, Phone
-- Company dropdown (searchable)
-- Title, Work Location, Notes
+### People CSV (people-27348383-7.csv)
 
----
-
-## Files to Create/Modify
-
-| File | Purpose |
-|------|---------|
-| `src/components/customers/AddContactModal.tsx` | Modal form to add new contacts |
-| `src/components/customers/OrganisationDetail.tsx` | Detail view showing linked contacts |
-| `src/components/customers/OrganisationsTab.tsx` | Add row actions and detail view |
-| `src/components/customers/CustomersTab.tsx` | Enhance company display |
-| `src/hooks/useContacts.ts` | Add mutation for creating contacts |
+| CSV Column | Database Column | Notes |
+|------------|-----------------|-------|
+| Person - First name | first_name | Required |
+| Person - Last name | last_name | |
+| Person - Organization | company_id | Match to company by name |
+| Person - Job title | title | |
+| Person - Email - Work | email | Primary email |
+| Person - Phone - Mobile | phone | Primary phone |
+| Person - Phone - Work | phone | Fallback phone |
+| Person - Country of Postal address | work_location | |
+| Person - LinkedIn URL (Lead CRM) | linkedin_url | |
+| Person - linkedin_handle | linkedin_url | Fallback LinkedIn |
+| Person - Last activity date | last_contacted | |
+| Person - Personalization_Notes | notes | |
+| Person - Seniority level | title | Append to title |
 
 ---
 
 ## Implementation Steps
 
-1. **Database**: Add foreign key constraint between contacts and companies
-2. **Sample Data**: Insert sample contacts linked to existing companies
-3. **Add Contact Modal**: Create form with company selection
-4. **Organisation Detail**: Show linked contacts when clicking an organisation
-5. **Connect "Add New" Button**: Wire up to contact creation modal
+### Step 1: Add Search Debouncing
+Create a debounced search hook and update `DataFilters.tsx` to wait 300ms after user stops typing before triggering the search.
+
+Files to modify:
+- `src/components/customers/DataFilters.tsx` - Add internal debounce state
+- Create `src/hooks/useDebounce.ts` - Reusable debounce hook
+
+### Step 2: Update Edge Function for New CSV Format
+Modify the import function to handle the new column names from your CSV files and create a new function for importing contacts.
+
+Files to modify:
+- `supabase/functions/import-companies/index.ts` - Update column mapping
+- Create `supabase/functions/import-contacts/index.ts` - New function for people import
+
+### Step 3: Clear Existing Data and Import New Data
+1. Delete existing companies and contacts (to replace with new data)
+2. Import organisations from new CSV
+3. Import people from new CSV, matching to companies by organisation name
+
+### Step 4: Fix Organisation Detail View
+Ensure the `useContactsByCompany` hook properly queries contacts and update the UI to handle loading states correctly.
+
+Files to verify:
+- `src/hooks/useContacts.ts` - Verify query syntax
+- `src/components/customers/OrganisationDetail.tsx` - Ensure company ID is passed correctly
+
+---
+
+## Technical Details
+
+### New Debounce Hook
+```typescript
+// src/hooks/useDebounce.ts
+export function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  
+  return debouncedValue;
+}
+```
+
+### Updated DataFilters with Debouncing
+The search input will update a local state immediately (for responsive UI), but only trigger the filter callback after 300ms of no typing.
+
+### Edge Function for Contact Import
+The new function will:
+1. Parse the people CSV
+2. Look up each organisation name to find the matching company_id
+3. Insert contacts with proper company linkage
+4. Handle multiple email/phone fields by picking the primary one
+
+### Database Operations
+```sql
+-- Clear existing data (in order due to foreign key)
+DELETE FROM contacts;
+DELETE FROM companies;
+```
+
+Then import fresh data from both CSVs.
+
+---
+
+## File Changes Summary
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/hooks/useDebounce.ts` | Create | Reusable debounce hook |
+| `src/components/customers/DataFilters.tsx` | Modify | Add search debouncing |
+| `supabase/functions/import-companies/index.ts` | Modify | Update for new CSV format |
+| `supabase/functions/import-contacts/index.ts` | Create | Import people from CSV |
+| `src/components/customers/ImportDataButton.tsx` | Modify | Add contacts import option |
 
 ---
 
 ## Summary
 
-The contacts table is empty because your CSV only had company data. We'll:
-1. Create proper database relationships
-2. Add sample data so you can see it working
-3. Build the UI to add and view contacts linked to organisations
+1. **Fix debouncing** - Search will wait 300ms after you stop typing
+2. **Update import functions** - Handle your new CSV column formats
+3. **Replace all data** - Clear existing and import ~1,100 orgs + ~1,600 contacts
+4. **Verify linking** - Contacts will be linked to organisations by name matching
+5. **Test View button** - With properly linked data, the detail view will show contacts
 
