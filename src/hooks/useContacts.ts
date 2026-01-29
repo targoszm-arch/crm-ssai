@@ -2,13 +2,34 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables, TablesInsert } from "@/integrations/supabase/types";
 
-export type Contact = Tables<"contacts">;
+export type Contact = Tables<"contacts"> & {
+  connection_strength?: string;
+  facebook_url?: string;
+  instagram_url?: string;
+  marketing_status?: string;
+  last_email_received?: string;
+  seniority_level?: string;
+  function?: string;
+  next_recommended_action?: string;
+  buying_signals?: string;
+  pain_point?: string;
+  interest_level?: string;
+  lqs?: number;
+  email_messages_count?: number;
+  labels?: string;
+  done_activities?: number;
+};
+
 export type ContactInsert = TablesInsert<"contacts">;
 
 export interface ContactFilters {
   search?: string;
-  companyId?: string;
-  workLocation?: string;
+  companyIds?: string[];
+  workLocations?: string[];
+  titles?: string[];
+  seniorityLevels?: string[];
+  marketingStatuses?: string[];
+  labels?: string[];
 }
 
 export interface ContactSorting {
@@ -32,14 +53,17 @@ export function useContacts(
         );
       }
 
-      // Apply company filter
-      if (filters.companyId) {
-        query = query.eq("company_id", filters.companyId);
+      // Apply multi-select filters
+      if (filters.companyIds && filters.companyIds.length > 0) {
+        query = query.in("company_id", filters.companyIds);
       }
 
-      // Apply work location filter
-      if (filters.workLocation) {
-        query = query.eq("work_location", filters.workLocation);
+      if (filters.workLocations && filters.workLocations.length > 0) {
+        query = query.in("work_location", filters.workLocations);
+      }
+
+      if (filters.titles && filters.titles.length > 0) {
+        query = query.in("title", filters.titles);
       }
 
       // Apply sorting
@@ -62,7 +86,7 @@ export function useContactFilterOptions() {
     queryKey: ["contact-filter-options"],
     queryFn: async () => {
       const [contactsResult, companiesResult] = await Promise.all([
-        supabase.from("contacts").select("work_location"),
+        supabase.from("contacts").select("work_location, title, seniority_level, marketing_status, labels"),
         supabase.from("companies").select("id, company_name"),
       ]);
 
@@ -70,9 +94,13 @@ export function useContactFilterOptions() {
       if (companiesResult.error) throw companiesResult.error;
 
       const workLocations = [...new Set(contactsResult.data?.map((c) => c.work_location).filter(Boolean))] as string[];
+      const titles = [...new Set(contactsResult.data?.map((c) => c.title).filter(Boolean))] as string[];
+      const seniorityLevels = [...new Set(contactsResult.data?.map((c) => c.seniority_level).filter(Boolean))] as string[];
+      const marketingStatuses = [...new Set(contactsResult.data?.map((c) => c.marketing_status).filter(Boolean))] as string[];
+      const labels = [...new Set(contactsResult.data?.map((c) => c.labels).filter(Boolean))] as string[];
       const companies = companiesResult.data || [];
 
-      return { workLocations, companies };
+      return { workLocations, titles, seniorityLevels, marketingStatuses, labels, companies };
     },
   });
 }

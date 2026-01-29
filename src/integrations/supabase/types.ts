@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       companies: {
         Row: {
+          address: string | null
           annual_turnover: number | null
           categories: string | null
           client_id: string | null
@@ -25,6 +26,8 @@ export type Database = {
           created_at: string
           description: string | null
           domains: string | null
+          done_activities: number | null
+          email_messages_count: number | null
           employee_count: number | null
           employee_range: string | null
           estimated_arr: number | null
@@ -32,8 +35,11 @@ export type Database = {
           funding_raised: number | null
           id: string
           industry: string | null
+          labels: string | null
           last_interaction: string | null
           linkedin_url: string | null
+          next_activity_date: string | null
+          people_count: number | null
           size: string | null
           stage: string | null
           twitter_followers: number | null
@@ -41,6 +47,7 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          address?: string | null
           annual_turnover?: number | null
           categories?: string | null
           client_id?: string | null
@@ -50,6 +57,8 @@ export type Database = {
           created_at?: string
           description?: string | null
           domains?: string | null
+          done_activities?: number | null
+          email_messages_count?: number | null
           employee_count?: number | null
           employee_range?: string | null
           estimated_arr?: number | null
@@ -57,8 +66,11 @@ export type Database = {
           funding_raised?: number | null
           id?: string
           industry?: string | null
+          labels?: string | null
           last_interaction?: string | null
           linkedin_url?: string | null
+          next_activity_date?: string | null
+          people_count?: number | null
           size?: string | null
           stage?: string | null
           twitter_followers?: number | null
@@ -66,6 +78,7 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          address?: string | null
           annual_turnover?: number | null
           categories?: string | null
           client_id?: string | null
@@ -75,6 +88,8 @@ export type Database = {
           created_at?: string
           description?: string | null
           domains?: string | null
+          done_activities?: number | null
+          email_messages_count?: number | null
           employee_count?: number | null
           employee_range?: string | null
           estimated_arr?: number | null
@@ -82,8 +97,11 @@ export type Database = {
           funding_raised?: number | null
           id?: string
           industry?: string | null
+          labels?: string | null
           last_interaction?: string | null
           linkedin_url?: string | null
+          next_activity_date?: string | null
+          people_count?: number | null
           size?: string | null
           stage?: string | null
           twitter_followers?: number | null
@@ -95,18 +113,33 @@ export type Database = {
       contacts: {
         Row: {
           avatar: string | null
+          buying_signals: string | null
           company_id: string | null
+          connection_strength: string | null
           created_at: string
+          done_activities: number | null
           email: string | null
+          email_messages_count: number | null
+          facebook_url: string | null
           first_name: string
+          function: string | null
           id: string
+          instagram_url: string | null
+          interest_level: string | null
+          labels: string | null
           last_contacted: string | null
+          last_email_received: string | null
           last_name: string | null
           linkedin_url: string | null
+          lqs: number | null
+          marketing_status: string | null
           name: string | null
+          next_recommended_action: string | null
           next_to_contact: string | null
           notes: string | null
+          pain_point: string | null
           phone: string | null
+          seniority_level: string | null
           talent_partner_name: string | null
           title: string | null
           updated_at: string
@@ -115,18 +148,33 @@ export type Database = {
         }
         Insert: {
           avatar?: string | null
+          buying_signals?: string | null
           company_id?: string | null
+          connection_strength?: string | null
           created_at?: string
+          done_activities?: number | null
           email?: string | null
+          email_messages_count?: number | null
+          facebook_url?: string | null
           first_name: string
+          function?: string | null
           id?: string
+          instagram_url?: string | null
+          interest_level?: string | null
+          labels?: string | null
           last_contacted?: string | null
+          last_email_received?: string | null
           last_name?: string | null
           linkedin_url?: string | null
+          lqs?: number | null
+          marketing_status?: string | null
           name?: string | null
+          next_recommended_action?: string | null
           next_to_contact?: string | null
           notes?: string | null
+          pain_point?: string | null
           phone?: string | null
+          seniority_level?: string | null
           talent_partner_name?: string | null
           title?: string | null
           updated_at?: string
@@ -135,18 +183,33 @@ export type Database = {
         }
         Update: {
           avatar?: string | null
+          buying_signals?: string | null
           company_id?: string | null
+          connection_strength?: string | null
           created_at?: string
+          done_activities?: number | null
           email?: string | null
+          email_messages_count?: number | null
+          facebook_url?: string | null
           first_name?: string
+          function?: string | null
           id?: string
+          instagram_url?: string | null
+          interest_level?: string | null
+          labels?: string | null
           last_contacted?: string | null
+          last_email_received?: string | null
           last_name?: string | null
           linkedin_url?: string | null
+          lqs?: number | null
+          marketing_status?: string | null
           name?: string | null
+          next_recommended_action?: string | null
           next_to_contact?: string | null
           notes?: string | null
+          pain_point?: string | null
           phone?: string | null
+          seniority_level?: string | null
           talent_partner_name?: string | null
           title?: string | null
           updated_at?: string
