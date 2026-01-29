@@ -5,3 +5,18 @@ verify_jwt = false
 
 [functions.import-contacts]
 verify_jwt = false
+
+[functions.enrich-company]
+verify_jwt = false
+
+[functions.enrich-contact]
+verify_jwt = false
+
+[functions.google-auth-callback]
+verify_jwt = false
+
+[functions.sync-emails]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false

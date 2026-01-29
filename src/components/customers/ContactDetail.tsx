@@ -21,10 +21,14 @@ import {
   Star,
   Pencil,
   Save,
-  X
+  X,
+  Sparkles,
+  Loader2
 } from "lucide-react";
 import { Contact, useUpdateContact } from "@/hooks/useContacts";
+import { enrichContact } from "@/lib/api/enrichment";
 import { toast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -58,6 +62,7 @@ function getConnectionStrengthBadge(strength: string | null) {
 
 export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isEnriching, setIsEnriching] = useState(false);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -72,6 +77,7 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
   });
 
   const updateContact = useUpdateContact();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (contact) {
@@ -134,6 +140,29 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
       });
     }
     setIsEditing(false);
+  };
+
+  const handleEnrich = async () => {
+    if (!contact) return;
+
+    setIsEnriching(true);
+    try {
+      const result = await enrichContact(contact.id);
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["company-contacts"] });
+      toast({
+        title: "Contact Enriched",
+        description: `Updated ${result.enrichedFields.length} fields with AI insights.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Enrichment Failed",
+        description: error instanceof Error ? error.message : "Failed to enrich contact",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEnriching(false);
+    }
   };
 
   if (!contact) return null;
@@ -201,9 +230,24 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
               </div>
             </div>
             {!isEditing ? (
-              <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleEnrich}
+                  disabled={isEnriching}
+                  title="Enrich with AI"
+                >
+                  {isEnriching ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
             ) : (
               <div className="flex gap-1">
                 <Button variant="ghost" size="icon" onClick={handleCancel}>

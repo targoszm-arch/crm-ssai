@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { 
   Users, ShoppingCart, LineChart, Calendar, 
   CreditCard, Settings, Home, MessageSquare,
-  GanttChartSquare, Wallet, X
+  GanttChartSquare, Wallet, X, Mail
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,11 @@ export default function MobileNavigation({ isOpen, onClose }: MobileNavigationPr
       icon: <Home size={18} />,
       label: "Dashboard",
       path: "/"
+    },
+    {
+      icon: <Mail size={18} />,
+      label: "Inbox",
+      path: "/inbox"
     },
     {
       icon: <Users size={18} />,
