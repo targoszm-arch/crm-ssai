@@ -1,6 +1,11 @@
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { 
   ExternalLink, 
   Mail, 
@@ -13,9 +18,13 @@ import {
   TrendingUp,
   Target,
   AlertCircle,
-  Star
+  Star,
+  Pencil,
+  Save,
+  X
 } from "lucide-react";
-import { Contact } from "@/hooks/useContacts";
+import { Contact, useUpdateContact } from "@/hooks/useContacts";
+import { toast } from "@/hooks/use-toast";
 
 type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -48,9 +57,88 @@ function getConnectionStrengthBadge(strength: string | null) {
 }
 
 export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    title: "",
+    work_location: "",
+    linkedin_url: "",
+    facebook_url: "",
+    instagram_url: "",
+    notes: "",
+  });
+
+  const updateContact = useUpdateContact();
+
+  useEffect(() => {
+    if (contact) {
+      setFormData({
+        first_name: contact.first_name || "",
+        last_name: contact.last_name || "",
+        email: contact.email || "",
+        phone: contact.phone || "",
+        title: contact.title || "",
+        work_location: contact.work_location || "",
+        linkedin_url: contact.linkedin_url || "",
+        facebook_url: contact.facebook_url || "",
+        instagram_url: contact.instagram_url || "",
+        notes: contact.notes || "",
+      });
+    }
+  }, [contact]);
+
+  useEffect(() => {
+    if (!open) {
+      setIsEditing(false);
+    }
+  }, [open]);
+
+  const handleSave = async () => {
+    if (!contact) return;
+
+    try {
+      await updateContact.mutateAsync({
+        id: contact.id,
+        ...formData,
+      });
+      toast({
+        title: "Contact updated",
+        description: "The contact details have been saved successfully.",
+      });
+      setIsEditing(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update contact. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCancel = () => {
+    if (contact) {
+      setFormData({
+        first_name: contact.first_name || "",
+        last_name: contact.last_name || "",
+        email: contact.email || "",
+        phone: contact.phone || "",
+        title: contact.title || "",
+        work_location: contact.work_location || "",
+        linkedin_url: contact.linkedin_url || "",
+        facebook_url: contact.facebook_url || "",
+        instagram_url: contact.instagram_url || "",
+        notes: contact.notes || "",
+      });
+    }
+    setIsEditing(false);
+  };
+
   if (!contact) return null;
 
-  const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || contact.name || "Unknown";
+  const fullName = [formData.first_name, formData.last_name].filter(Boolean).join(" ") || contact.name || "Unknown";
   const initials = fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
 
   return (
@@ -62,9 +150,45 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
               {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <SheetTitle className="text-xl truncate">{fullName}</SheetTitle>
-              {contact.title && (
-                <p className="text-sm text-muted-foreground mt-0.5">{contact.title}</p>
+              {isEditing ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor="first_name" className="text-xs">First Name</Label>
+                      <Input
+                        id="first_name"
+                        value={formData.first_name}
+                        onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                        placeholder="First name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="last_name" className="text-xs">Last Name</Label>
+                      <Input
+                        id="last_name"
+                        value={formData.last_name}
+                        onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                        placeholder="Last name"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="title" className="text-xs">Job Title</Label>
+                    <Input
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      placeholder="Job title"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <SheetTitle className="text-xl truncate">{fullName}</SheetTitle>
+                  {contact.title && (
+                    <p className="text-sm text-muted-foreground mt-0.5">{contact.title}</p>
+                  )}
+                </>
               )}
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 {getConnectionStrengthBadge(contact.connection_strength)}
@@ -76,6 +200,20 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
                 )}
               </div>
             </div>
+            {!isEditing ? (
+              <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            ) : (
+              <div className="flex gap-1">
+                <Button variant="ghost" size="icon" onClick={handleCancel}>
+                  <X className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={handleSave} disabled={updateContact.isPending}>
+                  <Save className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         </SheetHeader>
 
@@ -88,38 +226,103 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
                 <span>{contact.companies.company_name}</span>
               </div>
             )}
-            {contact.email && (
-              <a 
-                href={`mailto:${contact.email}`} 
-                className="flex items-center gap-3 text-sm text-primary hover:underline"
-              >
-                <Mail className="h-4 w-4" />
-                {contact.email}
-              </a>
-            )}
-            {contact.phone && (
-              <a 
-                href={`tel:${contact.phone}`} 
-                className="flex items-center gap-3 text-sm hover:text-primary"
-              >
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                {contact.phone}
-              </a>
-            )}
-            {contact.work_location && (
-              <div className="flex items-center gap-3 text-sm">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                <span>{contact.work_location}</span>
+            {isEditing ? (
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="email" className="text-xs">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="Email address"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone" className="text-xs">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="Phone number"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="work_location" className="text-xs">Location</Label>
+                  <Input
+                    id="work_location"
+                    value={formData.work_location}
+                    onChange={(e) => setFormData({ ...formData, work_location: e.target.value })}
+                    placeholder="Work location"
+                  />
+                </div>
               </div>
+            ) : (
+              <>
+                {contact.email && (
+                  <a 
+                    href={`mailto:${contact.email}`} 
+                    className="flex items-center gap-3 text-sm text-primary hover:underline"
+                  >
+                    <Mail className="h-4 w-4" />
+                    {contact.email}
+                  </a>
+                )}
+                {contact.phone && (
+                  <a 
+                    href={`tel:${contact.phone}`} 
+                    className="flex items-center gap-3 text-sm hover:text-primary"
+                  >
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    {contact.phone}
+                  </a>
+                )}
+                {contact.work_location && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span>{contact.work_location}</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           {/* Social Links */}
-          {(contact.linkedin_url || contact.facebook_url || contact.instagram_url) && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="text-sm font-medium mb-3">Social Links</h4>
+          <>
+            <Separator />
+            <div>
+              <h4 className="text-sm font-medium mb-3">Social Links</h4>
+              {isEditing ? (
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="linkedin_url" className="text-xs">LinkedIn URL</Label>
+                    <Input
+                      id="linkedin_url"
+                      value={formData.linkedin_url}
+                      onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
+                      placeholder="https://linkedin.com/in/..."
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="facebook_url" className="text-xs">Facebook URL</Label>
+                    <Input
+                      id="facebook_url"
+                      value={formData.facebook_url}
+                      onChange={(e) => setFormData({ ...formData, facebook_url: e.target.value })}
+                      placeholder="https://facebook.com/..."
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="instagram_url" className="text-xs">Instagram URL</Label>
+                    <Input
+                      id="instagram_url"
+                      value={formData.instagram_url}
+                      onChange={(e) => setFormData({ ...formData, instagram_url: e.target.value })}
+                      placeholder="https://instagram.com/..."
+                    />
+                  </div>
+                </div>
+              ) : (contact.linkedin_url || contact.facebook_url || contact.instagram_url) ? (
                 <div className="flex flex-wrap gap-2">
                   {contact.linkedin_url && (
                     <a
@@ -158,9 +361,11 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
                     </a>
                   )}
                 </div>
-              </div>
-            </>
-          )}
+              ) : (
+                <p className="text-sm text-muted-foreground">No social links added</p>
+              )}
+            </div>
+          </>
 
           {/* Professional Details */}
           {(contact.function || contact.seniority_level) && (
@@ -226,28 +431,35 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
           )}
 
           {/* Notes & Next Action */}
-          {(contact.notes || contact.next_recommended_action) && (
-            <>
-              <Separator />
-              <div className="space-y-4">
-                {contact.notes && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Notes</h4>
-                    <p className="text-sm text-muted-foreground">{contact.notes}</p>
-                  </div>
-                )}
-                {contact.next_recommended_action && (
-                  <div className="flex items-start gap-3 p-3 rounded-lg border bg-primary/5">
-                    <Target className="h-4 w-4 text-primary mt-0.5" />
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-0.5">Next Recommended Action</p>
-                      <p className="text-sm font-medium">{contact.next_recommended_action}</p>
-                    </div>
-                  </div>
+          <>
+            <Separator />
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-medium mb-2">Notes</h4>
+                {isEditing ? (
+                  <Textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Add notes about this contact..."
+                    rows={4}
+                  />
+                ) : contact.notes ? (
+                  <p className="text-sm text-muted-foreground">{contact.notes}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No notes added</p>
                 )}
               </div>
-            </>
-          )}
+              {contact.next_recommended_action && (
+                <div className="flex items-start gap-3 p-3 rounded-lg border bg-primary/5">
+                  <Target className="h-4 w-4 text-primary mt-0.5" />
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Next Recommended Action</p>
+                    <p className="text-sm font-medium">{contact.next_recommended_action}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
 
           {/* Labels */}
           {contact.labels && (
@@ -262,6 +474,18 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
                 </div>
               </div>
             </>
+          )}
+
+          {/* Save/Cancel buttons at bottom when editing */}
+          {isEditing && (
+            <div className="flex gap-2 pt-4">
+              <Button variant="outline" className="flex-1" onClick={handleCancel}>
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={handleSave} disabled={updateContact.isPending}>
+                {updateContact.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
           )}
         </div>
       </SheetContent>
