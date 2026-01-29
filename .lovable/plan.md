@@ -1,245 +1,228 @@
 
 
-# Plan: OpenAI Auto-Enrichment + Google Inbox Integration
+# Plan: Google Calendar Integration
 
 ## Overview
 
-This plan covers two major features:
-1. **OpenAI Auto-Enrichment** - Automatically enrich company and contact details using AI
-2. **Google Inbox Integration** - Connect Gmail to view/send emails linked to contacts and companies
+Add Google Calendar integration to the existing Calendar nav item at `/calendar`. This will allow users to:
+- View upcoming meetings and appointments
+- Create new calendar events
+- Schedule meetings with CRM contacts
+- Link meetings to contacts/companies
 
----
+## Architecture
 
-## Part 1: OpenAI Auto-Enrichment
-
-### What It Does
-
-Add an "Enrich" button to contact and company detail drawers that uses OpenAI to:
-- Research and fill missing company details (industry, employee count, description, website)
-- Research and fill missing contact details (job title, seniority level, LinkedIn URL)
-- Generate AI insights (buying signals, pain points, interest level)
-
-### Architecture
+The integration will leverage the existing Google OAuth flow (already set up for Gmail) by adding Calendar scopes. Events will be synced to a new `calendar_events` database table and linked to contacts/companies.
 
 ```text
-User clicks "Enrich" button
-        |
-        v
-Frontend calls Edge Function
-        |
-        v
-Edge Function:
-  1. Constructs prompt with existing data
-  2. Calls OpenAI API
-  3. Parses structured response
-  4. Updates database record
-        |
-        v
-Frontend receives updated data
-```
+Google OAuth Flow (Extended):
+  1. User already connected Gmail OR connects fresh
+  2. Add calendar scopes to OAuth request
+  3. Store tokens in existing email_accounts table
 
-### Files to Create
-
-| File | Purpose |
-|------|---------|
-| `supabase/functions/enrich-company/index.ts` | Edge function to enrich company data via OpenAI |
-| `supabase/functions/enrich-contact/index.ts` | Edge function to enrich contact data via OpenAI |
-| `src/lib/api/enrichment.ts` | Frontend API client for enrichment functions |
-
-### Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/components/customers/ContactDetail.tsx` | Add "Enrich with AI" button |
-| `src/components/customers/OrganisationDetail.tsx` | Add "Enrich with AI" button |
-| `src/hooks/useCompanies.ts` | Add `useUpdateCompany` mutation |
-| `supabase/config.toml` | Register new edge functions |
-
-### Secret Required
-
-- **OPENAI_API_KEY** - OpenAI API key for GPT-4 access
-
-### Edge Function Logic (Enrich Company)
-
-```typescript
-// Prompt template
-const prompt = `Given this company information, research and provide enriched data:
-Company Name: ${company.company_name}
-Website: ${company.website || 'unknown'}
-Current Industry: ${company.industry || 'unknown'}
-
-Return JSON with:
-- description (2-3 sentences about what the company does)
-- industry (if not set)
-- employee_range (e.g., "11-50", "51-200")
-- estimated_arr (in USD if publicly available)
-- categories (comma-separated list of business categories)`;
+Calendar Sync:
+  1. Edge function fetches events via Google Calendar API
+  2. Matches attendees to CRM contacts by email
+  3. Stores events in database
+  4. Frontend displays in Calendar page
 ```
 
 ---
 
-## Part 2: Google Inbox Integration
+## Required Google API Scopes
 
-### What It Does
+Add these scopes to your Google Cloud Console OAuth consent screen:
 
-Add a new "Inbox" section to the navigation that:
-- Shows Gmail emails linked to CRM contacts
-- Allows composing and sending emails
-- Automatically links emails to contacts based on email addresses
-- Displays email history in contact/company detail drawers
+| Scope | Purpose |
+|-------|---------|
+| `https://www.googleapis.com/auth/calendar` | Full calendar access |
+| `https://www.googleapis.com/auth/calendar.events` | Create/edit events |
 
-### Architecture
+---
 
-```text
-Google OAuth Flow:
-  1. User clicks "Connect Gmail"
-  2. Redirect to Google OAuth consent
-  3. Receive auth code, exchange for tokens
-  4. Store tokens in database
+## Database Changes
 
-Email Sync:
-  1. Edge function fetches emails via Gmail API
-  2. Matches sender/recipient to contacts by email
-  3. Stores email metadata in database
-  4. Frontend displays in Inbox and contact drawers
-```
+**New Table: `calendar_events`**
 
-### Database Changes
-
-**New Table: `email_accounts`**
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| user_id | uuid | Auth user reference |
-| provider | text | "google" |
-| email_address | text | Gmail address |
-| access_token | text | OAuth access token (encrypted) |
-| refresh_token | text | OAuth refresh token (encrypted) |
-| expires_at | timestamptz | Token expiry |
-| created_at | timestamptz | Created timestamp |
-
-**New Table: `emails`**
 | Column | Type | Description |
 |--------|------|-------------|
 | id | uuid | Primary key |
 | account_id | uuid | FK to email_accounts |
-| gmail_id | text | Gmail message ID |
-| thread_id | text | Gmail thread ID |
+| google_event_id | text | Google Calendar event ID |
 | contact_id | uuid | FK to contacts (nullable) |
 | company_id | uuid | FK to companies (nullable) |
-| subject | text | Email subject |
-| snippet | text | Email preview |
-| from_email | text | Sender email |
-| from_name | text | Sender name |
-| to_emails | text[] | Recipients |
-| received_at | timestamptz | Email timestamp |
-| is_read | boolean | Read status |
-| direction | text | 'inbound' or 'outbound' |
-| labels | text[] | Gmail labels |
+| title | text | Event title |
+| description | text | Event description |
+| location | text | Event location |
+| start_time | timestamptz | Event start |
+| end_time | timestamptz | Event end |
+| all_day | boolean | Is all-day event |
+| attendees | text[] | Attendee emails |
+| meeting_link | text | Video call link (Meet/Zoom) |
+| status | text | confirmed/tentative/cancelled |
+| created_at | timestamptz | Record created |
+| updated_at | timestamptz | Record updated |
 
-### Files to Create
+---
+
+## Files to Create
 
 | File | Purpose |
 |------|---------|
-| `src/pages/Inbox.tsx` | Main inbox page with email list |
-| `src/components/inbox/EmailList.tsx` | Email list component |
-| `src/components/inbox/EmailThread.tsx` | Email thread/conversation view |
-| `src/components/inbox/ComposeEmail.tsx` | Email composer modal |
-| `src/components/inbox/ConnectGmail.tsx` | Gmail connection UI |
-| `src/hooks/useEmails.ts` | Email-related React Query hooks |
-| `src/hooks/useEmailAccounts.ts` | Email account hooks |
-| `supabase/functions/google-auth-callback/index.ts` | OAuth callback handler |
-| `supabase/functions/sync-emails/index.ts` | Fetch and sync emails from Gmail |
-| `supabase/functions/send-email/index.ts` | Send email via Gmail API |
+| `src/pages/Calendar.tsx` | Main calendar page with month/week/day views |
+| `src/components/calendar/CalendarView.tsx` | Calendar grid component |
+| `src/components/calendar/EventCard.tsx` | Event display card |
+| `src/components/calendar/CreateEventModal.tsx` | Modal to create/edit events |
+| `src/components/calendar/ConnectCalendar.tsx` | Calendar connection UI (if not connected) |
+| `src/hooks/useCalendarEvents.ts` | React Query hooks for calendar data |
+| `supabase/functions/sync-calendar/index.ts` | Fetch events from Google Calendar |
+| `supabase/functions/create-calendar-event/index.ts` | Create event in Google Calendar |
+| `supabase/functions/update-calendar-event/index.ts` | Update/delete events |
 
-### Files to Modify
+---
+
+## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/App.tsx` | Add /inbox route |
-| `src/components/layout/Sidebar.tsx` | Add Inbox nav item with Mail icon |
-| `src/components/layout/MobileNavigation.tsx` | Add Inbox to mobile nav |
-| `src/components/customers/ContactDetail.tsx` | Add email history section |
-| `src/components/customers/OrganisationDetail.tsx` | Add email history section |
+| `src/App.tsx` | Add /calendar route |
+| `src/components/inbox/ConnectGmail.tsx` | Add calendar scopes to OAuth request |
 | `supabase/config.toml` | Register new edge functions |
 
-### Secrets Required
+---
 
-- **GOOGLE_CLIENT_ID** - Google OAuth client ID
-- **GOOGLE_CLIENT_SECRET** - Google OAuth client secret
+## Implementation Details
 
-### Navigation Update
+### 1. Update OAuth Scopes
+
+Modify `ConnectGmail.tsx` to include Calendar scopes:
 
 ```typescript
-// New item in mainNavItems array (Sidebar.tsx)
-{
-  icon: <Mail size={18} />,
-  label: "Inbox",
-  path: "/inbox"
-}
+const scope = encodeURIComponent(
+  "https://www.googleapis.com/auth/gmail.readonly " +
+  "https://www.googleapis.com/auth/gmail.send " +
+  "https://www.googleapis.com/auth/userinfo.email " +
+  "https://www.googleapis.com/auth/calendar " +
+  "https://www.googleapis.com/auth/calendar.events"
+);
 ```
 
-### Inbox Page Features
+### 2. Calendar Page Features
 
-1. **Email List View**
-   - Filter by: All, Linked to CRM, Unlinked
-   - Search emails
-   - Show sender, subject, snippet, timestamp
-   - Click to open thread view
+**Views:**
+- Month view (default) - Grid with event dots
+- Week view - Time-based grid
+- Day view - Detailed schedule
 
-2. **Thread View**
-   - Full email content
-   - Reply inline
-   - Link to contact/company
-   - View contact profile sidebar
+**Functionality:**
+- Click date to create event
+- Click event to view details
+- Drag to reschedule (future enhancement)
+- Filter by linked contacts
 
-3. **Compose**
-   - Rich text editor
-   - Select recipients from contacts
-   - Auto-link sent emails to contacts
+### 3. Create Event Modal
+
+Fields:
+- Title (required)
+- Date/Time picker
+- Duration or end time
+- Location
+- Description
+- Attendees (select from contacts or type email)
+- Add video meeting link option
+
+### 4. Edge Functions
+
+**sync-calendar:**
+- Fetches events from Google Calendar API
+- Matches attendees to contacts by email
+- Upserts into calendar_events table
+
+**create-calendar-event:**
+- Creates event in Google Calendar
+- Adds attendees
+- Stores in database with contact link
+
+---
+
+## UI Components
+
+### Calendar Page Layout
+
+```text
++----------------------------------+
+|  Calendar     < Jan 2026 >  + New Event |
++----------------------------------+
+| Sun | Mon | Tue | Wed | Thu | Fri | Sat |
++-----+-----+-----+-----+-----+-----+-----+
+|     |  1  |  2  |  3  |  4  |  5  |  6  |
+|     | [*] |     |     |[**]|     |     |
++-----+-----+-----+-----+-----+-----+-----+
+|  7  |  8  |  9  | 10  | 11  | 12  | 13  |
+|     |     | [*] |     |     |     |     |
++-----+-----+-----+-----+-----+-----+-----+
+```
+
+[*] = Event indicators
+
+### Event Card
+
+```text
++----------------------------------+
+| 10:00 AM - Meeting with John     |
+| @ Zoom                           |
+| [John Smith] [Acme Corp]         |
++----------------------------------+
+```
 
 ---
 
 ## Implementation Steps
 
-### Phase 1: OpenAI Auto-Enrichment
+1. **Database Setup**
+   - Create `calendar_events` table with RLS policies
 
-1. Add OPENAI_API_KEY secret
-2. Create `enrich-company` edge function
-3. Create `enrich-contact` edge function
-4. Create frontend API client
-5. Add `useUpdateCompany` hook
-6. Add "Enrich with AI" button to OrganisationDetail
-7. Add "Enrich with AI" button to ContactDetail
-8. Deploy and test
+2. **Update OAuth**
+   - Add calendar scopes to ConnectGmail component
+   - Users may need to re-authorize to grant calendar access
 
-### Phase 2: Google Inbox Integration
+3. **Create Edge Functions**
+   - `sync-calendar` - Fetch and store events
+   - `create-calendar-event` - Create new events
+   - `update-calendar-event` - Update/delete events
 
-1. Create database tables (email_accounts, emails)
-2. Add Google OAuth secrets
-3. Create OAuth callback edge function
-4. Create email sync edge function
-5. Create send email edge function
-6. Create Inbox page and components
-7. Update navigation
-8. Add email sections to detail drawers
-9. Deploy and test
+4. **Build Calendar UI**
+   - Create Calendar page with month/week/day views
+   - Create event display components
+   - Create event creation modal
+
+5. **Add Route**
+   - Add /calendar route to App.tsx
+
+6. **Test Flow**
+   - Verify OAuth works with new scopes
+   - Test event sync
+   - Test event creation
 
 ---
 
-## Security Considerations
+## Contact/Company Integration
 
-- OAuth tokens stored securely in database
-- Edge functions validate auth before API calls
-- RLS policies on email tables (users see only their own)
-- API keys never exposed to frontend
+Events will be automatically linked to contacts when:
+- Attendee email matches a contact's email
+- User manually links event to contact/company
+
+This allows viewing a contact's meeting history in their detail drawer.
 
 ---
 
 ## Summary
 
-| Feature | Components | Edge Functions | Database |
-|---------|------------|----------------|----------|
-| Auto-Enrichment | 2 buttons, 1 API client | 2 functions | No changes |
-| Inbox | 6 new components, 1 page | 3 functions | 2 new tables |
+| Component | Count |
+|-----------|-------|
+| New Pages | 1 |
+| New Components | 4-5 |
+| New Edge Functions | 3 |
+| New Database Tables | 1 |
+| Modified Files | 3 |
 
