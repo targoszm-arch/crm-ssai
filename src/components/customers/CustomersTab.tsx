@@ -3,11 +3,12 @@ import { DataTable } from "@/components/ui/data-table";
 import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
 import { FilterableTableHeader } from "./FilterableTableHeader";
+import { ContactDetail } from "./ContactDetail";
 import { useContacts, useContactFilterOptions, Contact, ContactFilters, ContactSorting } from "@/hooks/useContacts";
 import { useColumnPreferences, ColumnDefinition } from "@/hooks/useColumnPreferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -46,6 +47,13 @@ const CUSTOMER_COLUMNS: ColumnDefinition[] = [
 export function CustomersTab() {
   const [filters, setFilters] = useState<ContactFilters>({});
   const [sorting, setSorting] = useState<ContactSorting>({ column: "last_contacted", direction: "desc" });
+  const [selectedContact, setSelectedContact] = useState<ContactWithCompany | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  const handleViewContact = (contact: ContactWithCompany) => {
+    setSelectedContact(contact);
+    setDetailOpen(true);
+  };
 
   const { data: contacts, isLoading } = useContacts(filters, sorting);
   const { data: filterOptions } = useContactFilterOptions();
@@ -425,7 +433,12 @@ export function CustomersTab() {
       id: "actions",
       accessorKey: "actions",
       header: "",
-      cell: () => <Button variant="ghost" size="sm">View</Button>,
+      cell: (contact: ContactWithCompany) => (
+        <Button variant="ghost" size="sm" onClick={() => handleViewContact(contact)}>
+          <Eye className="h-4 w-4 mr-1" />
+          View
+        </Button>
+      ),
     },
   ];
 
@@ -467,6 +480,12 @@ export function CustomersTab() {
         columns={columns}
         data={contacts || []}
         emptyMessage="No customers found"
+      />
+
+      <ContactDetail
+        contact={selectedContact}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
       />
     </div>
   );
