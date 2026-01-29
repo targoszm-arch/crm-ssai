@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import { DataTable } from "@/components/ui/data-table";
-import { CRMDataFilters, MultiSelectFilterConfig } from "./CRMDataFilters";
+import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
+import { FilterableTableHeader } from "./FilterableTableHeader";
 import { useContacts, useContactFilterOptions, Contact, ContactFilters, ContactSorting } from "@/hooks/useContacts";
 import { useColumnPreferences, ColumnDefinition } from "@/hooks/useColumnPreferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -58,55 +59,70 @@ export function CustomersTab() {
     resetToDefault,
   } = useColumnPreferences("customers", CUSTOMER_COLUMNS);
 
-  const filterConfig: MultiSelectFilterConfig[] = useMemo(() => [
-    {
-      key: "company",
-      label: "Company",
-      options: (filterOptions?.companies || []).map((c) => ({ label: c.company_name, value: c.id })),
-      selectedValues: filters.companyIds || [],
-      onChange: (values) => setFilters((prev) => ({ ...prev, companyIds: values.length ? values : undefined })),
-    },
-    {
-      key: "location",
-      label: "Location",
-      options: (filterOptions?.workLocations || []).map((l) => ({ label: l, value: l })),
-      selectedValues: filters.workLocations || [],
-      onChange: (values) => setFilters((prev) => ({ ...prev, workLocations: values.length ? values : undefined })),
-    },
-    {
-      key: "title",
-      label: "Job Title",
-      options: (filterOptions?.titles || []).map((t) => ({ label: t, value: t })),
-      selectedValues: filters.titles || [],
-      onChange: (values) => setFilters((prev) => ({ ...prev, titles: values.length ? values : undefined })),
-    },
-    {
-      key: "labels",
-      label: "Labels",
-      options: (filterOptions?.labels || []).map((l) => ({ label: l, value: l })),
-      selectedValues: filters.labels || [],
-      onChange: (values) => setFilters((prev) => ({ ...prev, labels: values.length ? values : undefined })),
-    },
-  ], [filters, filterOptions]);
+  // Build filter options for each filterable column
+  const companyOptions = useMemo(() => 
+    (filterOptions?.companies || []).map((c) => ({ label: c.company_name, value: c.id })),
+    [filterOptions?.companies]
+  );
+
+  const locationOptions = useMemo(() => 
+    (filterOptions?.workLocations || []).map((l) => ({ label: l, value: l })),
+    [filterOptions?.workLocations]
+  );
+
+  const titleOptions = useMemo(() => 
+    (filterOptions?.titles || []).map((t) => ({ label: t, value: t })),
+    [filterOptions?.titles]
+  );
+
+  const labelsOptions = useMemo(() => 
+    (filterOptions?.labels || []).map((l) => ({ label: l, value: l })),
+    [filterOptions?.labels]
+  );
+
+  const functionOptions = useMemo(() => 
+    (filterOptions?.functions || []).map((f) => ({ label: f, value: f })),
+    [filterOptions?.functions]
+  );
+
+  const marketingStatusOptions = useMemo(() => 
+    (filterOptions?.marketingStatuses || []).map((m) => ({ label: m, value: m })),
+    [filterOptions?.marketingStatuses]
+  );
+
+  const seniorityOptions = useMemo(() => 
+    (filterOptions?.seniorityLevels || []).map((s) => ({ label: s, value: s })),
+    [filterOptions?.seniorityLevels]
+  );
+
+  const interestOptions = useMemo(() => 
+    (filterOptions?.interestLevels || []).map((i) => ({ label: i, value: i })),
+    [filterOptions?.interestLevels]
+  );
+
+  const connectionOptions = useMemo(() => [
+    { label: "Very strong", value: "Very strong" },
+    { label: "Strong", value: "Strong" },
+    { label: "Good", value: "Good" },
+    { label: "Weak", value: "Weak" },
+    { label: "Very weak", value: "Very weak" },
+  ], []);
 
   const hasActiveFilters = Boolean(
     filters.search || 
     (filters.companyIds && filters.companyIds.length > 0) ||
     (filters.workLocations && filters.workLocations.length > 0) ||
     (filters.titles && filters.titles.length > 0) ||
-    (filters.labels && filters.labels.length > 0)
+    (filters.labels && filters.labels.length > 0) ||
+    (filters.functions && filters.functions.length > 0) ||
+    (filters.marketingStatuses && filters.marketingStatuses.length > 0) ||
+    (filters.seniorityLevels && filters.seniorityLevels.length > 0) ||
+    (filters.interestLevels && filters.interestLevels.length > 0) ||
+    (filters.connectionStrengths && filters.connectionStrengths.length > 0)
   );
 
-  const handleSort = (column: keyof Contact) => {
-    setSorting((prev) => ({
-      column,
-      direction: prev.column === column && prev.direction === "asc" ? "desc" : "asc",
-    }));
-  };
-
-  const getSortIcon = (column: keyof Contact) => {
-    if (sorting.column !== column) return <ArrowUpDown className="ml-1 h-3 w-3" />;
-    return sorting.direction === "asc" ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  const handleSort = (column: string, direction: "asc" | "desc") => {
+    setSorting({ column: column as keyof Contact, direction });
   };
 
   const allColumns = [
@@ -114,9 +130,13 @@ export function CustomersTab() {
       id: "name",
       accessorKey: "name",
       header: (
-        <Button variant="ghost" className="p-0 h-auto font-medium" onClick={() => handleSort("first_name")}>
-          Name {getSortIcon("first_name")}
-        </Button>
+        <FilterableTableHeader
+          label="Name"
+          columnId="first_name"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("first_name", dir)}
+        />
       ),
       cell: (contact: ContactWithCompany) => {
         const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || contact.name;
@@ -135,7 +155,19 @@ export function CustomersTab() {
     {
       id: "connection_strength",
       accessorKey: "connection_strength",
-      header: "Connection",
+      header: (
+        <FilterableTableHeader
+          label="Connection"
+          columnId="connection_strength"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("connection_strength", dir)}
+          filterable
+          filterOptions={connectionOptions}
+          selectedFilterValues={filters.connectionStrengths || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, connectionStrengths: values.length ? values : undefined }))}
+        />
+      ),
       cell: (contact: ContactWithCompany) => contact.connection_strength ? <Badge variant="secondary">{contact.connection_strength}</Badge> : "-",
     },
     {
@@ -147,7 +179,16 @@ export function CustomersTab() {
     {
       id: "company",
       accessorKey: "company",
-      header: "Company",
+      header: (
+        <FilterableTableHeader
+          label="Company"
+          columnId="company_id"
+          filterable
+          filterOptions={companyOptions}
+          selectedFilterValues={filters.companyIds || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, companyIds: values.length ? values : undefined }))}
+        />
+      ),
       cell: (contact: ContactWithCompany) => <span className="text-sm">{contact.companies?.company_name || "-"}</span>,
     },
     {
@@ -159,25 +200,63 @@ export function CustomersTab() {
     {
       id: "title",
       accessorKey: "title",
-      header: "Title",
+      header: (
+        <FilterableTableHeader
+          label="Title"
+          columnId="title"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("title", dir)}
+          filterable
+          filterOptions={titleOptions}
+          selectedFilterValues={filters.titles || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, titles: values.length ? values : undefined }))}
+        />
+      ),
       cell: (contact: ContactWithCompany) => <span className="text-sm">{contact.title || "-"}</span>,
     },
     {
       id: "function",
       accessorKey: "function",
-      header: "Function",
+      header: (
+        <FilterableTableHeader
+          label="Function"
+          columnId="function"
+          filterable
+          filterOptions={functionOptions}
+          selectedFilterValues={filters.functions || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, functions: values.length ? values : undefined }))}
+        />
+      ),
       cell: (contact: ContactWithCompany) => <span className="text-sm">{contact.function || "-"}</span>,
     },
     {
       id: "labels",
       accessorKey: "labels",
-      header: "Labels",
+      header: (
+        <FilterableTableHeader
+          label="Labels"
+          columnId="labels"
+          filterable
+          filterOptions={labelsOptions}
+          selectedFilterValues={filters.labels || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, labels: values.length ? values : undefined }))}
+        />
+      ),
       cell: (contact: ContactWithCompany) => contact.labels ? <Badge variant="outline">{contact.labels}</Badge> : "-",
     },
     {
       id: "email_messages_count",
       accessorKey: "email_messages_count",
-      header: "Emails",
+      header: (
+        <FilterableTableHeader
+          label="Emails"
+          columnId="email_messages_count"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("email_messages_count", dir)}
+        />
+      ),
       cell: (contact: ContactWithCompany) => <span className="text-sm">{contact.email_messages_count ?? "-"}</span>,
     },
     {
@@ -189,7 +268,16 @@ export function CustomersTab() {
     {
       id: "work_location",
       accessorKey: "work_location",
-      header: "Location",
+      header: (
+        <FilterableTableHeader
+          label="Location"
+          columnId="work_location"
+          filterable
+          filterOptions={locationOptions}
+          selectedFilterValues={filters.workLocations || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, workLocations: values.length ? values : undefined }))}
+        />
+      ),
       cell: (contact: ContactWithCompany) => <span className="text-sm">{contact.work_location || "-"}</span>,
     },
     {
@@ -225,16 +313,29 @@ export function CustomersTab() {
     {
       id: "marketing_status",
       accessorKey: "marketing_status",
-      header: "Marketing",
+      header: (
+        <FilterableTableHeader
+          label="Marketing"
+          columnId="marketing_status"
+          filterable
+          filterOptions={marketingStatusOptions}
+          selectedFilterValues={filters.marketingStatuses || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, marketingStatuses: values.length ? values : undefined }))}
+        />
+      ),
       cell: (contact: ContactWithCompany) => contact.marketing_status ? <Badge variant="secondary">{contact.marketing_status}</Badge> : "-",
     },
     {
       id: "last_contacted",
       accessorKey: "last_contacted",
       header: (
-        <Button variant="ghost" className="p-0 h-auto font-medium" onClick={() => handleSort("last_contacted")}>
-          Last Activity {getSortIcon("last_contacted")}
-        </Button>
+        <FilterableTableHeader
+          label="Last Activity"
+          columnId="last_contacted"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("last_contacted", dir)}
+        />
       ),
       cell: (contact: ContactWithCompany) => (
         <span className="text-sm">
@@ -261,7 +362,16 @@ export function CustomersTab() {
     {
       id: "seniority_level",
       accessorKey: "seniority_level",
-      header: "Seniority",
+      header: (
+        <FilterableTableHeader
+          label="Seniority"
+          columnId="seniority_level"
+          filterable
+          filterOptions={seniorityOptions}
+          selectedFilterValues={filters.seniorityLevels || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, seniorityLevels: values.length ? values : undefined }))}
+        />
+      ),
       cell: (contact: ContactWithCompany) => contact.seniority_level ? <Badge variant="outline">{contact.seniority_level}</Badge> : "-",
     },
     {
@@ -285,13 +395,30 @@ export function CustomersTab() {
     {
       id: "interest_level",
       accessorKey: "interest_level",
-      header: "Interest",
+      header: (
+        <FilterableTableHeader
+          label="Interest"
+          columnId="interest_level"
+          filterable
+          filterOptions={interestOptions}
+          selectedFilterValues={filters.interestLevels || []}
+          onFilterChange={(values) => setFilters((prev) => ({ ...prev, interestLevels: values.length ? values : undefined }))}
+        />
+      ),
       cell: (contact: ContactWithCompany) => contact.interest_level ? <Badge variant="secondary">{contact.interest_level}</Badge> : "-",
     },
     {
       id: "lqs",
       accessorKey: "lqs",
-      header: "LQS",
+      header: (
+        <FilterableTableHeader
+          label="LQS"
+          columnId="lqs"
+          sortable
+          currentSort={sorting}
+          onSort={(dir) => handleSort("lqs", dir)}
+        />
+      ),
       cell: (contact: ContactWithCompany) => <span className="text-sm font-medium">{contact.lqs ?? "-"}</span>,
     },
     {
@@ -319,7 +446,6 @@ export function CustomersTab() {
         searchValue={filters.search || ""}
         onSearchChange={(value) => setFilters((prev) => ({ ...prev, search: value }))}
         searchPlaceholder="Search customers..."
-        filters={filterConfig}
         onClearFilters={() => setFilters({})}
         hasActiveFilters={hasActiveFilters}
       >
