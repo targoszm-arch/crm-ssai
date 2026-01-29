@@ -1,327 +1,252 @@
 
 
-# Plan: Enhanced CRM with Extended Columns, Multi-Select Filters, and Column Customization
+# Plan: Move Filters into Table Headers
 
 ## Overview
 
-This plan adds all requested columns from your CSV files to both Organisations and Customers views, replaces single-select filters with multi-select comboboxes, and adds the ability to select and reorder visible columns.
+This plan removes the external filter bar and integrates filtering directly into the table column headers. Clicking on a column header will open a dropdown with filter options for that column, combining sorting and filtering in one place.
+
+---
+
+## Current vs New Approach
+
+### Before (Current)
+```text
++----------------------------------------------------------+
+| Search: [___________]  [Country v] [Industry v] [Labels v]|
++----------------------------------------------------------+
+| Name        | Industry    | Country   | Connection        |
+| Acme Corp   | Technology  | USA       | Strong            |
+| Beta Inc    | Finance     | UK        | Weak              |
++----------------------------------------------------------+
+```
+
+### After (New)
+```text
++----------------------------------------------------------+
+| Search: [___________]                    [Columns Settings]|
++----------------------------------------------------------+
+| Name [v]     | Industry [v]  | Country [v] | Connection [v]|
+|   Sort A-Z   |   Sort A-Z    |   Sort A-Z  |   Sort A-Z    |
+|   Sort Z-A   |   Sort Z-A    |   Sort Z-A  |   Sort Z-A    |
+|   --------   |   --------    |   --------  |   --------    |
+|   [ ] All    |   [ ] All     |   [ ] All   |   [ ] All     |
+|   [x] Tech   |   [x] Ireland |   [x] Strong|               |
+|   [ ] Fin.   |   [ ] USA     |   [ ] Weak  |               |
++----------------------------------------------------------+
+| Acme Corp    | Technology   | USA        | Strong          |
+| Beta Inc     | Finance      | UK         | Weak            |
++----------------------------------------------------------+
+```
 
 ---
 
 ## What We'll Build
 
-### 1. Database Schema Updates
+### 1. FilterableTableHeader Component
+A new component that renders as a table header cell with:
+- Column label with dropdown trigger (chevron icon)
+- Popover with sort options (A-Z, Z-A)
+- Multi-select checkboxes for filtering values
+- Clear filter button
+- Visual indicator when filter is active
 
-**Companies Table - Add New Columns:**
-| Column | Type | Purpose |
-|--------|------|---------|
-| `people_count` | INTEGER | Count of associated contacts |
-| `next_activity_date` | TIMESTAMPTZ | Next scheduled activity |
-| `done_activities` | INTEGER | Number of completed activities |
-| `email_messages_count` | INTEGER | Count of email messages |
-| `labels` | TEXT | Organization labels (Cold lead, Hot lead, etc.) |
-| `address` | TEXT | Full address |
+### 2. Updated DataTable Component
+Modify the DataTable to accept a more flexible header definition that can include filterable headers.
 
-**Contacts Table - Add New Columns:**
-| Column | Type | Purpose |
-|--------|------|---------|
-| `connection_strength` | TEXT | Person's connection strength |
-| `facebook_url` | TEXT | Facebook profile URL |
-| `instagram_url` | TEXT | Instagram profile URL |
-| `marketing_status` | TEXT | Marketing status (Subscribed, Archived, etc.) |
-| `last_email_received` | TIMESTAMPTZ | When last email was received |
-| `seniority_level` | TEXT | CXO, Director, Manager, etc. |
-| `function` | TEXT | Job function (Legal, Sales, etc.) |
-| `next_recommended_action` | TEXT | AI-recommended next action |
-| `buying_signals` | TEXT | Detected buying signals |
-| `pain_point` | TEXT | Detected pain points |
-| `interest_level` | TEXT | Low, Medium, High |
-| `lqs` | INTEGER | Lead Qualification Score |
-| `email_messages_count` | INTEGER | Count of emails |
-| `labels` | TEXT | Person labels |
-| `done_activities` | INTEGER | Completed activities count |
+### 3. Simplified Filter Bar
+Keep only:
+- Search input (with debouncing)
+- Column selector button
+- Clear all filters button (shown when any header filter is active)
 
-### 2. Multi-Select Filter Component
+---
 
-Replace current single-select dropdowns with a multi-select combobox component:
+## Technical Implementation
 
-- Uses Popover + Command pattern for searchable multi-select
-- Checkbox items for multiple selections
-- "Clear all" and "Select all" options
-- Badge display of selected count
+### New Component: FilterableTableHeader
 
-**Filters to create:**
-- Country (multi-select)
-- Employees (multi-select)  
-- Revenue (multi-select)
-- Labels (multi-select)
-- Job Titles (multi-select)
-- Industry (multi-select)
-- Updated Time (date range)
-- Email messages sent (range)
-
-### 3. Column Visibility & Reordering
-
-**Column Settings Panel:**
-- Dropdown/popover to toggle column visibility
-- Drag-and-drop column reordering
-- Persist preferences to localStorage
-- "Reset to default" option
-
-**Organisations Columns (all selectable):**
-| Column | Default Visible |
-|--------|-----------------|
-| Name | Yes |
-| Labels | No |
-| Address | No |
-| Website | No |
-| LinkedIn | Yes |
-| Industry | No |
-| Revenue | No |
-| Funding Raised | No |
-| Employees | Yes |
-| Contacts Count | Yes |
-| Next Activity Date | No |
-| Done Activities | No |
-| Email Messages Count | No |
-| Description | No |
-| Date Founded | No |
-| Domains | No |
-| Categories | No |
-| Connection Strength | Yes |
-| Country | Yes |
-| Last Interaction | Yes |
-
-**Customers Columns (all selectable):**
-| Column | Default Visible |
-|--------|-----------------|
-| First Name | Yes |
-| Last Name | Yes |
-| Connection Strength | No |
-| Email | Yes |
-| Company | Yes |
-| Description | No |
-| Job Title | Yes |
-| Function | No |
-| Labels | No |
-| Email Messages Count | No |
-| Phone | Yes |
-| Location | No |
-| Facebook | No |
-| Instagram | No |
-| LinkedIn | No |
-| Marketing Status | No |
-| Last Activity Date | Yes |
-| Last Email Received | No |
-| Personalisation Notes | No |
-| Seniority Level | No |
-| Next Recommended Action | No |
-| Buying Signals | No |
-| Pain Point | No |
-| Interest Level | No |
-| LQS | No |
-
-### 4. Updated Edge Functions for Import
-
-Modify the import functions to handle all the new columns from your CSVs:
-
-**Organizations CSV Mapping:**
-```text
-Organization - Labels -> labels
-Organization - Address -> address
-Organization - People -> people_count
-Organization - Next activity date -> next_activity_date
-Organization - Done activities -> done_activities
-Organization - Email messages count -> email_messages_count
-Organization - Year Founded -> foundation_date
-Organization - Description -> description
+```typescript
+interface FilterableTableHeaderProps {
+  label: string;
+  columnId: string;
+  // Sorting
+  sortable?: boolean;
+  currentSort?: { column: string; direction: "asc" | "desc" } | null;
+  onSort?: (direction: "asc" | "desc") => void;
+  // Filtering  
+  filterable?: boolean;
+  filterOptions?: { label: string; value: string }[];
+  selectedFilterValues?: string[];
+  onFilterChange?: (values: string[]) => void;
+}
 ```
 
-**People CSV Mapping:**
-```text
-Person - Labels -> labels
-Person - Function -> function
-Person - Marketing status -> marketing_status
-Person - Last email received -> last_email_received
-Person - Seniority level -> seniority_level
-Person - Next recommended action -> next_recommended_action
-Person - Buying signals -> buying_signals
-Person - Pain Point detected -> pain_point
-Person - Interest level -> interest_level
-Person - LQS -> lqs
-Person - Email messages count -> email_messages_count
-Person - Done activities -> done_activities
+### Column Definition Updates
+
+Each column will optionally include filter configuration:
+
+```typescript
+{
+  id: "country",
+  accessorKey: "country",
+  header: <FilterableTableHeader
+    label="Country"
+    columnId="country"
+    sortable={true}
+    filterable={true}
+    filterOptions={countryOptions}
+    selectedFilterValues={filters.countries}
+    onFilterChange={(values) => setFilters({ ...filters, countries: values })}
+  />,
+  cell: (company) => ...
+}
 ```
 
 ---
 
-## Technical Details
-
-### Files to Create
+## Files to Create
 
 | File | Purpose |
 |------|---------|
-| `src/components/customers/MultiSelectFilter.tsx` | Reusable multi-select combobox filter |
-| `src/components/customers/ColumnSelector.tsx` | Column visibility and reorder panel |
-| `src/hooks/useColumnPreferences.ts` | Persist column settings to localStorage |
+| `src/components/customers/FilterableTableHeader.tsx` | Header cell with sort + filter dropdown |
 
-### Files to Modify
+## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/customers/DataFilters.tsx` | Replace Select with MultiSelectFilter |
-| `src/components/customers/OrganisationsTab.tsx` | Add all columns, integrate column selector |
-| `src/components/customers/CustomersTab.tsx` | Add all columns, integrate column selector |
-| `src/hooks/useCompanies.ts` | Add new filter types for multi-select |
-| `src/hooks/useContacts.ts` | Add new filter types for multi-select |
-| `supabase/functions/import-companies/index.ts` | Map all new CSV columns |
-| `supabase/functions/import-contacts/index.ts` | Map all new CSV columns |
+| `src/components/customers/OrganisationsTab.tsx` | Replace external filters with header filters |
+| `src/components/customers/CustomersTab.tsx` | Replace external filters with header filters |
+| `src/components/customers/CRMDataFilters.tsx` | Simplify to just search + column selector |
 
-### Database Migration SQL
+## Files to Keep (unchanged)
 
-```sql
--- Add new columns to companies table
-ALTER TABLE companies ADD COLUMN IF NOT EXISTS people_count INTEGER DEFAULT 0;
-ALTER TABLE companies ADD COLUMN IF NOT EXISTS next_activity_date TIMESTAMPTZ;
-ALTER TABLE companies ADD COLUMN IF NOT EXISTS done_activities INTEGER DEFAULT 0;
-ALTER TABLE companies ADD COLUMN IF NOT EXISTS email_messages_count INTEGER DEFAULT 0;
-ALTER TABLE companies ADD COLUMN IF NOT EXISTS labels TEXT;
-ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT;
+- `src/components/customers/MultiSelectFilter.tsx` - Reuse internally
+- `src/components/customers/ColumnSelector.tsx` - Still needed
+- `src/hooks/useColumnPreferences.ts` - Still needed
 
--- Add new columns to contacts table
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS connection_strength TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS facebook_url TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS instagram_url TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS marketing_status TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS last_email_received TIMESTAMPTZ;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS seniority_level TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS function TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS next_recommended_action TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS buying_signals TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS pain_point TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS interest_level TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lqs INTEGER;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS email_messages_count INTEGER DEFAULT 0;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS labels TEXT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS done_activities INTEGER DEFAULT 0;
+---
+
+## FilterableTableHeader Design
+
+### Visual States
+
+**Default (no filter active):**
+```text
++------------------+
+| Country     [v]  |
++------------------+
 ```
 
-### Multi-Select Filter Component Structure
-
-```typescript
-interface MultiSelectFilterProps {
-  label: string;
-  options: { label: string; value: string }[];
-  selectedValues: string[];
-  onChange: (values: string[]) => void;
-  placeholder?: string;
-}
+**Filter active (highlighted):**
+```text
++------------------+
+| Country (2) [v]  |  <- Shows count of selected
++------------------+
 ```
 
-### Column Preference Hook
+### Dropdown Contents
 
-```typescript
-interface ColumnPreference {
-  id: string;
-  label: string;
-  visible: boolean;
-  order: number;
-}
-
-function useColumnPreferences(tableKey: string) {
-  // Load/save from localStorage
-  // Returns: columns, toggleColumn, reorderColumn, resetToDefault
-}
+```text
++----------------------+
+| Sort A-Z             |
+| Sort Z-A             |
+|----------------------|
+| [ ] Select all       |
+|----------------------|
+| [x] Ireland          |
+| [x] UK               |
+| [ ] USA              |
+| [ ] Germany          |
+|----------------------|
+| Clear filter         |
++----------------------+
 ```
 
 ---
 
-## UI Preview
+## Which Columns Get Filters
 
-### Filters with Multi-Select
+### Organisations Tab
+| Column | Sortable | Filterable | Filter Type |
+|--------|----------|------------|-------------|
+| Name | Yes | No | - |
+| Labels | No | Yes | Multi-select |
+| Address | No | No | - |
+| Website | No | No | - |
+| LinkedIn | No | No | - |
+| Industry | Yes | Yes | Multi-select |
+| Revenue | Yes | Yes | Range select |
+| Funding | Yes | No | - |
+| Employees | No | Yes | Multi-select |
+| Contacts | Yes | No | - |
+| Next Activity | Yes | No | - |
+| Done Activities | Yes | No | - |
+| Emails | Yes | No | - |
+| Description | No | No | - |
+| Founded | Yes | No | - |
+| Domains | No | No | - |
+| Categories | No | Yes | Multi-select |
+| Connection | Yes | Yes | Multi-select |
+| Country | Yes | Yes | Multi-select |
+| Last Interaction | Yes | No | - |
 
-```text
-+----------------------------------------------------------------+
-| Search: [_______________]                                       |
-|                                                                |
-| Filters:                                                       |
-| [Country v] [Industry v] [Employees v] [Revenue v] [Labels v]  |
-|                                                                |
-| Active: Ireland, UK (+2 more)  |  Clear all filters            |
-+----------------------------------------------------------------+
-```
-
-### Column Selector
-
-```text
-+---------------------------+
-| Columns                   |
-| [x] Name                  |
-| [x] LinkedIn              |  
-| [ ] Address              |
-| [ ] Website              |
-| [x] Industry             |
-| ... (drag to reorder)    |
-| [Reset to default]       |
-+---------------------------+
-```
+### Customers Tab
+| Column | Sortable | Filterable | Filter Type |
+|--------|----------|------------|-------------|
+| Name | Yes | No | - |
+| Connection | Yes | Yes | Multi-select |
+| Email | No | No | - |
+| Company | No | Yes | Multi-select |
+| Description | No | No | - |
+| Job Title | Yes | Yes | Multi-select |
+| Function | No | Yes | Multi-select |
+| Labels | No | Yes | Multi-select |
+| Emails | Yes | No | - |
+| Phone | No | No | - |
+| Location | No | Yes | Multi-select |
+| Facebook | No | No | - |
+| Instagram | No | No | - |
+| LinkedIn | No | No | - |
+| Marketing Status | No | Yes | Multi-select |
+| Last Activity | Yes | No | - |
+| Seniority | No | Yes | Multi-select |
+| Interest | No | Yes | Multi-select |
+| LQS | Yes | No | - |
 
 ---
 
 ## Implementation Steps
 
-1. **Database**: Run migration to add new columns to both tables
-2. **Multi-Select Component**: Create reusable MultiSelectFilter 
-3. **Column Preferences**: Create hook for persisting column settings
-4. **Column Selector**: Build UI for toggling/reordering columns
-5. **Update Filters**: Replace DataFilters with multi-select version
-6. **Update Tab Components**: Integrate column selector and all columns
-7. **Update Edge Functions**: Map all new CSV columns for import
-8. **Update Hooks**: Add multi-value filter support to queries
-9. **Import Data**: Re-import CSVs to populate new columns
+1. **Create FilterableTableHeader** - Build the new header component with popover, sort buttons, and multi-select filter
+2. **Update OrganisationsTab** - Remove CRMDataFilters usage, update column headers to use FilterableTableHeader
+3. **Update CustomersTab** - Same changes as OrganisationsTab
+4. **Simplify CRMDataFilters** - Remove filter dropdowns, keep only search and children slot
+5. **Test** - Verify filtering and sorting work correctly from headers
 
 ---
 
-## Categories Multi-Select Options
+## User Experience
 
-For the Categories field (as specified):
-- B2B
-- B2C
-- Consulting
-- Financial Services
-- IT
-- SaaS
-- Technology
-- Healthcare
-- E-commerce
-- Transit
-- Government
-- Insurance
-- Finance
-- Legal
-- Real Estate
-- International Relations
-- Education
-- Marketplace
-- BCG
-- Airlines
-- Asset Management
-- Construction
-- Energy
-- Enterprise
-- NGO
-- Health & Wellness
-- University
-- Manufacturing
-- Industrial Services
-- International Trade
-- Investment Banking
-- Market Research
-- Media
-- Pharmaceuticals
-- Payments
-- Utilities
-- Venture Capital
-- Consumer Services
-- Security
+### Filtering Workflow
+1. Click column header dropdown arrow
+2. See sort options at top
+3. See available filter values as checkboxes
+4. Check/uncheck values to filter
+5. Close popover - filter applies immediately
+6. Header shows badge with count of active filters
+
+### Clear Filters
+- Click "Clear filter" within any column dropdown
+- Or use "Clear all" button in search bar area to reset all filters
+
+---
+
+## Summary
+
+- Remove external filter bar with dropdown buttons
+- Move filtering into each column header
+- Keep search input and column selector in simplified toolbar
+- Each filterable column header has a popover with sort + filter options
+- Visual indicator shows when a column has active filters
 
