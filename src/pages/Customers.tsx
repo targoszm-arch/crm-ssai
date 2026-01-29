@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -5,8 +6,11 @@ import { UserPlus, Building2, Users } from "lucide-react";
 import { CustomersTab } from "@/components/customers/CustomersTab";
 import { OrganisationsTab } from "@/components/customers/OrganisationsTab";
 import { ImportDataButton } from "@/components/customers/ImportDataButton";
+import { AddContactModal } from "@/components/customers/AddContactModal";
 
 export default function Customers() {
+  const [addContactOpen, setAddContactOpen] = useState(false);
+
   return (
     <div className="container mx-auto py-6 space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -18,9 +22,9 @@ export default function Customers() {
         </div>
         <div className="flex flex-wrap gap-2">
           <ImportDataButton />
-          <Button className="w-full sm:w-auto">
+          <Button className="w-full sm:w-auto" onClick={() => setAddContactOpen(true)}>
             <UserPlus className="mr-2 h-4 w-4" />
-            Add New
+            Add Contact
           </Button>
         </div>
       </div>
@@ -49,6 +53,11 @@ export default function Customers() {
           </Tabs>
         </CardContent>
       </Card>
+
+      <AddContactModal
+        open={addContactOpen}
+        onOpenChange={setAddContactOpen}
+      />
     </div>
   );
 }
