@@ -1,149 +1,327 @@
 
 
-# Plan: Fix Bugs and Replace Data with New CSV Files
+# Plan: Enhanced CRM with Extended Columns, Multi-Select Filters, and Column Customization
 
-## Issues Identified
+## Overview
 
-### Bug 1: "View" Button on Organisations Tab Not Showing Contacts
-**Root Cause:** The `useContactsByCompany` hook in `OrganisationDetail.tsx` is working correctly, but I need to verify the query is properly linking to the company. The foreign key relationship exists (`fk_contacts_company`) but the current sample contacts may not be linked to the correct company IDs.
-
-### Bug 2: Search Filter Triggers on Every Keystroke
-**Root Cause:** The search input in `DataFilters.tsx` directly updates the filter state on every `onChange` event without debouncing. This causes a new API query with each keystroke.
-
-### Data Replacement Requirement
-You want to replace the existing data with the two new CSV files:
-- `organizations-27348383-8.csv` (~1,100 organisations)
-- `people-27348383-7.csv` (~1,597 people/customers)
+This plan adds all requested columns from your CSV files to both Organisations and Customers views, replaces single-select filters with multi-select comboboxes, and adds the ability to select and reorder visible columns.
 
 ---
 
-## CSV Column Mapping
+## What We'll Build
 
-### Organisations CSV (organizations-27348383-8.csv)
+### 1. Database Schema Updates
 
-| CSV Column | Database Column | Notes |
-|------------|-----------------|-------|
-| Organization - Name | company_name | Required |
-| Organization - Labels | stage | Map labels to stage |
-| Organization - Country of Address | country | |
-| Organization - Website | website | New column needed |
-| Organization - LinkedIn profile | linkedin_url | |
-| Organization - Industry | industry | |
-| Organization - Annual revenue | annual_turnover | Parse to numeric |
-| Organization - Number of employees | employee_count | Parse to integer |
-| Organization - ID | client_id | External ID reference |
-| Organization - Last activity date | last_interaction | |
-| Organization - Address | description | Use as location/description |
-| Organization - Description | description | Company description |
-| Organization - Year Founded | foundation_date | |
-| Organization - Total Funding | funding_raised | Parse to numeric |
-| Organization - Number of Employees | employee_range | Text range |
+**Companies Table - Add New Columns:**
+| Column | Type | Purpose |
+|--------|------|---------|
+| `people_count` | INTEGER | Count of associated contacts |
+| `next_activity_date` | TIMESTAMPTZ | Next scheduled activity |
+| `done_activities` | INTEGER | Number of completed activities |
+| `email_messages_count` | INTEGER | Count of email messages |
+| `labels` | TEXT | Organization labels (Cold lead, Hot lead, etc.) |
+| `address` | TEXT | Full address |
 
-### People CSV (people-27348383-7.csv)
+**Contacts Table - Add New Columns:**
+| Column | Type | Purpose |
+|--------|------|---------|
+| `connection_strength` | TEXT | Person's connection strength |
+| `facebook_url` | TEXT | Facebook profile URL |
+| `instagram_url` | TEXT | Instagram profile URL |
+| `marketing_status` | TEXT | Marketing status (Subscribed, Archived, etc.) |
+| `last_email_received` | TIMESTAMPTZ | When last email was received |
+| `seniority_level` | TEXT | CXO, Director, Manager, etc. |
+| `function` | TEXT | Job function (Legal, Sales, etc.) |
+| `next_recommended_action` | TEXT | AI-recommended next action |
+| `buying_signals` | TEXT | Detected buying signals |
+| `pain_point` | TEXT | Detected pain points |
+| `interest_level` | TEXT | Low, Medium, High |
+| `lqs` | INTEGER | Lead Qualification Score |
+| `email_messages_count` | INTEGER | Count of emails |
+| `labels` | TEXT | Person labels |
+| `done_activities` | INTEGER | Completed activities count |
 
-| CSV Column | Database Column | Notes |
-|------------|-----------------|-------|
-| Person - First name | first_name | Required |
-| Person - Last name | last_name | |
-| Person - Organization | company_id | Match to company by name |
-| Person - Job title | title | |
-| Person - Email - Work | email | Primary email |
-| Person - Phone - Mobile | phone | Primary phone |
-| Person - Phone - Work | phone | Fallback phone |
-| Person - Country of Postal address | work_location | |
-| Person - LinkedIn URL (Lead CRM) | linkedin_url | |
-| Person - linkedin_handle | linkedin_url | Fallback LinkedIn |
-| Person - Last activity date | last_contacted | |
-| Person - Personalization_Notes | notes | |
-| Person - Seniority level | title | Append to title |
+### 2. Multi-Select Filter Component
 
----
+Replace current single-select dropdowns with a multi-select combobox component:
 
-## Implementation Steps
+- Uses Popover + Command pattern for searchable multi-select
+- Checkbox items for multiple selections
+- "Clear all" and "Select all" options
+- Badge display of selected count
 
-### Step 1: Add Search Debouncing
-Create a debounced search hook and update `DataFilters.tsx` to wait 300ms after user stops typing before triggering the search.
+**Filters to create:**
+- Country (multi-select)
+- Employees (multi-select)  
+- Revenue (multi-select)
+- Labels (multi-select)
+- Job Titles (multi-select)
+- Industry (multi-select)
+- Updated Time (date range)
+- Email messages sent (range)
 
-Files to modify:
-- `src/components/customers/DataFilters.tsx` - Add internal debounce state
-- Create `src/hooks/useDebounce.ts` - Reusable debounce hook
+### 3. Column Visibility & Reordering
 
-### Step 2: Update Edge Function for New CSV Format
-Modify the import function to handle the new column names from your CSV files and create a new function for importing contacts.
+**Column Settings Panel:**
+- Dropdown/popover to toggle column visibility
+- Drag-and-drop column reordering
+- Persist preferences to localStorage
+- "Reset to default" option
 
-Files to modify:
-- `supabase/functions/import-companies/index.ts` - Update column mapping
-- Create `supabase/functions/import-contacts/index.ts` - New function for people import
+**Organisations Columns (all selectable):**
+| Column | Default Visible |
+|--------|-----------------|
+| Name | Yes |
+| Labels | No |
+| Address | No |
+| Website | No |
+| LinkedIn | Yes |
+| Industry | No |
+| Revenue | No |
+| Funding Raised | No |
+| Employees | Yes |
+| Contacts Count | Yes |
+| Next Activity Date | No |
+| Done Activities | No |
+| Email Messages Count | No |
+| Description | No |
+| Date Founded | No |
+| Domains | No |
+| Categories | No |
+| Connection Strength | Yes |
+| Country | Yes |
+| Last Interaction | Yes |
 
-### Step 3: Clear Existing Data and Import New Data
-1. Delete existing companies and contacts (to replace with new data)
-2. Import organisations from new CSV
-3. Import people from new CSV, matching to companies by organisation name
+**Customers Columns (all selectable):**
+| Column | Default Visible |
+|--------|-----------------|
+| First Name | Yes |
+| Last Name | Yes |
+| Connection Strength | No |
+| Email | Yes |
+| Company | Yes |
+| Description | No |
+| Job Title | Yes |
+| Function | No |
+| Labels | No |
+| Email Messages Count | No |
+| Phone | Yes |
+| Location | No |
+| Facebook | No |
+| Instagram | No |
+| LinkedIn | No |
+| Marketing Status | No |
+| Last Activity Date | Yes |
+| Last Email Received | No |
+| Personalisation Notes | No |
+| Seniority Level | No |
+| Next Recommended Action | No |
+| Buying Signals | No |
+| Pain Point | No |
+| Interest Level | No |
+| LQS | No |
 
-### Step 4: Fix Organisation Detail View
-Ensure the `useContactsByCompany` hook properly queries contacts and update the UI to handle loading states correctly.
+### 4. Updated Edge Functions for Import
 
-Files to verify:
-- `src/hooks/useContacts.ts` - Verify query syntax
-- `src/components/customers/OrganisationDetail.tsx` - Ensure company ID is passed correctly
+Modify the import functions to handle all the new columns from your CSVs:
+
+**Organizations CSV Mapping:**
+```text
+Organization - Labels -> labels
+Organization - Address -> address
+Organization - People -> people_count
+Organization - Next activity date -> next_activity_date
+Organization - Done activities -> done_activities
+Organization - Email messages count -> email_messages_count
+Organization - Year Founded -> foundation_date
+Organization - Description -> description
+```
+
+**People CSV Mapping:**
+```text
+Person - Labels -> labels
+Person - Function -> function
+Person - Marketing status -> marketing_status
+Person - Last email received -> last_email_received
+Person - Seniority level -> seniority_level
+Person - Next recommended action -> next_recommended_action
+Person - Buying signals -> buying_signals
+Person - Pain Point detected -> pain_point
+Person - Interest level -> interest_level
+Person - LQS -> lqs
+Person - Email messages count -> email_messages_count
+Person - Done activities -> done_activities
+```
 
 ---
 
 ## Technical Details
 
-### New Debounce Hook
+### Files to Create
+
+| File | Purpose |
+|------|---------|
+| `src/components/customers/MultiSelectFilter.tsx` | Reusable multi-select combobox filter |
+| `src/components/customers/ColumnSelector.tsx` | Column visibility and reorder panel |
+| `src/hooks/useColumnPreferences.ts` | Persist column settings to localStorage |
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/components/customers/DataFilters.tsx` | Replace Select with MultiSelectFilter |
+| `src/components/customers/OrganisationsTab.tsx` | Add all columns, integrate column selector |
+| `src/components/customers/CustomersTab.tsx` | Add all columns, integrate column selector |
+| `src/hooks/useCompanies.ts` | Add new filter types for multi-select |
+| `src/hooks/useContacts.ts` | Add new filter types for multi-select |
+| `supabase/functions/import-companies/index.ts` | Map all new CSV columns |
+| `supabase/functions/import-contacts/index.ts` | Map all new CSV columns |
+
+### Database Migration SQL
+
+```sql
+-- Add new columns to companies table
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS people_count INTEGER DEFAULT 0;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS next_activity_date TIMESTAMPTZ;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS done_activities INTEGER DEFAULT 0;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS email_messages_count INTEGER DEFAULT 0;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS labels TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT;
+
+-- Add new columns to contacts table
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS connection_strength TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS facebook_url TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS instagram_url TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS marketing_status TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS last_email_received TIMESTAMPTZ;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS seniority_level TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS function TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS next_recommended_action TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS buying_signals TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS pain_point TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS interest_level TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lqs INTEGER;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS email_messages_count INTEGER DEFAULT 0;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS labels TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS done_activities INTEGER DEFAULT 0;
+```
+
+### Multi-Select Filter Component Structure
+
 ```typescript
-// src/hooks/useDebounce.ts
-export function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  
-  return debouncedValue;
+interface MultiSelectFilterProps {
+  label: string;
+  options: { label: string; value: string }[];
+  selectedValues: string[];
+  onChange: (values: string[]) => void;
+  placeholder?: string;
 }
 ```
 
-### Updated DataFilters with Debouncing
-The search input will update a local state immediately (for responsive UI), but only trigger the filter callback after 300ms of no typing.
+### Column Preference Hook
 
-### Edge Function for Contact Import
-The new function will:
-1. Parse the people CSV
-2. Look up each organisation name to find the matching company_id
-3. Insert contacts with proper company linkage
-4. Handle multiple email/phone fields by picking the primary one
+```typescript
+interface ColumnPreference {
+  id: string;
+  label: string;
+  visible: boolean;
+  order: number;
+}
 
-### Database Operations
-```sql
--- Clear existing data (in order due to foreign key)
-DELETE FROM contacts;
-DELETE FROM companies;
+function useColumnPreferences(tableKey: string) {
+  // Load/save from localStorage
+  // Returns: columns, toggleColumn, reorderColumn, resetToDefault
+}
 ```
 
-Then import fresh data from both CSVs.
+---
+
+## UI Preview
+
+### Filters with Multi-Select
+
+```text
++----------------------------------------------------------------+
+| Search: [_______________]                                       |
+|                                                                |
+| Filters:                                                       |
+| [Country v] [Industry v] [Employees v] [Revenue v] [Labels v]  |
+|                                                                |
+| Active: Ireland, UK (+2 more)  |  Clear all filters            |
++----------------------------------------------------------------+
+```
+
+### Column Selector
+
+```text
++---------------------------+
+| Columns                   |
+| [x] Name                  |
+| [x] LinkedIn              |  
+| [ ] Address              |
+| [ ] Website              |
+| [x] Industry             |
+| ... (drag to reorder)    |
+| [Reset to default]       |
++---------------------------+
+```
 
 ---
 
-## File Changes Summary
+## Implementation Steps
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/hooks/useDebounce.ts` | Create | Reusable debounce hook |
-| `src/components/customers/DataFilters.tsx` | Modify | Add search debouncing |
-| `supabase/functions/import-companies/index.ts` | Modify | Update for new CSV format |
-| `supabase/functions/import-contacts/index.ts` | Create | Import people from CSV |
-| `src/components/customers/ImportDataButton.tsx` | Modify | Add contacts import option |
+1. **Database**: Run migration to add new columns to both tables
+2. **Multi-Select Component**: Create reusable MultiSelectFilter 
+3. **Column Preferences**: Create hook for persisting column settings
+4. **Column Selector**: Build UI for toggling/reordering columns
+5. **Update Filters**: Replace DataFilters with multi-select version
+6. **Update Tab Components**: Integrate column selector and all columns
+7. **Update Edge Functions**: Map all new CSV columns for import
+8. **Update Hooks**: Add multi-value filter support to queries
+9. **Import Data**: Re-import CSVs to populate new columns
 
 ---
 
-## Summary
+## Categories Multi-Select Options
 
-1. **Fix debouncing** - Search will wait 300ms after you stop typing
-2. **Update import functions** - Handle your new CSV column formats
-3. **Replace all data** - Clear existing and import ~1,100 orgs + ~1,600 contacts
-4. **Verify linking** - Contacts will be linked to organisations by name matching
-5. **Test View button** - With properly linked data, the detail view will show contacts
+For the Categories field (as specified):
+- B2B
+- B2C
+- Consulting
+- Financial Services
+- IT
+- SaaS
+- Technology
+- Healthcare
+- E-commerce
+- Transit
+- Government
+- Insurance
+- Finance
+- Legal
+- Real Estate
+- International Relations
+- Education
+- Marketplace
+- BCG
+- Airlines
+- Asset Management
+- Construction
+- Energy
+- Enterprise
+- NGO
+- Health & Wellness
+- University
+- Manufacturing
+- Industrial Services
+- International Trade
+- Investment Banking
+- Market Research
+- Media
+- Pharmaceuticals
+- Payments
+- Utilities
+- Venture Capital
+- Consumer Services
+- Security
 
