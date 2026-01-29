@@ -1,8 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
+import { Tables, TablesInsert } from "@/integrations/supabase/types";
 
 export type Contact = Tables<"contacts">;
+export type ContactInsert = TablesInsert<"contacts">;
 
 export interface ContactFilters {
   search?: string;
@@ -22,7 +23,7 @@ export function useContacts(
   return useQuery({
     queryKey: ["contacts", filters, sorting],
     queryFn: async () => {
-      let query = supabase.from("contacts").select("*, companies(company_name)");
+      let query = supabase.from("contacts").select("*, companies!contacts_company_id_fkey(company_name)");
 
       // Apply search filter
       if (filters.search) {
@@ -73,5 +74,46 @@ export function useContactFilterOptions() {
 
       return { workLocations, companies };
     },
+  });
+}
+
+export function useCreateContact() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (contact: ContactInsert) => {
+      const { data, error } = await supabase
+        .from("contacts")
+        .insert(contact)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-filter-options"] });
+      queryClient.invalidateQueries({ queryKey: ["company-contacts"] });
+    },
+  });
+}
+
+export function useContactsByCompany(companyId: string | null) {
+  return useQuery({
+    queryKey: ["company-contacts", companyId],
+    queryFn: async () => {
+      if (!companyId) return [];
+      
+      const { data, error } = await supabase
+        .from("contacts")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("first_name", { ascending: true });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!companyId,
   });
 }

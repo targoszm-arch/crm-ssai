@@ -4,9 +4,11 @@ import { DataFilters, FilterOption } from "./DataFilters";
 import { useCompanies, useCompanyFilterOptions, Company, CompanyFilters, CompanySorting } from "@/hooks/useCompanies";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { OrganisationDetail } from "./OrganisationDetail";
+import { AddContactModal } from "./AddContactModal";
 
 function getConnectionStrengthBadge(strength: string | null) {
   if (!strength) return null;
@@ -28,9 +30,17 @@ function getConnectionStrengthBadge(strength: string | null) {
   );
 }
 
-export function OrganisationsTab() {
+interface OrganisationsTabProps {
+  onAddContact?: () => void;
+}
+
+export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
   const [filters, setFilters] = useState<CompanyFilters>({});
   const [sorting, setSorting] = useState<CompanySorting>({ column: "last_interaction", direction: "desc" });
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [addContactOpen, setAddContactOpen] = useState(false);
+  const [preselectedCompanyId, setPreselectedCompanyId] = useState<string | undefined>();
 
   const { data: companies, isLoading } = useCompanies(filters, sorting);
   const { data: filterOptions } = useCompanyFilterOptions();
@@ -68,6 +78,16 @@ export function OrganisationsTab() {
   const getSortIcon = (column: keyof Company) => {
     if (sorting.column !== column) return <ArrowUpDown className="ml-1 h-3 w-3" />;
     return sorting.direction === "asc" ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
+
+  const handleViewCompany = (company: Company) => {
+    setSelectedCompany(company);
+    setDetailOpen(true);
+  };
+
+  const handleAddContactFromDetail = (companyId: string) => {
+    setPreselectedCompanyId(companyId);
+    setAddContactOpen(true);
   };
 
   const columns = [
@@ -145,7 +165,12 @@ export function OrganisationsTab() {
     {
       accessorKey: "actions",
       header: "",
-      cell: () => <Button variant="ghost" size="sm">View</Button>,
+      cell: (company: Company) => (
+        <Button variant="ghost" size="sm" onClick={() => handleViewCompany(company)}>
+          <Eye className="h-4 w-4 mr-1" />
+          View
+        </Button>
+      ),
     },
   ];
 
@@ -177,6 +202,19 @@ export function OrganisationsTab() {
         columns={columns}
         data={companies || []}
         emptyMessage="No organisations found"
+      />
+
+      <OrganisationDetail
+        company={selectedCompany}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onAddContact={handleAddContactFromDetail}
+      />
+
+      <AddContactModal
+        open={addContactOpen}
+        onOpenChange={setAddContactOpen}
+        preselectedCompanyId={preselectedCompanyId}
       />
     </div>
   );
