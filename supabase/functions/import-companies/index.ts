@@ -25,19 +25,6 @@ serve(async (req) => {
       );
     }
 
-    // Clear existing data if requested
-    if (clearExisting) {
-      console.log("Clearing existing companies data...");
-      const { error: deleteContactsError } = await supabase.from("contacts").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-      if (deleteContactsError) {
-        console.log("Error clearing contacts:", deleteContactsError.message);
-      }
-      const { error: deleteError } = await supabase.from("companies").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-      if (deleteError) {
-        console.log("Error clearing companies:", deleteError.message);
-      }
-    }
-
     // Parse CSV
     const lines = csvData.split("\n");
     const rawHeaders = parseCSVLine(lines[0]);
@@ -57,8 +44,32 @@ serve(async (req) => {
     console.log("CSV Headers (first 15):", headers.slice(0, 15));
     console.log("Total headers:", headers.length);
     
-    const companies = [];
-    const errors = [];
+    const companies: Array<{
+      company_name: string;
+      labels: string | null;
+      address: string | null;
+      website: string | null;
+      linkedin_url: string | null;
+      industry: string | null;
+      annual_turnover: number | null;
+      funding_raised: number | null;
+      employee_count: number | null;
+      employee_range: string | null;
+      people_count: number;
+      next_activity_date: string | null;
+      done_activities: number;
+      email_messages_count: number;
+      description: string | null;
+      foundation_date: string | null;
+      domains: string | null;
+      categories: string | null;
+      connection_strength: string | null;
+      country: string | null;
+      client_id: string | null;
+      last_interaction: string | null;
+      stage: string;
+    }> = [];
+    const errors: Array<{ line?: number; chunk?: number; error: string }> = [];
 
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
@@ -127,12 +138,77 @@ serve(async (req) => {
 
     console.log(`Parsed ${companies.length} companies from CSV`);
 
-    // Batch insert in chunks of 100
-    const chunkSize = 100;
+    // Collect all company names from CSV for later cleanup (if clearExisting)
+    const csvCompanyNames = companies.map(c => c.company_name.toLowerCase().trim());
+    const csvCompanyNamesSet = new Set(csvCompanyNames);
+
+    // UPSERT LOGIC: Match by company_name (case-insensitive)
+    // 1. Fetch all existing companies
+    const { data: existingCompanies, error: fetchError } = await supabase
+      .from("companies")
+      .select("id, company_name");
+
+    if (fetchError) {
+      console.log("Error fetching existing companies:", fetchError.message);
+      throw new Error(`Failed to fetch existing companies: ${fetchError.message}`);
+    }
+
+    // Build a map of lowercase company_name -> existing record
+    const existingMap = new Map<string, { id: string; company_name: string }>();
+    for (const company of existingCompanies || []) {
+      const key = company.company_name.toLowerCase().trim();
+      // If duplicate names exist, keep the first one found (or you could prefer one with contacts)
+      if (!existingMap.has(key)) {
+        existingMap.set(key, company);
+      }
+    }
+
+    console.log(`Found ${existingMap.size} unique existing companies by name`);
+
+    // Separate into updates and inserts
+    const toUpdate: Array<{ id: string; data: typeof companies[0] }> = [];
+    const toInsert: typeof companies = [];
+
+    for (const company of companies) {
+      const key = company.company_name.toLowerCase().trim();
+      const existing = existingMap.get(key);
+
+      if (existing) {
+        toUpdate.push({ id: existing.id, data: company });
+      } else {
+        toInsert.push(company);
+      }
+    }
+
+    console.log(`To update: ${toUpdate.length}, To insert: ${toInsert.length}`);
+
+    let updated = 0;
     let inserted = 0;
 
-    for (let i = 0; i < companies.length; i += chunkSize) {
-      const chunk = companies.slice(i, i + chunkSize);
+    // Perform updates (one at a time to preserve IDs)
+    for (const { id, data } of toUpdate) {
+      const { error: updateError } = await supabase
+        .from("companies")
+        .update({
+          ...data,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+
+      if (updateError) {
+        console.log(`Error updating company ${id}:`, updateError.message);
+        errors.push({ error: `Update failed for ${data.company_name}: ${updateError.message}` });
+      } else {
+        updated++;
+      }
+    }
+
+    console.log(`Updated ${updated} companies`);
+
+    // Batch insert new companies in chunks of 100
+    const chunkSize = 100;
+    for (let i = 0; i < toInsert.length; i += chunkSize) {
+      const chunk = toInsert.slice(i, i + chunkSize);
       
       const { error } = await supabase
         .from("companies")
@@ -146,12 +222,63 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Inserted ${inserted} companies`);
+    console.log(`Inserted ${inserted} new companies`);
+
+    // If clearExisting is true, delete companies NOT in the CSV
+    // BUT only if they have no linked contacts (to prevent orphaning)
+    let deleted = 0;
+    if (clearExisting) {
+      console.log("Cleaning up companies not in CSV...");
+      
+      // Get all companies that are NOT in the CSV
+      const { data: allCompanies } = await supabase
+        .from("companies")
+        .select("id, company_name");
+
+      const companiesToDelete: string[] = [];
+      for (const company of allCompanies || []) {
+        const key = company.company_name.toLowerCase().trim();
+        if (!csvCompanyNamesSet.has(key)) {
+          companiesToDelete.push(company.id);
+        }
+      }
+
+      if (companiesToDelete.length > 0) {
+        console.log(`Found ${companiesToDelete.length} companies to potentially delete`);
+
+        // Check which have contacts - don't delete those
+        const { data: companiesWithContacts } = await supabase
+          .from("contacts")
+          .select("company_id")
+          .in("company_id", companiesToDelete);
+
+        const idsWithContacts = new Set((companiesWithContacts || []).map(c => c.company_id));
+        const safeToDelete = companiesToDelete.filter(id => !idsWithContacts.has(id));
+
+        console.log(`Safe to delete (no contacts): ${safeToDelete.length}`);
+
+        if (safeToDelete.length > 0) {
+          const { error: deleteError } = await supabase
+            .from("companies")
+            .delete()
+            .in("id", safeToDelete);
+
+          if (deleteError) {
+            console.log("Error deleting orphan companies:", deleteError.message);
+          } else {
+            deleted = safeToDelete.length;
+            console.log(`Deleted ${deleted} orphan companies`);
+          }
+        }
+      }
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        imported: inserted,
+        updated,
+        inserted,
+        deleted,
         total: companies.length,
         errors: errors.slice(0, 10),
       }),
