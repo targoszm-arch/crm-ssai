@@ -376,6 +376,127 @@ export type Database = {
           },
         ]
       }
+      email_accounts: {
+        Row: {
+          access_token: string
+          created_at: string
+          email_address: string
+          expires_at: string | null
+          id: string
+          provider: string
+          refresh_token: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          email_address: string
+          expires_at?: string | null
+          id?: string
+          provider?: string
+          refresh_token?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          email_address?: string
+          expires_at?: string | null
+          id?: string
+          provider?: string
+          refresh_token?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      emails: {
+        Row: {
+          account_id: string | null
+          body_html: string | null
+          company_id: string | null
+          contact_id: string | null
+          created_at: string
+          direction: string | null
+          from_email: string
+          from_name: string | null
+          gmail_id: string
+          id: string
+          is_read: boolean | null
+          labels: string[] | null
+          received_at: string
+          snippet: string | null
+          subject: string | null
+          thread_id: string | null
+          to_emails: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          body_html?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          direction?: string | null
+          from_email: string
+          from_name?: string | null
+          gmail_id: string
+          id?: string
+          is_read?: boolean | null
+          labels?: string[] | null
+          received_at: string
+          snippet?: string | null
+          subject?: string | null
+          thread_id?: string | null
+          to_emails?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          body_html?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          direction?: string | null
+          from_email?: string
+          from_name?: string | null
+          gmail_id?: string
+          id?: string
+          is_read?: boolean | null
+          labels?: string[] | null
+          received_at?: string
+          snippet?: string | null
+          subject?: string | null
+          thread_id?: string | null
+          to_emails?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emails_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "emails_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "emails_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           amount: number

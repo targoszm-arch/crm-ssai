@@ -13,6 +13,7 @@ import Campaigns from "./pages/Campaigns";
 import Finances from "./pages/Finances";
 import AIRecommendations from "./pages/AIRecommendations";
 import Payments from "./pages/Payments";
+import Inbox from "./pages/Inbox";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -83,6 +84,14 @@ const App = () => (
             element={
               <AppShell>
                 <AIRecommendations />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/inbox"
+            element={
+              <AppShell>
+                <Inbox />
               </AppShell>
             }
           />

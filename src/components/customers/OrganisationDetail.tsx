@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ExternalLink, UserPlus, Mail, Phone, MapPin, Calendar, Building2, Users } from "lucide-react";
+import { ExternalLink, UserPlus, Mail, Phone, MapPin, Calendar, Building2, Users, Sparkles, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useContactsByCompany } from "@/hooks/useContacts";
 import { Company } from "@/hooks/useCompanies";
 import { Skeleton } from "@/components/ui/skeleton";
+import { enrichCompany } from "@/lib/api/enrichment";
+import { toast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface OrganisationDetailProps {
   company: Company | null;
@@ -36,7 +40,32 @@ function getConnectionStrengthBadge(strength: string | null) {
 }
 
 export function OrganisationDetail({ company, open, onOpenChange, onAddContact }: OrganisationDetailProps) {
+  const [isEnriching, setIsEnriching] = useState(false);
   const { data: contacts, isLoading: contactsLoading } = useContactsByCompany(company?.id || null);
+  const queryClient = useQueryClient();
+
+  const handleEnrich = async () => {
+    if (!company) return;
+
+    setIsEnriching(true);
+    try {
+      const result = await enrichCompany(company.id);
+      queryClient.invalidateQueries({ queryKey: ["companies"] });
+      queryClient.invalidateQueries({ queryKey: ["company-filter-options"] });
+      toast({
+        title: "Company Enriched",
+        description: `Updated ${result.enrichedFields.length} fields with AI insights.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Enrichment Failed",
+        description: error instanceof Error ? error.message : "Failed to enrich company",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEnriching(false);
+    }
+  };
 
   if (!company) return null;
 
@@ -57,6 +86,19 @@ export function OrganisationDetail({ company, open, onOpenChange, onAddContact }
                 )}
               </div>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleEnrich}
+              disabled={isEnriching}
+              title="Enrich with AI"
+            >
+              {isEnriching ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         </SheetHeader>
 
@@ -106,6 +148,22 @@ export function OrganisationDetail({ company, open, onOpenChange, onAddContact }
               <div>
                 <h4 className="text-sm font-medium mb-2">Description</h4>
                 <p className="text-sm text-muted-foreground">{company.description}</p>
+              </div>
+            </>
+          )}
+
+          {company.categories && (
+            <>
+              <Separator />
+              <div>
+                <h4 className="text-sm font-medium mb-2">Categories</h4>
+                <div className="flex flex-wrap gap-1">
+                  {company.categories.split(",").map((cat, i) => (
+                    <Badge key={i} variant="secondary" className="text-xs">
+                      {cat.trim()}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             </>
           )}
