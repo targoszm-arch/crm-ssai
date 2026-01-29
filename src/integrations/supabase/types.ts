@@ -17,40 +17,76 @@ export type Database = {
       companies: {
         Row: {
           annual_turnover: number | null
+          categories: string | null
           client_id: string | null
           company_name: string
+          connection_strength: string | null
+          country: string | null
           created_at: string
+          description: string | null
+          domains: string | null
           employee_count: number | null
+          employee_range: string | null
+          estimated_arr: number | null
+          foundation_date: string | null
+          funding_raised: number | null
           id: string
           industry: string | null
+          last_interaction: string | null
+          linkedin_url: string | null
           size: string | null
           stage: string | null
+          twitter_followers: number | null
           updated_at: string
           website: string | null
         }
         Insert: {
           annual_turnover?: number | null
+          categories?: string | null
           client_id?: string | null
           company_name: string
+          connection_strength?: string | null
+          country?: string | null
           created_at?: string
+          description?: string | null
+          domains?: string | null
           employee_count?: number | null
+          employee_range?: string | null
+          estimated_arr?: number | null
+          foundation_date?: string | null
+          funding_raised?: number | null
           id?: string
           industry?: string | null
+          last_interaction?: string | null
+          linkedin_url?: string | null
           size?: string | null
           stage?: string | null
+          twitter_followers?: number | null
           updated_at?: string
           website?: string | null
         }
         Update: {
           annual_turnover?: number | null
+          categories?: string | null
           client_id?: string | null
           company_name?: string
+          connection_strength?: string | null
+          country?: string | null
           created_at?: string
+          description?: string | null
+          domains?: string | null
           employee_count?: number | null
+          employee_range?: string | null
+          estimated_arr?: number | null
+          foundation_date?: string | null
+          funding_raised?: number | null
           id?: string
           industry?: string | null
+          last_interaction?: string | null
+          linkedin_url?: string | null
           size?: string | null
           stage?: string | null
+          twitter_followers?: number | null
           updated_at?: string
           website?: string | null
         }

@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 interface DataTableProps<T> {
   columns: {
     accessorKey: string;
-    header: string;
+    header: React.ReactNode;
     cell?: (item: T) => React.ReactNode;
   }[];
   data: T[];
