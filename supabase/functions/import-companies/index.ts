@@ -28,7 +28,6 @@ serve(async (req) => {
     // Clear existing data if requested
     if (clearExisting) {
       console.log("Clearing existing companies data...");
-      // First delete contacts to avoid FK constraint issues
       const { error: deleteContactsError } = await supabase.from("contacts").delete().neq("id", "00000000-0000-0000-0000-000000000000");
       if (deleteContactsError) {
         console.log("Error clearing contacts:", deleteContactsError.message);
@@ -43,7 +42,7 @@ serve(async (req) => {
     const lines = csvData.split("\n");
     const headers = parseCSVLine(lines[0]);
     
-    console.log("CSV Headers:", headers.slice(0, 10));
+    console.log("CSV Headers:", headers.slice(0, 15));
     
     const companies = [];
     const errors = [];
@@ -59,25 +58,31 @@ serve(async (req) => {
           record[header] = values[index] || null;
         });
 
-        // Map new CSV columns to database columns
+        // Map all CSV columns to database columns
         const company = {
           company_name: record["Organization - Name"] || record["Record"] || "Unknown",
-          stage: mapLabel(record["Organization - Labels"]),
-          country: record["Organization - Country of Address"] || record["Primary location > Country"] || null,
+          labels: record["Organization - Labels"] || null,
+          address: record["Organization - Address"] || null,
           website: record["Organization - Website"] || null,
           linkedin_url: record["Organization - LinkedIn profile"] || record["LinkedIn"] || null,
           industry: record["Organization - Industry"] || null,
           annual_turnover: parseRevenue(record["Organization - Annual revenue"]),
-          employee_count: parseEmployeeCount(record["Organization - Number of employees"]),
-          client_id: record["Organization - ID"] || null,
-          last_interaction: parseTimestamp(record["Organization - Last activity date"]),
-          description: record["Organization - Description"] || record["Organization - Address"] || null,
-          foundation_date: parseFoundationYear(record["Organization - Year Founded"] || record["Foundation date"]),
           funding_raised: parseFunding(record["Organization - Total Funding"] || record["Funding raised"]),
+          employee_count: parseEmployeeCount(record["Organization - Number of employees"]),
           employee_range: record["Organization - Number of Employees"] || record["Employee range"] || null,
-          domains: record["Domains"] || null,
+          people_count: parseInt(record["Organization - People"]) || 0,
+          next_activity_date: parseTimestamp(record["Organization - Next activity date"]),
+          done_activities: parseInt(record["Organization - Done activities"]) || 0,
+          email_messages_count: parseInt(record["Organization - Email messages count"]) || 0,
+          description: record["Organization - Description"] || null,
+          foundation_date: parseFoundationYear(record["Organization - Year Founded"] || record["Foundation date"]),
+          domains: record["Domains"] || record["Organization - Domain"] || null,
           categories: record["Categories"] || null,
           connection_strength: record["Connection strength"] || null,
+          country: record["Organization - Country of Address"] || record["Primary location > Country"] || null,
+          client_id: record["Organization - ID"] || null,
+          last_interaction: parseTimestamp(record["Organization - Last activity date"]),
+          stage: mapLabel(record["Organization - Labels"]),
         };
 
         // Skip records without a name
@@ -168,7 +173,6 @@ function mapLabel(label: string | null): string {
 
 function parseRevenue(revenue: string | null): number | null {
   if (!revenue) return null;
-  // Parse strings like "10+B USD", "1 - 10B USD", "100 - 1000M USD"
   const match = revenue.match(/(\d+(?:\.\d+)?)\s*(?:-\s*(\d+(?:\.\d+)?))?\s*([BMK])?/i);
   if (!match) return null;
   
@@ -202,7 +206,6 @@ function parseTimestamp(dateStr: string | null): string | null {
 function parseFoundationYear(year: string | null): string | null {
   if (!year) return null;
   try {
-    // Handle year-only format
     if (/^\d{4}$/.test(year)) {
       return `${year}-01-01`;
     }

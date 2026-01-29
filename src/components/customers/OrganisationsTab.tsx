@@ -1,7 +1,9 @@
 import { useState, useMemo } from "react";
 import { DataTable } from "@/components/ui/data-table";
-import { DataFilters, FilterOption } from "./DataFilters";
+import { CRMDataFilters, MultiSelectFilterConfig } from "./CRMDataFilters";
+import { ColumnSelector } from "./ColumnSelector";
 import { useCompanies, useCompanyFilterOptions, Company, CompanyFilters, CompanySorting } from "@/hooks/useCompanies";
+import { useColumnPreferences, ColumnDefinition } from "@/hooks/useColumnPreferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Eye } from "lucide-react";
@@ -30,6 +32,30 @@ function getConnectionStrengthBadge(strength: string | null) {
   );
 }
 
+const ORGANISATION_COLUMNS: ColumnDefinition[] = [
+  { id: "company_name", label: "Name", defaultVisible: true },
+  { id: "labels", label: "Labels", defaultVisible: false },
+  { id: "address", label: "Address", defaultVisible: false },
+  { id: "website", label: "Website", defaultVisible: false },
+  { id: "linkedin_url", label: "LinkedIn", defaultVisible: true },
+  { id: "industry", label: "Industry", defaultVisible: false },
+  { id: "annual_turnover", label: "Revenue", defaultVisible: false },
+  { id: "funding_raised", label: "Funding Raised", defaultVisible: false },
+  { id: "employee_range", label: "Employees", defaultVisible: true },
+  { id: "people_count", label: "Contacts", defaultVisible: true },
+  { id: "next_activity_date", label: "Next Activity", defaultVisible: false },
+  { id: "done_activities", label: "Done Activities", defaultVisible: false },
+  { id: "email_messages_count", label: "Emails", defaultVisible: false },
+  { id: "description", label: "Description", defaultVisible: false },
+  { id: "foundation_date", label: "Founded", defaultVisible: false },
+  { id: "domains", label: "Domains", defaultVisible: true },
+  { id: "categories", label: "Categories", defaultVisible: false },
+  { id: "connection_strength", label: "Connection", defaultVisible: true },
+  { id: "country", label: "Country", defaultVisible: true },
+  { id: "last_interaction", label: "Last Interaction", defaultVisible: true },
+  { id: "actions", label: "Actions", defaultVisible: true },
+];
+
 interface OrganisationsTabProps {
   onAddContact?: () => void;
 }
@@ -44,29 +70,55 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
 
   const { data: companies, isLoading } = useCompanies(filters, sorting);
   const { data: filterOptions } = useCompanyFilterOptions();
+  
+  const {
+    columns: columnPrefs,
+    visibleColumns,
+    isVisible,
+    toggleColumn,
+    moveColumnUp,
+    moveColumnDown,
+    resetToDefault,
+  } = useColumnPreferences("organisations", ORGANISATION_COLUMNS);
 
-  const filterConfig: FilterOption[] = useMemo(() => [
+  const filterConfig: MultiSelectFilterConfig[] = useMemo(() => [
     {
-      label: "Connection",
-      value: filters.connectionStrength || "all",
-      options: (filterOptions?.connectionStrengths || []).map((s) => ({ label: s, value: s })),
-      onChange: (value) => setFilters((prev) => ({ ...prev, connectionStrength: value === "all" ? undefined : value })),
-    },
-    {
+      key: "country",
       label: "Country",
-      value: filters.country || "all",
       options: (filterOptions?.countries || []).map((c) => ({ label: c, value: c })),
-      onChange: (value) => setFilters((prev) => ({ ...prev, country: value === "all" ? undefined : value })),
+      selectedValues: filters.countries || [],
+      onChange: (values) => setFilters((prev) => ({ ...prev, countries: values.length ? values : undefined })),
     },
     {
+      key: "employees",
       label: "Employees",
-      value: filters.employeeRange || "all",
       options: (filterOptions?.employeeRanges || []).map((e) => ({ label: e, value: e })),
-      onChange: (value) => setFilters((prev) => ({ ...prev, employeeRange: value === "all" ? undefined : value })),
+      selectedValues: filters.employeeRanges || [],
+      onChange: (values) => setFilters((prev) => ({ ...prev, employeeRanges: values.length ? values : undefined })),
+    },
+    {
+      key: "industry",
+      label: "Industry",
+      options: (filterOptions?.industries || []).map((i) => ({ label: i, value: i })),
+      selectedValues: filters.industries || [],
+      onChange: (values) => setFilters((prev) => ({ ...prev, industries: values.length ? values : undefined })),
+    },
+    {
+      key: "labels",
+      label: "Labels",
+      options: (filterOptions?.labels || []).map((l) => ({ label: l, value: l })),
+      selectedValues: filters.labels || [],
+      onChange: (values) => setFilters((prev) => ({ ...prev, labels: values.length ? values : undefined })),
     },
   ], [filters, filterOptions]);
 
-  const hasActiveFilters = Boolean(filters.search || filters.connectionStrength || filters.country || filters.employeeRange);
+  const hasActiveFilters = Boolean(
+    filters.search || 
+    (filters.countries && filters.countries.length > 0) ||
+    (filters.employeeRanges && filters.employeeRanges.length > 0) ||
+    (filters.industries && filters.industries.length > 0) ||
+    (filters.labels && filters.labels.length > 0)
+  );
 
   const handleSort = (column: keyof Company) => {
     setSorting((prev) => ({
@@ -90,12 +142,13 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
     setAddContactOpen(true);
   };
 
-  const columns = [
+  const allColumns = [
     {
+      id: "company_name",
       accessorKey: "company_name",
       header: (
         <Button variant="ghost" className="p-0 h-auto font-medium" onClick={() => handleSort("company_name")}>
-          Company Name {getSortIcon("company_name")}
+          Name {getSortIcon("company_name")}
         </Button>
       ),
       cell: (company: Company) => (
@@ -105,35 +158,116 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
           </div>
           <div>
             <div className="font-medium">{company.company_name}</div>
-            {company.linkedin_url && (
-              <a
-                href={company.linkedin_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
-              >
-                LinkedIn <ExternalLink className="h-2.5 w-2.5" />
-              </a>
-            )}
           </div>
         </div>
       ),
     },
     {
+      id: "labels",
+      accessorKey: "labels",
+      header: "Labels",
+      cell: (company: Company) => company.labels ? <Badge variant="secondary">{company.labels}</Badge> : "-",
+    },
+    {
+      id: "address",
+      accessorKey: "address",
+      header: "Address",
+      cell: (company: Company) => <span className="text-sm truncate max-w-[200px] block">{company.address || "-"}</span>,
+    },
+    {
+      id: "website",
+      accessorKey: "website",
+      header: "Website",
+      cell: (company: Company) => company.website ? (
+        <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
+          Visit <ExternalLink className="h-3 w-3" />
+        </a>
+      ) : "-",
+    },
+    {
+      id: "linkedin_url",
+      accessorKey: "linkedin_url",
+      header: "LinkedIn",
+      cell: (company: Company) => company.linkedin_url ? (
+        <a href={company.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
+          LinkedIn <ExternalLink className="h-2.5 w-2.5" />
+        </a>
+      ) : "-",
+    },
+    {
+      id: "industry",
+      accessorKey: "industry",
+      header: "Industry",
+      cell: (company: Company) => <span className="text-sm">{company.industry || "-"}</span>,
+    },
+    {
+      id: "annual_turnover",
+      accessorKey: "annual_turnover",
+      header: "Revenue",
+      cell: (company: Company) => <span className="text-sm">{company.annual_turnover ? `$${(company.annual_turnover / 1000000).toFixed(1)}M` : "-"}</span>,
+    },
+    {
+      id: "funding_raised",
+      accessorKey: "funding_raised",
+      header: "Funding",
+      cell: (company: Company) => <span className="text-sm">{company.funding_raised ? `$${(company.funding_raised / 1000000).toFixed(1)}M` : "-"}</span>,
+    },
+    {
+      id: "employee_range",
+      accessorKey: "employee_range",
+      header: "Employees",
+      cell: (company: Company) => <span className="text-sm">{company.employee_range || "-"}</span>,
+    },
+    {
+      id: "people_count",
+      accessorKey: "people_count",
+      header: "Contacts",
+      cell: (company: Company) => <span className="text-sm">{company.people_count ?? "-"}</span>,
+    },
+    {
+      id: "next_activity_date",
+      accessorKey: "next_activity_date",
+      header: "Next Activity",
+      cell: (company: Company) => <span className="text-sm">{company.next_activity_date ? format(new Date(company.next_activity_date), "MMM d") : "-"}</span>,
+    },
+    {
+      id: "done_activities",
+      accessorKey: "done_activities",
+      header: "Done",
+      cell: (company: Company) => <span className="text-sm">{company.done_activities ?? "-"}</span>,
+    },
+    {
+      id: "email_messages_count",
+      accessorKey: "email_messages_count",
+      header: "Emails",
+      cell: (company: Company) => <span className="text-sm">{company.email_messages_count ?? "-"}</span>,
+    },
+    {
+      id: "description",
+      accessorKey: "description",
+      header: "Description",
+      cell: (company: Company) => <span className="text-sm truncate max-w-[200px] block">{company.description || "-"}</span>,
+    },
+    {
+      id: "foundation_date",
+      accessorKey: "foundation_date",
+      header: "Founded",
+      cell: (company: Company) => <span className="text-sm">{company.foundation_date ? new Date(company.foundation_date).getFullYear() : "-"}</span>,
+    },
+    {
+      id: "domains",
       accessorKey: "domains",
       header: "Domain",
-      cell: (company: Company) => (
-        <span className="text-sm text-muted-foreground">{company.domains || "-"}</span>
-      ),
+      cell: (company: Company) => <span className="text-sm text-muted-foreground">{company.domains || "-"}</span>,
     },
     {
-      accessorKey: "country",
-      header: "Country",
-      cell: (company: Company) => (
-        <span className="text-sm">{company.country || "-"}</span>
-      ),
+      id: "categories",
+      accessorKey: "categories",
+      header: "Categories",
+      cell: (company: Company) => company.categories ? <Badge variant="outline">{company.categories}</Badge> : "-",
     },
     {
+      id: "connection_strength",
       accessorKey: "connection_strength",
       header: (
         <Button variant="ghost" className="p-0 h-auto font-medium" onClick={() => handleSort("connection_strength")}>
@@ -143,6 +277,13 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
       cell: (company: Company) => getConnectionStrengthBadge(company.connection_strength),
     },
     {
+      id: "country",
+      accessorKey: "country",
+      header: "Country",
+      cell: (company: Company) => <span className="text-sm">{company.country || "-"}</span>,
+    },
+    {
+      id: "last_interaction",
       accessorKey: "last_interaction",
       header: (
         <Button variant="ghost" className="p-0 h-auto font-medium" onClick={() => handleSort("last_interaction")}>
@@ -156,13 +297,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
       ),
     },
     {
-      accessorKey: "employee_range",
-      header: "Employees",
-      cell: (company: Company) => (
-        <span className="text-sm">{company.employee_range || "-"}</span>
-      ),
-    },
-    {
+      id: "actions",
       accessorKey: "actions",
       header: "",
       cell: (company: Company) => (
@@ -173,6 +308,8 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
       ),
     },
   ];
+
+  const columns = allColumns.filter((col) => isVisible(col.id));
 
   if (isLoading) {
     return (
@@ -185,14 +322,23 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
 
   return (
     <div className="space-y-4">
-      <DataFilters
+      <CRMDataFilters
         searchValue={filters.search || ""}
         onSearchChange={(value) => setFilters((prev) => ({ ...prev, search: value }))}
         searchPlaceholder="Search organisations..."
         filters={filterConfig}
         onClearFilters={() => setFilters({})}
         hasActiveFilters={hasActiveFilters}
-      />
+      >
+        <ColumnSelector
+          columns={columnPrefs}
+          columnDefinitions={ORGANISATION_COLUMNS}
+          onToggle={toggleColumn}
+          onMoveUp={moveColumnUp}
+          onMoveDown={moveColumnDown}
+          onReset={resetToDefault}
+        />
+      </CRMDataFilters>
 
       <div className="text-sm text-muted-foreground">
         Showing {companies?.length || 0} organisations

@@ -25,7 +25,7 @@ serve(async (req) => {
       );
     }
 
-    // First, fetch all companies to create a lookup map by name
+    // Fetch all companies to create a lookup map by name
     const { data: companiesData, error: companiesError } = await supabase
       .from("companies")
       .select("id, company_name");
@@ -48,7 +48,7 @@ serve(async (req) => {
     const lines = csvData.split("\n");
     const headers = parseCSVLine(lines[0]);
     
-    console.log("CSV Headers:", headers.slice(0, 10));
+    console.log("CSV Headers:", headers.slice(0, 15));
     
     const contacts = [];
     const errors = [];
@@ -74,18 +74,33 @@ serve(async (req) => {
           if (companyId) matchedCount++;
         }
 
-        // Map CSV columns to database columns
+        // Map all CSV columns to database columns
         const contact = {
           first_name: record["Person - First name"] || record["Person - Name"]?.split(" ")[0] || "Unknown",
           last_name: record["Person - Last name"] || null,
           company_id: companyId,
-          title: buildTitle(record["Person - Job title"], record["Person - Seniority level"]),
+          title: record["Person - Job title"] || null,
           email: record["Person - Email - Work"] || record["Person - Email - Home"] || record["Person - Email - Other"] || null,
           phone: cleanPhone(record["Person - Phone - Mobile"] || record["Person - Phone - Work"] || record["Person - Phone - Home"] || record["Person - Phone - Other"]),
           work_location: record["Person - Country of Postal address"] || null,
           linkedin_url: record["Person - LinkedIn URL (Lead CRM)"] || buildLinkedInUrl(record["Person - linkedin_handle"]) || null,
+          facebook_url: record["Person - Facebook URL"] || null,
+          instagram_url: record["Person - Instagram URL"] || null,
           last_contacted: parseTimestamp(record["Person - Last activity date"]),
-          notes: record["Person - Personalization_Notes"] || null,
+          last_email_received: parseTimestamp(record["Person - Last email received"]),
+          notes: record["Person - Personalization_Notes"] || record["Person - Description"] || null,
+          connection_strength: record["Person - Connection strength"] || null,
+          labels: record["Person - Labels"] || null,
+          function: record["Person - Function"] || null,
+          marketing_status: record["Person - Marketing status"] || null,
+          seniority_level: record["Person - Seniority level"] || null,
+          next_recommended_action: record["Person - Next recommended action"] || null,
+          buying_signals: record["Person - Buying signals"] || null,
+          pain_point: record["Person - Pain Point detected"] || null,
+          interest_level: record["Person - Interest level"] || null,
+          lqs: parseInt(record["Person - LQS"]) || null,
+          email_messages_count: parseInt(record["Person - Email messages count"]) || 0,
+          done_activities: parseInt(record["Person - Done activities"]) || 0,
         };
 
         // Skip records without a first name
@@ -166,16 +181,8 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-function buildTitle(jobTitle: string | null, seniority: string | null): string | null {
-  if (!jobTitle && !seniority) return null;
-  if (!jobTitle) return seniority;
-  if (!seniority) return jobTitle;
-  return jobTitle;
-}
-
 function cleanPhone(phone: string | null): string | null {
   if (!phone) return null;
-  // Remove quotes and clean up
   return phone.replace(/^['"]|['"]$/g, "").trim() || null;
 }
 

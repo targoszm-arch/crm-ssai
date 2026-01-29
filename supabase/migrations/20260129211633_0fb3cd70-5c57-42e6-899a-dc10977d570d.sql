@@ -1,0 +1,24 @@
+-- Add new columns to companies table
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS people_count INTEGER DEFAULT 0;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS next_activity_date TIMESTAMPTZ;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS done_activities INTEGER DEFAULT 0;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS email_messages_count INTEGER DEFAULT 0;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS labels TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT;
+
+-- Add new columns to contacts table
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS connection_strength TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS facebook_url TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS instagram_url TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS marketing_status TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS last_email_received TIMESTAMPTZ;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS seniority_level TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS function TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS next_recommended_action TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS buying_signals TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS pain_point TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS interest_level TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lqs INTEGER;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS email_messages_count INTEGER DEFAULT 0;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS labels TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS done_activities INTEGER DEFAULT 0;
