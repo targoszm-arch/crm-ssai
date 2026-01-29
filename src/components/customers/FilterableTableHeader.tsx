@@ -94,9 +94,19 @@ export function FilterableTableHeader({
       </PopoverTrigger>
       <PopoverContent className="w-[220px] p-0" align="start">
         <Command shouldFilter={false}>
-          {/* Sort options */}
-          {sortable && onSort && (
-            <>
+          {/* Search input - must be direct child of Command */}
+          {filterable && filterOptions.length > 0 && (
+            <CommandInput
+              placeholder="Search..."
+              value={search}
+              onValueChange={setSearch}
+              className="h-8"
+            />
+          )}
+          
+          <CommandList className="max-h-[300px]">
+            {/* Sort options */}
+            {sortable && onSort && (
               <CommandGroup heading="Sort">
                 <CommandItem
                   onSelect={() => {
@@ -119,23 +129,13 @@ export function FilterableTableHeader({
                   {isSortedDesc && <Check className="ml-auto h-3.5 w-3.5" />}
                 </CommandItem>
               </CommandGroup>
-            </>
-          )}
+            )}
 
-          {/* Filter options */}
-          {filterable && filterOptions.length > 0 && (
-            <>
-              {sortable && <CommandSeparator />}
-              <CommandGroup heading="Filter">
-                <div className="px-2 pb-2">
-                  <CommandInput
-                    placeholder="Search..."
-                    value={search}
-                    onValueChange={setSearch}
-                    className="h-8"
-                  />
-                </div>
-                <CommandList className="max-h-[200px]">
+            {/* Filter options */}
+            {filterable && filterOptions.length > 0 && (
+              <>
+                {sortable && <CommandSeparator />}
+                <CommandGroup heading="Filter">
                   <CommandEmpty>No results found.</CommandEmpty>
                   {filteredOptions.map((option) => {
                     const isSelected = selectedFilterValues.includes(option.value);
@@ -150,32 +150,32 @@ export function FilterableTableHeader({
                       </CommandItem>
                     );
                   })}
-                </CommandList>
-              </CommandGroup>
-              <CommandSeparator />
-              <CommandGroup>
-                <div className="flex items-center gap-1 px-1 py-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs flex-1"
-                    onClick={handleSelectAll}
-                  >
-                    Select all
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs flex-1"
-                    onClick={handleClearFilter}
-                    disabled={!isActive}
-                  >
-                    Clear
-                  </Button>
-                </div>
-              </CommandGroup>
-            </>
-          )}
+                </CommandGroup>
+                <CommandSeparator />
+                <CommandGroup>
+                  <div className="flex items-center gap-1 px-1 py-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs flex-1"
+                      onClick={handleSelectAll}
+                    >
+                      Select all
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs flex-1"
+                      onClick={handleClearFilter}
+                      disabled={!isActive}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </CommandGroup>
+              </>
+            )}
+          </CommandList>
         </Command>
       </PopoverContent>
     </Popover>
