@@ -35,10 +35,10 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`Enriching contact: ${contactId}`);
 
-    // Fetch current contact data with company
+    // Fetch current contact data with company (specify FK to avoid ambiguity)
     const { data: contact, error: fetchError } = await supabase
       .from("contacts")
-      .select("*, companies(company_name, industry, website)")
+      .select("*, companies!contacts_company_id_fkey(company_name, industry, website)")
       .eq("id", contactId)
       .single();
 
