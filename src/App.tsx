@@ -14,6 +14,7 @@ import Finances from "./pages/Finances";
 import AIRecommendations from "./pages/AIRecommendations";
 import Payments from "./pages/Payments";
 import Inbox from "./pages/Inbox";
+import Calendar from "./pages/Calendar";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -92,6 +93,14 @@ const App = () => (
             element={
               <AppShell>
                 <Inbox />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/calendar"
+            element={
+              <AppShell>
+                <Calendar />
               </AppShell>
             }
           />
