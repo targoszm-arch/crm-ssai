@@ -1,70 +1,56 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Loader2 } from "lucide-react";
-import { useConnectGmail } from "@/hooks/useEmailAccounts";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
 export function ConnectCalendar() {
   const [isConnecting, setIsConnecting] = useState(false);
-  const connectGmail = useConnectGmail();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleConnect = () => {
-    if (!GOOGLE_CLIENT_ID) {
+  const handleConnect = async () => {
+    setIsLoading(true);
+
+    try {
+      // Fetch Google config from edge function (Client ID and fixed redirect URI)
+      const { data, error } = await supabase.functions.invoke("get-google-config");
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (!data.clientId || !data.redirectUri) {
+        throw new Error("Invalid configuration received from server");
+      }
+
+      setIsConnecting(true);
+
+      const scope = encodeURIComponent(
+        "https://www.googleapis.com/auth/gmail.readonly " +
+        "https://www.googleapis.com/auth/gmail.send " +
+        "https://www.googleapis.com/auth/userinfo.email " +
+        "https://www.googleapis.com/auth/calendar " +
+        "https://www.googleapis.com/auth/calendar.events"
+      );
+
+      // Use state parameter to tell the callback where to redirect after auth
+      const state = "calendar";
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${data.clientId}&redirect_uri=${encodeURIComponent(data.redirectUri)}&response_type=code&scope=${scope}&access_type=offline&prompt=consent&state=${state}`;
+
+      window.location.href = authUrl;
+    } catch (err) {
+      console.error("Failed to start OAuth flow:", err);
+      const message = err instanceof Error ? err.message : "Failed to connect";
       toast({
         title: "Configuration Error",
-        description: "Google Client ID is not configured. Please add VITE_GOOGLE_CLIENT_ID to your environment.",
+        description: message,
         variant: "destructive",
       });
-      return;
+      setIsLoading(false);
     }
-
-    setIsConnecting(true);
-
-    const redirectUri = `${window.location.origin}/calendar`;
-    const scope = encodeURIComponent(
-      "https://www.googleapis.com/auth/gmail.readonly " +
-      "https://www.googleapis.com/auth/gmail.send " +
-      "https://www.googleapis.com/auth/userinfo.email " +
-      "https://www.googleapis.com/auth/calendar " +
-      "https://www.googleapis.com/auth/calendar.events"
-    );
-
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
-
-    window.location.href = authUrl;
   };
-
-  // Handle OAuth callback
-  const urlParams = new URLSearchParams(window.location.search);
-  const code = urlParams.get("code");
-
-  if (code && !connectGmail.isPending && !connectGmail.isSuccess) {
-    const redirectUri = `${window.location.origin}/calendar`;
-
-    connectGmail.mutate(
-      { code, redirectUri },
-      {
-        onSuccess: (data) => {
-          window.history.replaceState({}, document.title, "/calendar");
-          toast({
-            title: "Calendar Connected",
-            description: `Successfully connected ${data.email}`,
-          });
-        },
-        onError: (error) => {
-          window.history.replaceState({}, document.title, "/calendar");
-          toast({
-            title: "Connection Failed",
-            description: error.message,
-            variant: "destructive",
-          });
-        },
-      }
-    );
-  }
 
   return (
     <Card className="max-w-md mx-auto">
@@ -80,10 +66,10 @@ export function ConnectCalendar() {
       <CardContent className="flex justify-center">
         <Button
           onClick={handleConnect}
-          disabled={isConnecting || connectGmail.isPending}
+          disabled={isConnecting || isLoading}
           className="gap-2"
         >
-          {(isConnecting || connectGmail.isPending) && (
+          {(isConnecting || isLoading) && (
             <Loader2 className="h-4 w-4 animate-spin" />
           )}
           <Calendar className="h-4 w-4" />
