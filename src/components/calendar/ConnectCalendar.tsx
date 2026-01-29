@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mail, Loader2 } from "lucide-react";
+import { Calendar, Loader2 } from "lucide-react";
 import { useConnectGmail } from "@/hooks/useEmailAccounts";
 import { toast } from "@/hooks/use-toast";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
-export function ConnectGmail() {
+export function ConnectCalendar() {
   const [isConnecting, setIsConnecting] = useState(false);
   const connectGmail = useConnectGmail();
 
@@ -23,7 +23,7 @@ export function ConnectGmail() {
 
     setIsConnecting(true);
 
-    const redirectUri = `${window.location.origin}/inbox`;
+    const redirectUri = `${window.location.origin}/calendar`;
     const scope = encodeURIComponent(
       "https://www.googleapis.com/auth/gmail.readonly " +
       "https://www.googleapis.com/auth/gmail.send " +
@@ -42,21 +42,20 @@ export function ConnectGmail() {
   const code = urlParams.get("code");
 
   if (code && !connectGmail.isPending && !connectGmail.isSuccess) {
-    const redirectUri = `${window.location.origin}/inbox`;
+    const redirectUri = `${window.location.origin}/calendar`;
 
     connectGmail.mutate(
       { code, redirectUri },
       {
         onSuccess: (data) => {
-          // Remove code from URL
-          window.history.replaceState({}, document.title, "/inbox");
+          window.history.replaceState({}, document.title, "/calendar");
           toast({
-            title: "Gmail Connected",
+            title: "Calendar Connected",
             description: `Successfully connected ${data.email}`,
           });
         },
         onError: (error) => {
-          window.history.replaceState({}, document.title, "/inbox");
+          window.history.replaceState({}, document.title, "/calendar");
           toast({
             title: "Connection Failed",
             description: error.message,
@@ -71,11 +70,11 @@ export function ConnectGmail() {
     <Card className="max-w-md mx-auto">
       <CardHeader className="text-center">
         <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-          <Mail className="h-6 w-6 text-primary" />
+          <Calendar className="h-6 w-6 text-primary" />
         </div>
-        <CardTitle>Connect Your Gmail</CardTitle>
+        <CardTitle>Connect Your Google Calendar</CardTitle>
         <CardDescription>
-          Connect your Gmail account to sync emails and link them to your CRM contacts.
+          Connect your Google account to sync calendar events and schedule meetings with your CRM contacts.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex justify-center">
@@ -87,8 +86,8 @@ export function ConnectGmail() {
           {(isConnecting || connectGmail.isPending) && (
             <Loader2 className="h-4 w-4 animate-spin" />
           )}
-          <Mail className="h-4 w-4" />
-          Connect Gmail
+          <Calendar className="h-4 w-4" />
+          Connect Google Calendar
         </Button>
       </CardContent>
     </Card>

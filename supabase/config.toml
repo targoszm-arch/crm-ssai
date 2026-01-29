@@ -20,3 +20,12 @@ verify_jwt = false
 
 [functions.send-email]
 verify_jwt = false
+
+[functions.sync-calendar]
+verify_jwt = false
+
+[functions.create-calendar-event]
+verify_jwt = false
+
+[functions.update-calendar-event]
+verify_jwt = false
