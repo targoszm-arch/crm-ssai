@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppShell from "./components/layout/AppShell";
+import { AuthGuard } from "./components/auth/AuthGuard";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
 import Orders from "./pages/Orders";
@@ -15,6 +16,7 @@ import AIRecommendations from "./pages/AIRecommendations";
 import Payments from "./pages/Payments";
 import Inbox from "./pages/Inbox";
 import Calendar from "./pages/Calendar";
+import Auth from "./pages/Auth";
 import OAuthCallback from "./pages/OAuthCallback";
 import NotFound from "./pages/NotFound";
 
@@ -25,88 +27,111 @@ const App = () => (
     <BrowserRouter>
       <TooltipProvider>
         <Routes>
+          {/* Public routes */}
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/oauth/callback" element={<OAuthCallback />} />
+          
+          {/* Protected routes */}
           <Route
             path="/"
             element={
-              <AppShell>
-                <Dashboard />
-              </AppShell>
+              <AuthGuard>
+                <AppShell>
+                  <Dashboard />
+                </AppShell>
+              </AuthGuard>
             }
           />
           <Route
             path="/customers"
             element={
-              <AppShell>
-                <Customers />
-              </AppShell>
+              <AuthGuard>
+                <AppShell>
+                  <Customers />
+                </AppShell>
+              </AuthGuard>
             }
           />
           <Route
             path="/orders"
             element={
-              <AppShell>
-                <Orders />
-              </AppShell>
+              <AuthGuard>
+                <AppShell>
+                  <Orders />
+                </AppShell>
+              </AuthGuard>
             }
           />
           <Route
             path="/abandonment"
             element={
-              <AppShell>
-                <CartAbandonment />
-              </AppShell>
+              <AuthGuard>
+                <AppShell>
+                  <CartAbandonment />
+                </AppShell>
+              </AuthGuard>
             }
           />
           <Route
             path="/campaigns"
             element={
-              <AppShell>
-                <Campaigns />
-              </AppShell>
+              <AuthGuard>
+                <AppShell>
+                  <Campaigns />
+                </AppShell>
+              </AuthGuard>
             }
           />
           <Route
             path="/finances"
             element={
-              <AppShell>
-                <Finances />
-              </AppShell>
+              <AuthGuard>
+                <AppShell>
+                  <Finances />
+                </AppShell>
+              </AuthGuard>
             }
           />
           <Route
             path="/payments"
             element={
-              <AppShell>
-                <Payments />
-              </AppShell>
+              <AuthGuard>
+                <AppShell>
+                  <Payments />
+                </AppShell>
+              </AuthGuard>
             }
           />
           <Route
             path="/ai-recommendations"
             element={
-              <AppShell>
-                <AIRecommendations />
-              </AppShell>
+              <AuthGuard>
+                <AppShell>
+                  <AIRecommendations />
+                </AppShell>
+              </AuthGuard>
             }
           />
           <Route
             path="/inbox"
             element={
-              <AppShell>
-                <Inbox />
-              </AppShell>
+              <AuthGuard>
+                <AppShell>
+                  <Inbox />
+                </AppShell>
+              </AuthGuard>
             }
           />
           <Route
             path="/calendar"
             element={
-              <AppShell>
-                <Calendar />
-              </AppShell>
+              <AuthGuard>
+                <AppShell>
+                  <Calendar />
+                </AppShell>
+              </AuthGuard>
             }
           />
-          {/* OAuth callback route - handles Google OAuth redirects */}
-          <Route path="/oauth/callback" element={<OAuthCallback />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <Toaster />
