@@ -1,120 +1,109 @@
 
-# Plan: Fix Google OAuth Redirect URI Mismatch
+# Plan: Fix "Link to Contact" Empty Dropdown
 
-## Problem
+## Problem Analysis
 
-The `redirect_uri_mismatch` error occurs because:
-1. The app builds the redirect URI dynamically: `${window.location.origin}/calendar`
-2. This creates different URLs depending on which environment you're in (preview vs production)
-3. Google requires **exact** matching of registered redirect URIs
+The "Link to contact" dropdown shows empty because:
 
-## Solution
+1. **RLS policies require authentication** - The security fix we applied earlier restricts the `contacts` table to authenticated users only
+2. **No authentication in the app** - The application has no login/signup functionality
+3. **Anonymous requests fail** - The Supabase client uses the anonymous key, which the RLS policies now reject
 
-Create a centralized OAuth flow that:
-1. Uses a **single, fixed redirect URI** that works everywhere
-2. Fetches the **Google Client ID from Supabase secrets** via an edge function (solving the .env deletion issue)
+## Solution Options
 
-## Architecture
-
-```text
-User clicks "Connect"
-        |
-        v
-Edge Function: get-google-config
-  - Returns Client ID from secrets
-  - Returns the fixed redirect URI
-        |
-        v
-Frontend redirects to Google OAuth
-  - Uses fixed redirect URI: https://crm-ssai.lovable.app/oauth/callback
-        |
-        v
-Google redirects back to /oauth/callback
-        |
-        v
-Frontend calls google-auth-callback edge function
-        |
-        v
-Redirect to original page (/calendar or /inbox)
-```
+I'll present two options and let you choose:
 
 ---
 
-## Files to Create
+### Option A: Revert to Public Access (Quick Fix)
+
+Undo the RLS policy change for the `contacts` table so data is accessible without login.
+
+| Pros | Cons |
+|------|------|
+| Fast, 1 migration | Security vulnerability returns |
+| No code changes | Not recommended for production |
+
+---
+
+### Option B: Add User Authentication (Recommended)
+
+Implement a proper authentication system with login/signup pages.
+
+| Pros | Cons |
+|------|------|
+| Secure by design | More work (3-4 files) |
+| Follows best practices | Users need to log in |
+| Enables per-user data later | - |
+
+---
+
+## Recommended: Option B - Add Authentication
+
+### Files to Create
 
 | File | Purpose |
 |------|---------|
-| `supabase/functions/get-google-config/index.ts` | Returns Google Client ID from secrets |
-| `src/pages/OAuthCallback.tsx` | Handles OAuth callback for all Google integrations |
+| `src/pages/Auth.tsx` | Login and signup page with email/password |
+| `src/hooks/useAuth.ts` | Authentication state management hook |
+| `src/components/auth/AuthGuard.tsx` | Wrapper to protect routes requiring login |
 
-## Files to Modify
+### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/calendar/ConnectCalendar.tsx` | Fetch Client ID from edge function, use fixed redirect |
-| `src/components/inbox/ConnectGmail.tsx` | Fetch Client ID from edge function, use fixed redirect |
-| `src/App.tsx` | Add `/oauth/callback` route |
-| `supabase/config.toml` | Register new edge function |
+| `src/App.tsx` | Add auth route, wrap protected routes with AuthGuard |
 
 ---
 
 ## Implementation Details
 
-### 1. New Edge Function: get-google-config
+### 1. Authentication Page (`src/pages/Auth.tsx`)
 
-Returns the Google Client ID and fixed redirect URI from Supabase secrets:
+A simple login/signup form with:
+- Email and password fields
+- Toggle between login and signup modes
+- Error handling and loading states
+- Redirect to dashboard on success
 
-```typescript
-// Returns:
-{
-  clientId: "your-client-id.apps.googleusercontent.com",
-  redirectUri: "https://crm-ssai.lovable.app/oauth/callback"
-}
+### 2. Auth Hook (`src/hooks/useAuth.ts`)
+
+```text
+- Track current user session
+- Listen for auth state changes
+- Provide signIn, signUp, signOut functions
+- Auto-refresh on page load
 ```
 
-### 2. OAuth Callback Page
+### 3. Auth Guard Component
 
-A new page at `/oauth/callback` that:
-- Reads the `code` and `state` from URL parameters
-- The `state` parameter contains the original page (e.g., "calendar" or "inbox")
-- Calls the `google-auth-callback` edge function
-- Redirects back to the original page
+- Checks if user is authenticated
+- Shows loading state while checking
+- Redirects to /auth if not logged in
+- Renders children if authenticated
 
-### 3. Updated Connect Components
+### 4. App.tsx Updates
 
-Both `ConnectCalendar.tsx` and `ConnectGmail.tsx` will:
-- Fetch the Google Client ID from the edge function (instead of .env)
-- Use the fixed redirect URI
-- Pass a `state` parameter indicating where to return after OAuth
-
-### 4. Google Cloud Console Setup
-
-You need to register this **exact** redirect URI in Google Cloud Console:
-
-```
-https://crm-ssai.lovable.app/oauth/callback
-```
+- Add `/auth` route for login page
+- Wrap existing routes with AuthGuard
+- Auth callback route remains public
 
 ---
 
-## Summary of Changes
+## After Implementation
 
-| Component | Change |
-|-----------|--------|
-| New Edge Function | `get-google-config` - serves Client ID from secrets |
-| New Page | `/oauth/callback` - centralized OAuth callback handler |
-| ConnectCalendar | Fetch config from edge function, use fixed redirect |
-| ConnectGmail | Fetch config from edge function, use fixed redirect |
-| supabase/config.toml | Register new edge function |
+Once logged in, the Supabase client will automatically include the user's JWT token in requests, allowing the RLS policies to pass and showing contacts in the dropdown.
 
 ---
 
-## Google Cloud Console Action Required
+## Technical Notes
 
-After implementation, add this exact redirect URI to your Google Cloud Console OAuth credentials:
+- Uses Supabase's built-in `auth.signInWithPassword()` and `auth.signUp()`
+- Session is persisted in localStorage automatically
+- Token refresh is handled by the Supabase client
 
-```
-https://crm-ssai.lovable.app/oauth/callback
-```
+---
 
-This single URI will handle both Gmail and Calendar OAuth flows.
+## Summary
+
+The dropdown is empty because there's no logged-in user, and the new security policies require authentication. We need to add a login system so users can authenticate before accessing CRM data.
