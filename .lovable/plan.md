@@ -1,67 +1,42 @@
 
+# Plan: Fix Google OAuth Redirect URI Mismatch
 
-# Plan: Google Calendar Integration
+## Problem
 
-## Overview
+The `redirect_uri_mismatch` error occurs because:
+1. The app builds the redirect URI dynamically: `${window.location.origin}/calendar`
+2. This creates different URLs depending on which environment you're in (preview vs production)
+3. Google requires **exact** matching of registered redirect URIs
 
-Add Google Calendar integration to the existing Calendar nav item at `/calendar`. This will allow users to:
-- View upcoming meetings and appointments
-- Create new calendar events
-- Schedule meetings with CRM contacts
-- Link meetings to contacts/companies
+## Solution
+
+Create a centralized OAuth flow that:
+1. Uses a **single, fixed redirect URI** that works everywhere
+2. Fetches the **Google Client ID from Supabase secrets** via an edge function (solving the .env deletion issue)
 
 ## Architecture
 
-The integration will leverage the existing Google OAuth flow (already set up for Gmail) by adding Calendar scopes. Events will be synced to a new `calendar_events` database table and linked to contacts/companies.
-
 ```text
-Google OAuth Flow (Extended):
-  1. User already connected Gmail OR connects fresh
-  2. Add calendar scopes to OAuth request
-  3. Store tokens in existing email_accounts table
-
-Calendar Sync:
-  1. Edge function fetches events via Google Calendar API
-  2. Matches attendees to CRM contacts by email
-  3. Stores events in database
-  4. Frontend displays in Calendar page
+User clicks "Connect"
+        |
+        v
+Edge Function: get-google-config
+  - Returns Client ID from secrets
+  - Returns the fixed redirect URI
+        |
+        v
+Frontend redirects to Google OAuth
+  - Uses fixed redirect URI: https://crm-ssai.lovable.app/oauth/callback
+        |
+        v
+Google redirects back to /oauth/callback
+        |
+        v
+Frontend calls google-auth-callback edge function
+        |
+        v
+Redirect to original page (/calendar or /inbox)
 ```
-
----
-
-## Required Google API Scopes
-
-Add these scopes to your Google Cloud Console OAuth consent screen:
-
-| Scope | Purpose |
-|-------|---------|
-| `https://www.googleapis.com/auth/calendar` | Full calendar access |
-| `https://www.googleapis.com/auth/calendar.events` | Create/edit events |
-
----
-
-## Database Changes
-
-**New Table: `calendar_events`**
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| account_id | uuid | FK to email_accounts |
-| google_event_id | text | Google Calendar event ID |
-| contact_id | uuid | FK to contacts (nullable) |
-| company_id | uuid | FK to companies (nullable) |
-| title | text | Event title |
-| description | text | Event description |
-| location | text | Event location |
-| start_time | timestamptz | Event start |
-| end_time | timestamptz | Event end |
-| all_day | boolean | Is all-day event |
-| attendees | text[] | Attendee emails |
-| meeting_link | text | Video call link (Meet/Zoom) |
-| status | text | confirmed/tentative/cancelled |
-| created_at | timestamptz | Record created |
-| updated_at | timestamptz | Record updated |
 
 ---
 
@@ -69,160 +44,77 @@ Add these scopes to your Google Cloud Console OAuth consent screen:
 
 | File | Purpose |
 |------|---------|
-| `src/pages/Calendar.tsx` | Main calendar page with month/week/day views |
-| `src/components/calendar/CalendarView.tsx` | Calendar grid component |
-| `src/components/calendar/EventCard.tsx` | Event display card |
-| `src/components/calendar/CreateEventModal.tsx` | Modal to create/edit events |
-| `src/components/calendar/ConnectCalendar.tsx` | Calendar connection UI (if not connected) |
-| `src/hooks/useCalendarEvents.ts` | React Query hooks for calendar data |
-| `supabase/functions/sync-calendar/index.ts` | Fetch events from Google Calendar |
-| `supabase/functions/create-calendar-event/index.ts` | Create event in Google Calendar |
-| `supabase/functions/update-calendar-event/index.ts` | Update/delete events |
-
----
+| `supabase/functions/get-google-config/index.ts` | Returns Google Client ID from secrets |
+| `src/pages/OAuthCallback.tsx` | Handles OAuth callback for all Google integrations |
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/App.tsx` | Add /calendar route |
-| `src/components/inbox/ConnectGmail.tsx` | Add calendar scopes to OAuth request |
-| `supabase/config.toml` | Register new edge functions |
+| `src/components/calendar/ConnectCalendar.tsx` | Fetch Client ID from edge function, use fixed redirect |
+| `src/components/inbox/ConnectGmail.tsx` | Fetch Client ID from edge function, use fixed redirect |
+| `src/App.tsx` | Add `/oauth/callback` route |
+| `supabase/config.toml` | Register new edge function |
 
 ---
 
 ## Implementation Details
 
-### 1. Update OAuth Scopes
+### 1. New Edge Function: get-google-config
 
-Modify `ConnectGmail.tsx` to include Calendar scopes:
+Returns the Google Client ID and fixed redirect URI from Supabase secrets:
 
 ```typescript
-const scope = encodeURIComponent(
-  "https://www.googleapis.com/auth/gmail.readonly " +
-  "https://www.googleapis.com/auth/gmail.send " +
-  "https://www.googleapis.com/auth/userinfo.email " +
-  "https://www.googleapis.com/auth/calendar " +
-  "https://www.googleapis.com/auth/calendar.events"
-);
+// Returns:
+{
+  clientId: "your-client-id.apps.googleusercontent.com",
+  redirectUri: "https://crm-ssai.lovable.app/oauth/callback"
+}
 ```
 
-### 2. Calendar Page Features
+### 2. OAuth Callback Page
 
-**Views:**
-- Month view (default) - Grid with event dots
-- Week view - Time-based grid
-- Day view - Detailed schedule
+A new page at `/oauth/callback` that:
+- Reads the `code` and `state` from URL parameters
+- The `state` parameter contains the original page (e.g., "calendar" or "inbox")
+- Calls the `google-auth-callback` edge function
+- Redirects back to the original page
 
-**Functionality:**
-- Click date to create event
-- Click event to view details
-- Drag to reschedule (future enhancement)
-- Filter by linked contacts
+### 3. Updated Connect Components
 
-### 3. Create Event Modal
+Both `ConnectCalendar.tsx` and `ConnectGmail.tsx` will:
+- Fetch the Google Client ID from the edge function (instead of .env)
+- Use the fixed redirect URI
+- Pass a `state` parameter indicating where to return after OAuth
 
-Fields:
-- Title (required)
-- Date/Time picker
-- Duration or end time
-- Location
-- Description
-- Attendees (select from contacts or type email)
-- Add video meeting link option
+### 4. Google Cloud Console Setup
 
-### 4. Edge Functions
+You need to register this **exact** redirect URI in Google Cloud Console:
 
-**sync-calendar:**
-- Fetches events from Google Calendar API
-- Matches attendees to contacts by email
-- Upserts into calendar_events table
-
-**create-calendar-event:**
-- Creates event in Google Calendar
-- Adds attendees
-- Stores in database with contact link
-
----
-
-## UI Components
-
-### Calendar Page Layout
-
-```text
-+----------------------------------+
-|  Calendar     < Jan 2026 >  + New Event |
-+----------------------------------+
-| Sun | Mon | Tue | Wed | Thu | Fri | Sat |
-+-----+-----+-----+-----+-----+-----+-----+
-|     |  1  |  2  |  3  |  4  |  5  |  6  |
-|     | [*] |     |     |[**]|     |     |
-+-----+-----+-----+-----+-----+-----+-----+
-|  7  |  8  |  9  | 10  | 11  | 12  | 13  |
-|     |     | [*] |     |     |     |     |
-+-----+-----+-----+-----+-----+-----+-----+
 ```
-
-[*] = Event indicators
-
-### Event Card
-
-```text
-+----------------------------------+
-| 10:00 AM - Meeting with John     |
-| @ Zoom                           |
-| [John Smith] [Acme Corp]         |
-+----------------------------------+
+https://crm-ssai.lovable.app/oauth/callback
 ```
 
 ---
 
-## Implementation Steps
+## Summary of Changes
 
-1. **Database Setup**
-   - Create `calendar_events` table with RLS policies
-
-2. **Update OAuth**
-   - Add calendar scopes to ConnectGmail component
-   - Users may need to re-authorize to grant calendar access
-
-3. **Create Edge Functions**
-   - `sync-calendar` - Fetch and store events
-   - `create-calendar-event` - Create new events
-   - `update-calendar-event` - Update/delete events
-
-4. **Build Calendar UI**
-   - Create Calendar page with month/week/day views
-   - Create event display components
-   - Create event creation modal
-
-5. **Add Route**
-   - Add /calendar route to App.tsx
-
-6. **Test Flow**
-   - Verify OAuth works with new scopes
-   - Test event sync
-   - Test event creation
+| Component | Change |
+|-----------|--------|
+| New Edge Function | `get-google-config` - serves Client ID from secrets |
+| New Page | `/oauth/callback` - centralized OAuth callback handler |
+| ConnectCalendar | Fetch config from edge function, use fixed redirect |
+| ConnectGmail | Fetch config from edge function, use fixed redirect |
+| supabase/config.toml | Register new edge function |
 
 ---
 
-## Contact/Company Integration
+## Google Cloud Console Action Required
 
-Events will be automatically linked to contacts when:
-- Attendee email matches a contact's email
-- User manually links event to contact/company
+After implementation, add this exact redirect URI to your Google Cloud Console OAuth credentials:
 
-This allows viewing a contact's meeting history in their detail drawer.
+```
+https://crm-ssai.lovable.app/oauth/callback
+```
 
----
-
-## Summary
-
-| Component | Count |
-|-----------|-------|
-| New Pages | 1 |
-| New Components | 4-5 |
-| New Edge Functions | 3 |
-| New Database Tables | 1 |
-| Modified Files | 3 |
-
+This single URI will handle both Gmail and Calendar OAuth flows.
