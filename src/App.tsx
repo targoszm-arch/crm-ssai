@@ -15,6 +15,7 @@ import AIRecommendations from "./pages/AIRecommendations";
 import Payments from "./pages/Payments";
 import Inbox from "./pages/Inbox";
 import Calendar from "./pages/Calendar";
+import OAuthCallback from "./pages/OAuthCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -104,6 +105,8 @@ const App = () => (
               </AppShell>
             }
           />
+          {/* OAuth callback route - handles Google OAuth redirects */}
+          <Route path="/oauth/callback" element={<OAuthCallback />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <Toaster />

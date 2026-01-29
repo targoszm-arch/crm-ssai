@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.update-calendar-event]
 verify_jwt = false
+
+[functions.get-google-config]
+verify_jwt = false
