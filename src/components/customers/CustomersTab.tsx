@@ -155,7 +155,13 @@ export function CustomersTab() {
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
               {initials}
             </div>
-            <div className="font-medium">{fullName}</div>
+            <button
+              type="button"
+              onClick={() => handleViewContact(contact)}
+              className="font-medium text-left hover:text-primary hover:underline transition-colors"
+            >
+              {fullName}
+            </button>
           </div>
         );
       },
