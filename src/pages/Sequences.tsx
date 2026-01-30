@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
   Mail, Play, Pause, MoreHorizontal, Plus, 
-  Users, Clock, BarChart3, UserPlus, Copy, Edit
+  Users, Clock, BarChart3, UserPlus, Copy, Edit, FileText
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SequenceBuilderSheet } from "@/components/sequences/SequenceBuilderSheet";
 import { EnrollContactModal } from "@/components/sequences/EnrollContactModal";
 import { SequenceEnrollmentsSheet } from "@/components/sequences/SequenceEnrollmentsSheet";
+import { TemplateListModal } from "@/components/templates/TemplateListModal";
 
 const triggerTypeLabels: Record<string, string> = {
   new_customer: "New Customer",
@@ -46,6 +47,7 @@ export default function Sequences() {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
   const [enrollmentsOpen, setEnrollmentsOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [selectedSequence, setSelectedSequence] = useState<Sequence | null>(null);
 
   const getSequenceStats = (sequence: Sequence) => {
@@ -103,10 +105,16 @@ export default function Sequences() {
             Automate your email campaigns with pre-built sequences.
           </p>
         </div>
-        <Button onClick={handleCreateNew}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Sequence
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setTemplatesOpen(true)}>
+            <FileText className="mr-2 h-4 w-4" />
+            Templates
+          </Button>
+          <Button onClick={handleCreateNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Sequence
+          </Button>
+        </div>
       </div>
 
       {/* Quick Stats */}
@@ -348,6 +356,10 @@ export default function Sequences() {
         open={enrollmentsOpen}
         onOpenChange={setEnrollmentsOpen}
         sequence={selectedSequence}
+      />
+      <TemplateListModal
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
       />
     </div>
   );
