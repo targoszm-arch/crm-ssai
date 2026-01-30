@@ -641,7 +641,7 @@ export function RichTextComposer({
             {mode === "visual" && toolbar}
           </div>
 
-          <TabsContent value="visual" className="mt-0">
+          <TabsContent value="visual" className="mt-0" forceMount hidden={mode !== "visual"}>
             <div
               ref={editorRef}
               contentEditable
@@ -655,7 +655,7 @@ export function RichTextComposer({
             />
           </TabsContent>
 
-          <TabsContent value="html" className="mt-0">
+          <TabsContent value="html" className="mt-0" forceMount hidden={mode !== "html"}>
             <textarea
               value={value}
               onChange={(e) => handleHtmlChange(e.target.value)}

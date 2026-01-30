@@ -581,7 +581,7 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
           )}
         </div>
 
-        <TabsContent value="visual" className="mt-0">
+        <TabsContent value="visual" className="mt-0" forceMount hidden={mode !== "visual"}>
           <div
             ref={editorRef}
             contentEditable
@@ -594,7 +594,7 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
           />
         </TabsContent>
 
-        <TabsContent value="html" className="mt-0">
+        <TabsContent value="html" className="mt-0" forceMount hidden={mode !== "html"}>
           <textarea
             value={value}
             onChange={(e) => handleHtmlChange(e.target.value)}
