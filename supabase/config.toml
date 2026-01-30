@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.track-sequence-click]
 verify_jwt = false
+
+[functions.lms-webhook]
+verify_jwt = false
