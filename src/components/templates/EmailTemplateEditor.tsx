@@ -114,12 +114,33 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
   const lastValueRef = useRef(value);
   const savedCursorRangeRef = useRef<Range | null>(null);
 
+  // Extract body content from full HTML documents for safe rendering in contentEditable
+  const extractBodyContent = (html: string): string => {
+    // Check if this looks like a full HTML document
+    if (/<html[\s>]/i.test(html) || /<!DOCTYPE/i.test(html)) {
+      // Try to extract body content
+      const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      if (bodyMatch && bodyMatch[1]) {
+        return bodyMatch[1].trim();
+      }
+      // If no body tag but has html tag, try to extract content after head
+      const htmlMatch = html.match(/<html[^>]*>([\s\S]*)<\/html>/i);
+      if (htmlMatch) {
+        // Remove head section and return the rest
+        const content = htmlMatch[1].replace(/<head[\s\S]*?<\/head>/gi, '').trim();
+        return content;
+      }
+    }
+    return html;
+  };
+
   // Sync external value changes to editor - but NOT while user is editing
   useEffect(() => {
     if (editorRef.current && mode === "visual" && !isFocusedRef.current) {
-      // Always sync when not focused - covers initial mount + external changes
-      if (editorRef.current.innerHTML !== value) {
-        editorRef.current.innerHTML = value;
+      // Extract body content if full HTML document was pasted
+      const safeHtml = extractBodyContent(value);
+      if (editorRef.current.innerHTML !== safeHtml) {
+        editorRef.current.innerHTML = safeHtml;
       }
     }
     lastValueRef.current = value;
@@ -579,7 +600,7 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
         </div>
         <div
           className="p-4 border rounded-md bg-white dark:bg-muted/20 prose prose-sm max-w-none dark:prose-invert"
-          dangerouslySetInnerHTML={{ __html: value }}
+          dangerouslySetInnerHTML={{ __html: extractBodyContent(value) }}
         />
       </div>
 
