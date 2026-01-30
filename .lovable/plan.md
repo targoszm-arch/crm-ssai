@@ -1,111 +1,157 @@
 
 
-# Plan: Connect Backend to Sequences Page
+# Email Templates with Rich Text and HTML Editing
 
-## Problem Summary
-The Sequences page displays data correctly, but all interactive actions are placeholder buttons with no click handlers. Users cannot:
-- Create new sequences
-- Edit existing sequences
-- View enrollments for a sequence
-- Pause or activate sequences
-- Enroll contacts into sequences
-- See actual enrollment and open rate stats
+## Overview
 
-## Solution Overview
-
-### 1. Create Sequence Builder Component
-A modal/sheet for creating and editing email sequences with:
-- Name, description, trigger type inputs
-- From email/name configuration
-- Step builder (add/remove email steps with day delays)
-- Subject and template selection for each step
-- Save as draft or activate
-
-### 2. Create Enrollment Modal Component
-A dialog to enroll contacts into a sequence:
-- Contact search/selection
-- Preview of sequence steps
-- Confirm enrollment button
-
-### 3. Create Sequence Enrollments View Component  
-A sheet to view all contacts enrolled in a sequence:
-- List of enrolled contacts with their status
-- Current step progress
-- Option to pause/cancel individual enrollments
-
-### 4. Wire Up All Dropdown Actions
-Connect the existing dropdown menu items to their handlers:
-- Edit Sequence: Opens SequenceBuilder with sequence data
-- View Enrollments: Opens EnrollmentsSheet
-- Pause/Activate: Calls useUpdateSequence mutation
-- Duplicate: Creates a copy with "(Copy)" suffix
-
-### 5. Calculate Real Stats
-Query actual data for the stats cards:
-- Enrolled count from sequence_enrollments
-- Avg Open Rate from sequence_emails (opened_at / sent_at)
+This plan adds a complete email template management system to the Sequences page, allowing users to:
+- Create and edit email templates with a rich text editor
+- Switch between visual (rich text) and HTML code editing modes
+- Save templates to the database for reuse
+- Select saved templates when building sequence steps
 
 ---
 
-## Technical Implementation
+## What Will Be Built
 
-### New Components to Create
+### 1. Template Management UI
+A new "Templates" section accessible from the Sequences page with:
+- List of all saved templates with preview
+- Create, edit, duplicate, and delete templates
+- Search/filter templates by name
 
-**File: `src/components/sequences/SequenceBuilderSheet.tsx`**
-- Sheet component with form for sequence editing
-- Step builder with drag-and-drop reordering
-- Uses useCreateSequence and useUpdateSequence hooks
-- Includes template previews
+### 2. Rich Text Editor Component
+A custom editor supporting:
+- Bold, italic, underline formatting
+- Links and images
+- Bullet and numbered lists
+- Headers (H1, H2, H3)
+- Toggle between Rich Text and HTML code view
+- Live preview
 
-**File: `src/components/sequences/EnrollContactModal.tsx`**
-- Dialog to search and select contacts
-- Uses useEnrollContact mutation
-- Shows preview of selected sequence
+### 3. Template Editor Modal
+A full-featured editing experience with:
+- Template name and category
+- Subject line field
+- Dual-mode editor (Visual / HTML)
+- Merge tags for personalization (e.g., `{{first_name}}`)
+- Save as new or update existing
 
-**File: `src/components/sequences/SequenceEnrollmentsSheet.tsx`**
-- Sheet showing all enrollments for a sequence
-- Uses useSequenceEnrollments hook
-- Displays contact info, current step, status
-- Actions to pause/cancel enrollments
+---
 
-### Modify Existing Files
+## User Experience Flow
 
-**File: `src/pages/Sequences.tsx`**
-Changes needed:
-1. Add state for selected sequence (for edit/view)
-2. Add state for modals/sheets (builder, enrollments, enroll contact)
-3. Wire up "Create Sequence" button to open builder sheet
-4. Wire up dropdown menu items:
-   - "Edit Sequence" -> open builder with sequence data
-   - "View Enrollments" -> open enrollments sheet  
-   - "Pause/Activate" -> call update mutation
-   - "Duplicate" -> call create mutation with copy
-5. Add "Enroll Contacts" action to dropdown
-6. Query actual enrollment counts for stats
+### Creating a Template
+1. Navigate to Sequences page
+2. Click "Templates" tab or button
+3. Click "New Template"
+4. Enter template name (e.g., "Welcome Email")
+5. Write subject line
+6. Use rich text editor to design the email body
+7. Toggle to "HTML" mode to fine-tune code if needed
+8. Click "Save Template"
 
-**File: `src/hooks/useSequences.ts`**
-Add new hooks/queries:
-- `useSequenceStats()` - aggregate stats for dashboard
-- `useUnenrollContact()` - cancel an enrollment
-- `usePauseEnrollment()` - pause an enrollment
+### Using a Template in a Sequence
+1. Open Sequence Builder
+2. Add a step
+3. Select template from dropdown (now shows saved templates)
+4. Subject auto-fills from template (can override)
+5. Template body is used when sending
 
-### Stats Calculation
+---
 
-Query for enrolled count:
+## Technical Changes
+
+### Database
+
+**New table: `email_templates`**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| name | text | Template name |
+| category | text | Category (welcome, follow_up, etc.) |
+| subject | text | Default subject line |
+| body_html | text | HTML content |
+| body_text | text | Plain text version |
+| is_default | boolean | System template flag |
+| created_at | timestamp | Creation date |
+| updated_at | timestamp | Last modified |
+
+RLS policies: Allow authenticated users full access
+
+### New Components
+
+**`src/components/templates/EmailTemplateEditor.tsx`**
+- Rich text editor with formatting toolbar
+- HTML code editor toggle (uses contenteditable + textarea for code)
+- Merge tag inserter
+- Live preview pane
+
+**`src/components/templates/TemplateListModal.tsx`**
+- Grid/list view of all templates
+- Quick preview on hover
+- Actions: Edit, Duplicate, Delete
+
+**`src/components/templates/EditTemplateSheet.tsx`**
+- Full editing sheet for template details
+- Name, category, subject fields
+- Embeds EmailTemplateEditor
+- Save/Cancel actions
+
+### Modified Components
+
+**`src/pages/Sequences.tsx`**
+- Add "Templates" button/tab
+- Open TemplateListModal on click
+
+**`src/components/sequences/SequenceBuilderSheet.tsx`**
+- Template dropdown now queries `email_templates` table
+- Shows template preview when selected
+- Option to "Edit Template" inline
+
+### New Hook
+
+**`src/hooks/useEmailTemplates.ts`**
 ```typescript
-const { data: enrollmentCount } = await supabase
-  .from("sequence_enrollments")
-  .select("id", { count: "exact" })
-  .eq("status", "active");
+// CRUD operations for email templates
+useEmailTemplates() - fetch all templates
+useEmailTemplate(id) - fetch single template
+useCreateTemplate() - create new
+useUpdateTemplate() - update existing
+useDeleteTemplate() - delete template
 ```
 
-Query for open rate:
-```typescript
-const { data: emailStats } = await supabase
-  .from("sequence_emails")
-  .select("opened_at, sent_at");
-// Calculate: emails with opened_at / total sent
-```
+### Edge Function Update
+
+**`supabase/functions/process-sequences/index.ts`**
+- Remove hardcoded templates
+- Query `email_templates` table for template content
+- Fallback to basic content if template not found
+
+---
+
+## Rich Text Editor Implementation
+
+The editor uses native browser `contentEditable` (similar to existing EmailThread.tsx) with a custom toolbar. This approach:
+- Requires no additional dependencies
+- Works well for email HTML
+- Matches existing patterns in the codebase
+
+**Toolbar Features:**
+- Bold (Ctrl+B)
+- Italic (Ctrl+I)
+- Underline (Ctrl+U)
+- Link insert
+- Bullet list
+- Numbered list
+- Header formatting
+- Merge tag dropdown
+
+**HTML Mode:**
+- Textarea with monospace font
+- Syntax highlighting optional
+- Validates HTML on save
 
 ---
 
@@ -113,60 +159,37 @@ const { data: emailStats } = await supabase
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `src/components/sequences/SequenceBuilderSheet.tsx` | Create | Create/edit sequences |
-| `src/components/sequences/EnrollContactModal.tsx` | Create | Enroll contacts in sequences |
-| `src/components/sequences/SequenceEnrollmentsSheet.tsx` | Create | View enrollments per sequence |
-| `src/pages/Sequences.tsx` | Modify | Wire up all actions and stats |
-| `src/hooks/useSequences.ts` | Modify | Add stats and enrollment management hooks |
+| `supabase/migrations/[timestamp].sql` | Create | Add email_templates table |
+| `src/hooks/useEmailTemplates.ts` | Create | Template CRUD hooks |
+| `src/components/templates/EmailTemplateEditor.tsx` | Create | Rich text/HTML editor |
+| `src/components/templates/TemplateListModal.tsx` | Create | Template library view |
+| `src/components/templates/EditTemplateSheet.tsx` | Create | Template editing sheet |
+| `src/pages/Sequences.tsx` | Modify | Add Templates button |
+| `src/components/sequences/SequenceBuilderSheet.tsx` | Modify | Use saved templates |
+| `supabase/functions/process-sequences/index.ts` | Modify | Load templates from DB |
 
 ---
 
-## User Interface Flow
+## Seed Data
 
-### Creating a Sequence
-1. Click "Create Sequence" button
-2. SequenceBuilderSheet opens with empty form
-3. Fill in name, trigger type, from email
-4. Add email steps (Day 0, Day 3, etc.) with subjects
-5. Select templates for each step
-6. Click "Save as Draft" or "Activate"
-
-### Editing a Sequence
-1. Click dropdown menu on sequence card
-2. Select "Edit Sequence"
-3. SequenceBuilderSheet opens with existing data
-4. Make changes
-5. Save
-
-### Enrolling Contacts
-1. Click dropdown menu on sequence card
-2. Select "Enroll Contacts"
-3. EnrollContactModal opens
-4. Search and select contacts
-5. Click "Enroll"
-6. Contact is added to sequence_enrollments with next_email_at calculated
-
-### Viewing Enrollments
-1. Click dropdown menu on sequence card
-2. Select "View Enrollments"
-3. SequenceEnrollmentsSheet opens
-4. See list of enrolled contacts with progress
-5. Option to pause/cancel individual enrollments
-
-### Pause/Activate Sequence
-1. Click dropdown on sequence card
-2. Click "Pause" (if active) or "Activate" (if draft/paused)
-3. Sequence status updates immediately
-4. Toast notification confirms action
+Pre-populate with useful starter templates:
+- Welcome Email
+- Follow-up
+- Value Proposition
+- Case Study
+- Special Offer
+- Meeting Request
+- Thank You
 
 ---
 
-## Expected Outcome
-After implementation:
-1. All buttons and menu items will be functional
-2. Users can create and edit sequences with a visual builder
-3. Users can enroll contacts into sequences
-4. Users can view and manage enrollments
-5. Dashboard stats show real data (enrolled count, open rates)
-6. Sequences can be paused, activated, and duplicated
+## Merge Tags Support
+
+The following merge tags will be supported:
+- `{{first_name}}` - Contact's first name
+- `{{last_name}}` - Contact's last name
+- `{{email}}` - Contact's email
+- `{{company}}` - Contact's company name
+
+The process-sequences edge function already handles these replacements.
 
