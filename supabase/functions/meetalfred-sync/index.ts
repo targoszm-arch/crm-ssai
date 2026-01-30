@@ -117,14 +117,52 @@ Deno.serve(async (req) => {
 
         for (const campaign of campaignsArray) {
           try {
+            console.log(`Processing campaign ${campaign.id}:`, JSON.stringify(campaign, null, 2));
+            
+            // Try multiple field names - Meet Alfred API may use different names
+            const campaignName = 
+              campaign.name || 
+              campaign.sequence_name || 
+              campaign.title || 
+              campaign.campaign_name ||
+              `Campaign ${campaign.id}`;
+            
+            const totalLeads = 
+              campaign.total_leads || 
+              campaign.leads_count || 
+              campaign.people_count ||
+              campaign.contacts_count ||
+              campaign.count ||
+              0;
+            
+            const sentCount = 
+              campaign.sent_count ||
+              campaign.messages_sent ||
+              campaign.sent ||
+              0;
+            
+            const sequenceType = 
+              campaign.sequence_type || 
+              campaign.type || 
+              campaign.campaign_type ||
+              null;
+            
+            const status = 
+              campaign.status || 
+              (campaign.is_active === true ? "active" : 
+               campaign.is_active === false ? "paused" : "active");
+            
+            console.log(`Extracted: name="${campaignName}", leads=${totalLeads}, sent=${sentCount}, status=${status}`);
+            
             const { error: campError } = await supabase.from("campaigns").upsert(
               {
                 meetalfred_id: campaign.id,
-                name: campaign.name || `Campaign ${campaign.id}`,
-                type: campaign.type || campaign.sequence_type || "linkedin",
-                status: campaign.status || "active",
-                sequence_type: campaign.sequence_type,
-                total_leads: campaign.total_leads || campaign.leads_count || 0,
+                name: campaignName,
+                type: campaign.type || sequenceType || "linkedin",
+                status: status,
+                sequence_type: sequenceType,
+                total_leads: totalLeads,
+                sent_count: sentCount,
                 last_synced_at: new Date().toISOString(),
               },
               { onConflict: "meetalfred_id" }
@@ -135,7 +173,7 @@ Deno.serve(async (req) => {
               results.campaigns.errors.push(`Campaign ${campaign.id}: ${campError.message}`);
             } else {
               results.campaigns.synced++;
-              console.log(`✓ Synced campaign: ${campaign.name}`);
+              console.log(`✓ Synced campaign: ${campaignName}`);
             }
           } catch (e) {
             console.error("Error processing campaign:", e);
