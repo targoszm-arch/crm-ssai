@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.get-google-config]
 verify_jwt = false
+
+[functions.fireflies-webhook]
+verify_jwt = false
