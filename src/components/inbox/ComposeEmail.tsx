@@ -2,7 +2,6 @@ import { useState } from "react";
 import { X, Send, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -28,7 +27,11 @@ import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { useContacts, Contact } from "@/hooks/useContacts";
 import { useEmailSignature } from "@/hooks/useEmailSignature";
 import { useGenerateEmailDraft, DraftTone } from "@/hooks/useGenerateEmailDraft";
+import { RichTextComposer } from "@/components/shared/RichTextComposer";
 import { toast } from "@/hooks/use-toast";
+import { Tables } from "@/integrations/supabase/types";
+
+type EmailTemplate = Tables<"email_templates">;
 
 interface ComposeEmailProps {
   open: boolean;
@@ -77,7 +80,8 @@ export function ComposeEmail({
       { to, subject, tone },
       {
         onSuccess: (draft) => {
-          setBody(draft);
+          // Convert plain text to HTML for the rich editor
+          setBody(draft.replace(/\n/g, '<br>'));
           toast({
             title: "Draft Generated",
             description: `${tone.charAt(0).toUpperCase() + tone.slice(1)} draft created. Feel free to edit before sending.`,
@@ -94,6 +98,15 @@ export function ComposeEmail({
     );
   };
 
+  const handleTemplateSelect = (template: EmailTemplate) => {
+    const content = template.body_html || template.body_text || "";
+    setBody(content);
+    // Auto-fill subject if template has one and subject is empty
+    if (template.subject && !subject.trim()) {
+      setSubject(template.subject);
+    }
+  };
+
   const handleSend = () => {
     if (!account || !to.trim() || !subject.trim() || !body.trim()) {
       toast({
@@ -104,10 +117,10 @@ export function ComposeEmail({
       return;
     }
 
-    // Append signature if exists
+    // Body is already HTML from RichTextComposer, append signature if exists
     let finalBody = body;
     if (signature?.signature_html) {
-      finalBody = `<div style="font-family: sans-serif;">${body.replace(/\n/g, '<br>')}</div>
+      finalBody = `<div style="font-family: sans-serif;">${body}</div>
         <br><div style="margin-top: 16px; border-top: 1px solid #ddd; padding-top: 12px;">
         ${signature.signature_html}</div>`;
     }
@@ -143,14 +156,21 @@ export function ComposeEmail({
     );
   };
 
+  // Strip HTML to check if body has content
+  const getPlainTextLength = (html: string) => {
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = html;
+    return (tempDiv.textContent || tempDiv.innerText || "").trim().length;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>New Email</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 flex-1 overflow-y-auto">
           <div className="flex items-center gap-3">
             <div className="flex-1">
               <Label htmlFor="to" className="text-xs text-muted-foreground">
@@ -195,7 +215,7 @@ export function ComposeEmail({
             />
           </div>
 
-          <div>
+          <div className="flex-1">
             <div className="flex items-center justify-between mb-1">
               <Label htmlFor="body" className="text-xs text-muted-foreground">
                 Message
@@ -228,12 +248,15 @@ export function ComposeEmail({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <Textarea
-              id="body"
+            <RichTextComposer
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={setBody}
               placeholder="Write your message..."
-              rows={10}
+              minHeight={200}
+              maxHeight={350}
+              showTemplates
+              showMergeTags
+              onTemplateSelect={handleTemplateSelect}
             />
           </div>
 
@@ -251,7 +274,7 @@ export function ComposeEmail({
             </Button>
             <Button
               onClick={handleSend}
-              disabled={!to.trim() || !subject.trim() || !body.trim() || sendEmail.isPending}
+              disabled={!to.trim() || !subject.trim() || getPlainTextLength(body) === 0 || sendEmail.isPending}
             >
               <Send className="h-4 w-4 mr-2" />
               Send

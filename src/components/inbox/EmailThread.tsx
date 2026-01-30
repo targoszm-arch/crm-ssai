@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { format } from "date-fns";
 import { Mail, User, Send, Link2, X, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,11 @@ import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { useContacts, Contact } from "@/hooks/useContacts";
 import { useGenerateEmailReply, ReplyTone } from "@/hooks/useEmailReply";
 import { useEmailSignature } from "@/hooks/useEmailSignature";
+import { RichTextComposer } from "@/components/shared/RichTextComposer";
 import { toast } from "@/hooks/use-toast";
+import { Tables } from "@/integrations/supabase/types";
+
+type EmailTemplate = Tables<"email_templates">;
 
 interface EmailThreadProps {
   email: Email;
@@ -32,7 +36,6 @@ interface EmailThreadProps {
 export function EmailThread({ email, account, onClose }: EmailThreadProps) {
   const [replyBody, setReplyBody] = useState("");
   const [isReplying, setIsReplying] = useState(false);
-  const replyEditorRef = useRef<HTMLDivElement>(null);
 
   const sendEmail = useSendEmail();
   const linkEmail = useLinkEmailToContact();
@@ -69,9 +72,6 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
           });
           setReplyBody("");
           setIsReplying(false);
-          if (replyEditorRef.current) {
-            replyEditorRef.current.innerHTML = "";
-          }
         },
         onError: (error) => {
           toast({
@@ -89,10 +89,8 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
       { emailId: email.id, tone },
       {
         onSuccess: (reply) => {
-          setReplyBody(reply);
-          if (replyEditorRef.current) {
-            replyEditorRef.current.innerText = reply;
-          }
+          // Set as HTML with line breaks
+          setReplyBody(reply.replace(/\n/g, '<br>'));
           toast({
             title: "Reply Suggested",
             description: `${tone.charAt(0).toUpperCase() + tone.slice(1)} reply generated. Feel free to edit before sending.`,
@@ -130,10 +128,9 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
     );
   };
 
-  const handleEditorInput = () => {
-    if (replyEditorRef.current) {
-      setReplyBody(replyEditorRef.current.innerText);
-    }
+  const handleTemplateSelect = (template: EmailTemplate) => {
+    const content = template.body_html || template.body_text || "";
+    setReplyBody(content);
   };
 
   return (
@@ -198,14 +195,17 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
               Replying to <span className="font-medium text-foreground">{replyToName}</span>
             </div>
 
-            {/* Rich text editor area */}
-            <div
-              ref={replyEditorRef}
-              contentEditable
-              onInput={handleEditorInput}
-              className="min-h-[100px] max-h-[200px] overflow-auto p-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              data-placeholder="Write your reply..."
-              style={{ whiteSpace: 'pre-wrap' }}
+            {/* Rich text editor with templates */}
+            <RichTextComposer
+              value={replyBody}
+              onChange={setReplyBody}
+              placeholder="Write your reply..."
+              minHeight={100}
+              maxHeight={200}
+              compact
+              showTemplates
+              showMergeTags
+              onTemplateSelect={handleTemplateSelect}
             />
 
             {/* Signature preview */}
@@ -288,7 +288,8 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
 
 // Format reply with quoted original message and signature
 function formatReplyHtml(replyText: string, originalEmail: Email, signatureHtml?: string): string {
-  const replyHtml = replyText.replace(/\n/g, '<br>');
+  // replyText is already HTML from RichTextComposer
+  const replyHtml = replyText;
   
   const quotedDate = format(new Date(originalEmail.received_at), "EEE, MMM d, yyyy 'at' h:mm a");
   const quotedFrom = originalEmail.from_name 
