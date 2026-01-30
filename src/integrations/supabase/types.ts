@@ -26,6 +26,7 @@ export type Database = {
           occurred_at: string | null
           source: string | null
           source_id: string | null
+          user_id: string | null
         }
         Insert: {
           activity_type: string
@@ -38,6 +39,7 @@ export type Database = {
           occurred_at?: string | null
           source?: string | null
           source_id?: string | null
+          user_id?: string | null
         }
         Update: {
           activity_type?: string
@@ -50,6 +52,7 @@ export type Database = {
           occurred_at?: string | null
           source?: string | null
           source_id?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -86,6 +89,7 @@ export type Database = {
           status: string | null
           title: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           account_id?: string | null
@@ -104,6 +108,7 @@ export type Database = {
           status?: string | null
           title: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           account_id?: string | null
@@ -122,6 +127,7 @@ export type Database = {
           status?: string | null
           title?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -163,6 +169,7 @@ export type Database = {
           total_leads: number | null
           type: string | null
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           audience?: string | null
@@ -179,6 +186,7 @@ export type Database = {
           total_leads?: number | null
           type?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           audience?: string | null
@@ -195,6 +203,7 @@ export type Database = {
           total_leads?: number | null
           type?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -228,6 +237,7 @@ export type Database = {
           stage: string | null
           twitter_followers: number | null
           updated_at: string
+          user_id: string | null
           website: string | null
         }
         Insert: {
@@ -259,6 +269,7 @@ export type Database = {
           stage?: string | null
           twitter_followers?: number | null
           updated_at?: string
+          user_id?: string | null
           website?: string | null
         }
         Update: {
@@ -290,6 +301,7 @@ export type Database = {
           stage?: string | null
           twitter_followers?: number | null
           updated_at?: string
+          user_id?: string | null
           website?: string | null
         }
         Relationships: []
@@ -330,6 +342,7 @@ export type Database = {
           total_emails_sent: number | null
           total_opens: number | null
           updated_at: string
+          user_id: string | null
           video_link: string | null
           work_location: string | null
         }
@@ -368,6 +381,7 @@ export type Database = {
           total_emails_sent?: number | null
           total_opens?: number | null
           updated_at?: string
+          user_id?: string | null
           video_link?: string | null
           work_location?: string | null
         }
@@ -406,6 +420,7 @@ export type Database = {
           total_emails_sent?: number | null
           total_opens?: number | null
           updated_at?: string
+          user_id?: string | null
           video_link?: string | null
           work_location?: string | null
         }
@@ -487,6 +502,7 @@ export type Database = {
           stage: string | null
           type: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           company_id?: string | null
@@ -509,6 +525,7 @@ export type Database = {
           stage?: string | null
           type?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           company_id?: string | null
@@ -531,6 +548,7 @@ export type Database = {
           stage?: string | null
           type?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -565,6 +583,7 @@ export type Database = {
           question: string | null
           response: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -574,6 +593,7 @@ export type Database = {
           question?: string | null
           response?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -583,6 +603,7 @@ export type Database = {
           question?: string | null
           response?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -671,6 +692,7 @@ export type Database = {
           name: string
           subject: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           body_html?: string | null
@@ -682,6 +704,7 @@ export type Database = {
           name: string
           subject?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           body_html?: string | null
@@ -693,6 +716,7 @@ export type Database = {
           name?: string
           subject?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -707,6 +731,7 @@ export type Database = {
           link_url: string | null
           occurred_at: string | null
           user_agent: string | null
+          user_id: string | null
         }
         Insert: {
           contact_id?: string | null
@@ -718,6 +743,7 @@ export type Database = {
           link_url?: string | null
           occurred_at?: string | null
           user_agent?: string | null
+          user_id?: string | null
         }
         Update: {
           contact_id?: string | null
@@ -729,6 +755,7 @@ export type Database = {
           link_url?: string | null
           occurred_at?: string | null
           user_agent?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -776,6 +803,7 @@ export type Database = {
           thread_id: string | null
           to_emails: string[] | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           account_id?: string | null
@@ -805,6 +833,7 @@ export type Database = {
           thread_id?: string | null
           to_emails?: string[] | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           account_id?: string | null
@@ -834,6 +863,7 @@ export type Database = {
           thread_id?: string | null
           to_emails?: string[] | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -880,6 +910,7 @@ export type Database = {
           payment_status: string | null
           project_id: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           amount?: number
@@ -894,6 +925,7 @@ export type Database = {
           payment_status?: string | null
           project_id?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           amount?: number
@@ -908,6 +940,7 @@ export type Database = {
           payment_status?: string | null
           project_id?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -971,6 +1004,7 @@ export type Database = {
           source: string | null
           status: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           company_id?: string | null
@@ -986,6 +1020,7 @@ export type Database = {
           source?: string | null
           status?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           company_id?: string | null
@@ -1001,6 +1036,7 @@ export type Database = {
           source?: string | null
           status?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1069,6 +1105,7 @@ export type Database = {
           profile_url: string | null
           synced_at: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           company?: string | null
@@ -1083,6 +1120,7 @@ export type Database = {
           profile_url?: string | null
           synced_at?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           company?: string | null
@@ -1097,6 +1135,7 @@ export type Database = {
           profile_url?: string | null
           synced_at?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1132,6 +1171,7 @@ export type Database = {
           sender_linkedin_id: string
           sender_name: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           campaign_name?: string | null
@@ -1149,6 +1189,7 @@ export type Database = {
           sender_linkedin_id: string
           sender_name?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           campaign_name?: string | null
@@ -1166,6 +1207,7 @@ export type Database = {
           sender_linkedin_id?: string
           sender_name?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1188,6 +1230,7 @@ export type Database = {
           name: string
           sort_order: number | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           color?: string | null
@@ -1199,6 +1242,7 @@ export type Database = {
           name: string
           sort_order?: number | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           color?: string | null
@@ -1210,6 +1254,7 @@ export type Database = {
           name?: string
           sort_order?: number | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1233,6 +1278,7 @@ export type Database = {
           title: string
           transcript_url: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           action_items?: Json | null
@@ -1253,6 +1299,7 @@ export type Database = {
           title: string
           transcript_url?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           action_items?: Json | null
@@ -1273,6 +1320,7 @@ export type Database = {
           title?: string
           transcript_url?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1301,6 +1349,7 @@ export type Database = {
           name: string
           pipeline_id: string | null
           position: number
+          user_id: string | null
         }
         Insert: {
           color?: string | null
@@ -1311,6 +1360,7 @@ export type Database = {
           name: string
           pipeline_id?: string | null
           position: number
+          user_id?: string | null
         }
         Update: {
           color?: string | null
@@ -1321,6 +1371,7 @@ export type Database = {
           name?: string
           pipeline_id?: string | null
           position?: number
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1339,6 +1390,7 @@ export type Database = {
           is_default: boolean | null
           name: string
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -1346,6 +1398,7 @@ export type Database = {
           is_default?: boolean | null
           name: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -1353,6 +1406,7 @@ export type Database = {
           is_default?: boolean | null
           name?: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1367,6 +1421,7 @@ export type Database = {
           project_id: string | null
           updated_at: string
           uploaded_by: string | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1378,6 +1433,7 @@ export type Database = {
           project_id?: string | null
           updated_at?: string
           uploaded_by?: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1389,6 +1445,7 @@ export type Database = {
           project_id?: string | null
           updated_at?: string
           uploaded_by?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1417,6 +1474,7 @@ export type Database = {
           status: string | null
           team_members: string[] | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           budget?: number | null
@@ -1434,6 +1492,7 @@ export type Database = {
           status?: string | null
           team_members?: string[] | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           budget?: number | null
@@ -1451,6 +1510,7 @@ export type Database = {
           status?: string | null
           team_members?: string[] | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1473,6 +1533,7 @@ export type Database = {
           quantity: number | null
           total: number | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1484,6 +1545,7 @@ export type Database = {
           quantity?: number | null
           total?: number | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1495,6 +1557,7 @@ export type Database = {
           quantity?: number | null
           total?: number | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1520,6 +1583,7 @@ export type Database = {
           status: string | null
           title: string
           updated_at: string
+          user_id: string | null
           why_us: string | null
         }
         Insert: {
@@ -1535,6 +1599,7 @@ export type Database = {
           status?: string | null
           title: string
           updated_at?: string
+          user_id?: string | null
           why_us?: string | null
         }
         Update: {
@@ -1550,6 +1615,7 @@ export type Database = {
           status?: string | null
           title?: string
           updated_at?: string
+          user_id?: string | null
           why_us?: string | null
         }
         Relationships: [
@@ -1575,6 +1641,7 @@ export type Database = {
           probability: number | null
           stage: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           company_id?: string | null
@@ -1588,6 +1655,7 @@ export type Database = {
           probability?: number | null
           stage?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           company_id?: string | null
@@ -1601,6 +1669,7 @@ export type Database = {
           probability?: number | null
           stage?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1642,6 +1711,7 @@ export type Database = {
           unique_clicks: number | null
           unique_opens: number | null
           unsubscribed_at: string | null
+          user_id: string | null
         }
         Insert: {
           body_html?: string | null
@@ -1665,6 +1735,7 @@ export type Database = {
           unique_clicks?: number | null
           unique_opens?: number | null
           unsubscribed_at?: string | null
+          user_id?: string | null
         }
         Update: {
           body_html?: string | null
@@ -1688,6 +1759,7 @@ export type Database = {
           unique_clicks?: number | null
           unique_opens?: number | null
           unsubscribed_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1710,6 +1782,7 @@ export type Database = {
           next_email_at: string | null
           sequence_id: string | null
           status: string | null
+          user_id: string | null
         }
         Insert: {
           completed_at?: string | null
@@ -1721,6 +1794,7 @@ export type Database = {
           next_email_at?: string | null
           sequence_id?: string | null
           status?: string | null
+          user_id?: string | null
         }
         Update: {
           completed_at?: string | null
@@ -1732,6 +1806,7 @@ export type Database = {
           next_email_at?: string | null
           sequence_id?: string | null
           status?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1762,6 +1837,7 @@ export type Database = {
           steps: Json
           trigger_type: string
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -1774,6 +1850,7 @@ export type Database = {
           steps?: Json
           trigger_type: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -1786,6 +1863,7 @@ export type Database = {
           steps?: Json
           trigger_type?: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1809,6 +1887,7 @@ export type Database = {
           tags: string[] | null
           task_name: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           archive?: boolean | null
@@ -1829,6 +1908,7 @@ export type Database = {
           tags?: string[] | null
           task_name: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           archive?: boolean | null
@@ -1849,6 +1929,7 @@ export type Database = {
           tags?: string[] | null
           task_name?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1897,6 +1978,7 @@ export type Database = {
           hourly_rate: number | null
           hours: number
           id: string
+          owner_user_id: string | null
           project_id: string | null
           task_id: string | null
           updated_at: string
@@ -1910,6 +1992,7 @@ export type Database = {
           hourly_rate?: number | null
           hours?: number
           id?: string
+          owner_user_id?: string | null
           project_id?: string | null
           task_id?: string | null
           updated_at?: string
@@ -1923,6 +2006,7 @@ export type Database = {
           hourly_rate?: number | null
           hours?: number
           id?: string
+          owner_user_id?: string | null
           project_id?: string | null
           task_id?: string | null
           updated_at?: string
