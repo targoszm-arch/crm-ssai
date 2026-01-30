@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { format } from "date-fns";
-import { Mail, User, Send, Link2, X } from "lucide-react";
+import { Mail, User, Send, Link2, X, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -12,9 +11,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Email, useSendEmail, useLinkEmailToContact } from "@/hooks/useEmails";
 import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { useContacts, Contact } from "@/hooks/useContacts";
+import { useGenerateEmailReply, ReplyTone } from "@/hooks/useEmailReply";
 import { toast } from "@/hooks/use-toast";
 
 interface EmailThreadProps {
@@ -26,23 +32,32 @@ interface EmailThreadProps {
 export function EmailThread({ email, account, onClose }: EmailThreadProps) {
   const [replyBody, setReplyBody] = useState("");
   const [isReplying, setIsReplying] = useState(false);
+  const replyEditorRef = useRef<HTMLDivElement>(null);
 
   const sendEmail = useSendEmail();
   const linkEmail = useLinkEmailToContact();
+  const generateReply = useGenerateEmailReply();
   const { data: contacts } = useContacts({});
+
+  // Get reply recipient
+  const replyTo = email.direction === "inbound" ? email.from_email : email.to_emails?.[0];
+  const replyToName = email.direction === "inbound" 
+    ? (email.from_name || email.from_email)
+    : email.to_emails?.[0];
 
   const handleSendReply = () => {
     if (!account || !replyBody.trim()) return;
-
-    const replyTo = email.direction === "inbound" ? email.from_email : email.to_emails?.[0];
     if (!replyTo) return;
+
+    // Format reply with quoted original message
+    const formattedBody = formatReplyHtml(replyBody, email);
 
     sendEmail.mutate(
       {
         accountId: account.id,
         to: [replyTo],
         subject: email.subject?.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
-        body: replyBody,
+        body: formattedBody,
         contactId: email.contact_id || undefined,
       },
       {
@@ -53,10 +68,38 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
           });
           setReplyBody("");
           setIsReplying(false);
+          if (replyEditorRef.current) {
+            replyEditorRef.current.innerHTML = "";
+          }
         },
         onError: (error) => {
           toast({
             title: "Send Failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        },
+      }
+    );
+  };
+
+  const handleGenerateReply = (tone: ReplyTone) => {
+    generateReply.mutate(
+      { emailId: email.id, tone },
+      {
+        onSuccess: (reply) => {
+          setReplyBody(reply);
+          if (replyEditorRef.current) {
+            replyEditorRef.current.innerText = reply;
+          }
+          toast({
+            title: "Reply Suggested",
+            description: `${tone.charAt(0).toUpperCase() + tone.slice(1)} reply generated. Feel free to edit before sending.`,
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: "Generation Failed",
             description: error.message,
             variant: "destructive",
           });
@@ -84,6 +127,12 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
         },
       }
     );
+  };
+
+  const handleEditorInput = () => {
+    if (replyEditorRef.current) {
+      setReplyBody(replyEditorRef.current.innerText);
+    }
   };
 
   return (
@@ -141,9 +190,12 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
 
       {/* Email Body */}
       <div className="flex-1 overflow-auto p-4">
-        <div className="prose prose-sm max-w-none">
+        <div className="prose prose-sm max-w-none dark:prose-invert">
           {email.body_html ? (
-            <div dangerouslySetInnerHTML={{ __html: email.body_html }} />
+            <div 
+              dangerouslySetInnerHTML={{ __html: email.body_html }} 
+              className="email-content"
+            />
           ) : (
             <p className="whitespace-pre-wrap">{email.snippet}</p>
           )}
@@ -155,23 +207,63 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
       <div className="p-4 bg-muted/30">
         {isReplying ? (
           <div className="space-y-3">
-            <Textarea
-              placeholder="Write your reply..."
-              value={replyBody}
-              onChange={(e) => setReplyBody(e.target.value)}
-              rows={4}
+            {/* Reply header */}
+            <div className="text-sm text-muted-foreground">
+              Replying to <span className="font-medium text-foreground">{replyToName}</span>
+            </div>
+
+            {/* Rich text editor area */}
+            <div
+              ref={replyEditorRef}
+              contentEditable
+              onInput={handleEditorInput}
+              className="min-h-[120px] max-h-[300px] overflow-auto p-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              data-placeholder="Write your reply..."
+              style={{ whiteSpace: 'pre-wrap' }}
             />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsReplying(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSendReply}
-                disabled={!replyBody.trim() || sendEmail.isPending}
-              >
-                <Send className="h-4 w-4 mr-1" />
-                Send Reply
-              </Button>
+
+            {/* Action buttons */}
+            <div className="flex items-center justify-between">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    disabled={generateReply.isPending}
+                  >
+                    {generateReply.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-1" />
+                    )}
+                    {generateReply.isPending ? "Generating..." : "AI Suggest"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => handleGenerateReply("professional")}>
+                    Professional tone
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleGenerateReply("casual")}>
+                    Casual tone
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleGenerateReply("brief")}>
+                    Brief & concise
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setIsReplying(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSendReply}
+                  disabled={!replyBody.trim() || sendEmail.isPending}
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  {sendEmail.isPending ? "Sending..." : "Send Reply"}
+                </Button>
+              </div>
             </div>
           </div>
         ) : (
@@ -183,4 +275,29 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
       </div>
     </div>
   );
+}
+
+// Format reply with quoted original message
+function formatReplyHtml(replyText: string, originalEmail: Email): string {
+  const replyHtml = replyText.replace(/\n/g, '<br>');
+  
+  const quotedDate = format(new Date(originalEmail.received_at), "EEE, MMM d, yyyy 'at' h:mm a");
+  const quotedFrom = originalEmail.from_name 
+    ? `${originalEmail.from_name} &lt;${originalEmail.from_email}&gt;` 
+    : originalEmail.from_email;
+  
+  return `
+    <div style="font-family: sans-serif;">
+      ${replyHtml}
+    </div>
+    <br>
+    <div style="color: #666; border-left: 2px solid #ccc; padding-left: 12px; margin-top: 16px;">
+      <p style="margin: 0 0 8px 0; font-size: 12px;">
+        On ${quotedDate}, ${quotedFrom} wrote:
+      </p>
+      <blockquote style="margin: 0; padding: 0;">
+        ${originalEmail.body_html || `<p>${originalEmail.snippet || ''}</p>`}
+      </blockquote>
+    </div>
+  `.trim();
 }

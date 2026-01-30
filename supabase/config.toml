@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.meetalfred-sync]
 verify_jwt = false
+
+[functions.generate-email-reply]
+verify_jwt = false

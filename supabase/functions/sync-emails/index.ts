@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { decode as base64Decode } from "https://deno.land/std@0.190.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,6 +12,67 @@ interface SyncRequest {
   accountId: string;
   maxResults?: number;
   daysBack?: number;
+}
+
+interface PayloadPart {
+  mimeType: string;
+  body?: { data?: string; size?: number };
+  parts?: PayloadPart[];
+}
+
+// Decode base64url encoded string (Gmail uses URL-safe base64)
+function decodeBase64Url(data: string): string {
+  try {
+    // Convert URL-safe base64 to regular base64
+    const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
+    // Add padding if needed
+    const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+    const bytes = base64Decode(padded);
+    return new TextDecoder().decode(bytes);
+  } catch (e) {
+    console.error('Error decoding base64:', e);
+    return '';
+  }
+}
+
+// Recursively extract email body from Gmail payload
+function extractEmailBody(payload: PayloadPart, preferredMimeType: string): string | null {
+  // Check if body exists at this level with matching mime type
+  if (payload.body?.data && payload.mimeType === preferredMimeType) {
+    return decodeBase64Url(payload.body.data);
+  }
+
+  // If this is a multipart message, search through parts
+  if (payload.parts && payload.parts.length > 0) {
+    // First, try to find the preferred type in nested parts
+    for (const part of payload.parts) {
+      const result = extractEmailBody(part, preferredMimeType);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
+// Extract body with fallback: try HTML first, then plain text
+function getEmailBodyHtml(payload: PayloadPart): string | null {
+  // Try to get HTML body first
+  const htmlBody = extractEmailBody(payload, 'text/html');
+  if (htmlBody) return htmlBody;
+
+  // Fallback to plain text and wrap in <pre> for display
+  const textBody = extractEmailBody(payload, 'text/plain');
+  if (textBody) {
+    // Convert plain text to simple HTML (escape HTML entities and preserve formatting)
+    const escaped = textBody
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+    return `<div style="white-space: pre-wrap; font-family: sans-serif;">${escaped}</div>`;
+  }
+
+  return null;
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -223,6 +285,9 @@ serve(async (req: Request): Promise<Response> => {
         const matchEmail = direction === "inbound" ? fromEmail : toEmails[0];
         const contactId = emailToContactId[matchEmail?.toLowerCase() || ""] || null;
 
+        // Extract HTML body from message payload
+        const bodyHtml = getEmailBodyHtml(msgData.payload);
+
         // Insert email
         const { data: inserted, error: insertError } = await supabase
           .from("emails")
@@ -233,6 +298,7 @@ serve(async (req: Request): Promise<Response> => {
             contact_id: contactId,
             subject,
             snippet: msgData.snippet,
+            body_html: bodyHtml,
             from_email: fromEmail,
             from_name: fromName,
             to_emails: toEmails,

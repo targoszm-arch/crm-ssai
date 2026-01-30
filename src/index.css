@@ -134,4 +134,31 @@
   .hover-scale {
     @apply transition-transform duration-200 hover:scale-[1.01];
   }
+
+  /* Email content styling */
+  .email-content {
+    @apply text-sm;
+  }
+
+  .email-content img {
+    @apply max-w-full h-auto;
+  }
+
+  .email-content a {
+    @apply text-primary underline;
+  }
+
+  .email-content table {
+    @apply max-w-full overflow-x-auto;
+  }
+
+  .email-content blockquote {
+    @apply border-l-2 border-muted pl-4 text-muted-foreground;
+  }
+
+  /* Contenteditable placeholder */
+  [contenteditable]:empty:before {
+    content: attr(data-placeholder);
+    @apply text-muted-foreground;
+  }
 }
