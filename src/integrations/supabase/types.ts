@@ -626,6 +626,42 @@ export type Database = {
         }
         Relationships: []
       }
+      email_templates: {
+        Row: {
+          body_html: string | null
+          body_text: string | null
+          category: string | null
+          created_at: string
+          id: string
+          is_default: boolean | null
+          name: string
+          subject: string | null
+          updated_at: string
+        }
+        Insert: {
+          body_html?: string | null
+          body_text?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean | null
+          name: string
+          subject?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body_html?: string | null
+          body_text?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          subject?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       emails: {
         Row: {
           account_id: string | null
