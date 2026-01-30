@@ -1,238 +1,172 @@
 
-# Fix: Campaign Stats, View Details, and Contact Association Display
 
-## Issues Found
+# Plan: Connect Backend to Sequences Page
 
-### Issue 1: Campaign Stats Show 0
-The Meet Alfred API is returning campaign data, but:
-- Campaign names show as "Campaign {id}" instead of actual names
-- Stats like `total_leads` and `sent_count` are 0 because the API returns these fields with different names
+## Problem Summary
+The Sequences page displays data correctly, but all interactive actions are placeholder buttons with no click handlers. Users cannot:
+- Create new sequences
+- Edit existing sequences
+- View enrollments for a sequence
+- Pause or activate sequences
+- Enroll contacts into sequences
+- See actual enrollment and open rate stats
 
-**Root Cause:** The edge function extracts `campaign.name` but the API returns it in a different field. The API likely returns:
-- `sequence_name` or `title` instead of `name`
-- `leads_count` or `total` instead of `total_leads`
+## Solution Overview
 
-### Issue 2: View Details Not Working
-The "View Details" dropdown menu item in `Campaigns.tsx` has no click handler - it's a placeholder.
+### 1. Create Sequence Builder Component
+A modal/sheet for creating and editing email sequences with:
+- Name, description, trigger type inputs
+- From email/name configuration
+- Step builder (add/remove email steps with day delays)
+- Subject and template selection for each step
+- Save as draft or activate
 
-### Issue 3: Contact Display in LinkedIn Messages
-The contact linking is actually **working correctly** in the database:
-- `linkedin_connections` has `contact_id` properly set
-- Messages are linked to connections via `connection_id`
-- The join path exists: `linkedin_messages` -> `linkedin_connections` -> `contacts`
+### 2. Create Enrollment Modal Component
+A dialog to enroll contacts into a sequence:
+- Contact search/selection
+- Preview of sequence steps
+- Confirm enrollment button
 
-However, the UI components don't fully utilize this data:
-- `LinkedInMessageList.tsx` falls back to `sender_linkedin_id` instead of showing `sender_name`
-- The contact badge only shows if `message.connection?.contacts` exists (via foreign key join)
+### 3. Create Sequence Enrollments View Component  
+A sheet to view all contacts enrolled in a sequence:
+- List of enrolled contacts with their status
+- Current step progress
+- Option to pause/cancel individual enrollments
 
----
+### 4. Wire Up All Dropdown Actions
+Connect the existing dropdown menu items to their handlers:
+- Edit Sequence: Opens SequenceBuilder with sequence data
+- View Enrollments: Opens EnrollmentsSheet
+- Pause/Activate: Calls useUpdateSequence mutation
+- Duplicate: Creates a copy with "(Copy)" suffix
 
-## Solution
-
-### 1. Fix Campaign Data Extraction
-
-Update the edge function to try multiple field names from the Meet Alfred API:
-
-```typescript
-// In meetalfred-sync/index.ts - campaigns sync
-const campaignName = 
-  campaign.name || 
-  campaign.sequence_name || 
-  campaign.title || 
-  `Campaign ${campaign.id}`;
-
-const totalLeads = 
-  campaign.total_leads || 
-  campaign.leads_count || 
-  campaign.total || 
-  campaign.count || 
-  0;
-
-const status = 
-  campaign.status || 
-  (campaign.is_active ? "active" : "draft") ||
-  "active";
-```
-
-Also add logging to capture the raw campaign response structure for debugging.
-
-### 2. Implement Campaign Detail View
-
-Create a campaign detail modal/sheet that shows:
-- Campaign name and status
-- Sequence type and steps
-- Lead list associated with the campaign
-- Activity timeline from the campaign
-
-Add click handler to "View Details":
-```typescript
-<DropdownMenuItem onClick={() => openCampaignDetail(campaign)}>
-  View Details
-</DropdownMenuItem>
-```
-
-Create `CampaignDetailModal.tsx` component.
-
-### 3. Fix Contact Display in Message List
-
-Update `LinkedInMessageList.tsx` to show sender name from message directly:
-
-```typescript
-// Show sender_name first, then connection name, then fallback
-const senderName = message.sender_name || message.connection?.name || message.sender_linkedin_id;
-```
-
-Update `useLinkedInMessages.ts` to include the `sender_name` field in the select and interface.
+### 5. Calculate Real Stats
+Query actual data for the stats cards:
+- Enrolled count from sequence_enrollments
+- Avg Open Rate from sequence_emails (opened_at / sent_at)
 
 ---
 
-## Detailed Changes
+## Technical Implementation
 
-### File 1: `supabase/functions/meetalfred-sync/index.ts`
+### New Components to Create
 
-**Changes:**
-- Add full raw response logging for campaigns
-- Try multiple field names for campaign name, leads count, status
-- Log individual campaign data extraction for debugging
+**File: `src/components/sequences/SequenceBuilderSheet.tsx`**
+- Sheet component with form for sequence editing
+- Step builder with drag-and-drop reordering
+- Uses useCreateSequence and useUpdateSequence hooks
+- Includes template previews
 
+**File: `src/components/sequences/EnrollContactModal.tsx`**
+- Dialog to search and select contacts
+- Uses useEnrollContact mutation
+- Shows preview of selected sequence
+
+**File: `src/components/sequences/SequenceEnrollmentsSheet.tsx`**
+- Sheet showing all enrollments for a sequence
+- Uses useSequenceEnrollments hook
+- Displays contact info, current step, status
+- Actions to pause/cancel enrollments
+
+### Modify Existing Files
+
+**File: `src/pages/Sequences.tsx`**
+Changes needed:
+1. Add state for selected sequence (for edit/view)
+2. Add state for modals/sheets (builder, enrollments, enroll contact)
+3. Wire up "Create Sequence" button to open builder sheet
+4. Wire up dropdown menu items:
+   - "Edit Sequence" -> open builder with sequence data
+   - "View Enrollments" -> open enrollments sheet  
+   - "Pause/Activate" -> call update mutation
+   - "Duplicate" -> call create mutation with copy
+5. Add "Enroll Contacts" action to dropdown
+6. Query actual enrollment counts for stats
+
+**File: `src/hooks/useSequences.ts`**
+Add new hooks/queries:
+- `useSequenceStats()` - aggregate stats for dashboard
+- `useUnenrollContact()` - cancel an enrollment
+- `usePauseEnrollment()` - pause an enrollment
+
+### Stats Calculation
+
+Query for enrolled count:
 ```typescript
-// Campaigns sync section
-console.log("=== CAMPAIGNS API RAW RESPONSE ===");
-console.log(JSON.stringify(campaignsData, null, 2));
-
-for (const campaign of campaignsArray) {
-  console.log(`Processing campaign ${campaign.id}:`, JSON.stringify(campaign, null, 2));
-  
-  const campaignName = 
-    campaign.name || 
-    campaign.sequence_name || 
-    campaign.title || 
-    campaign.campaign_name ||
-    `Campaign ${campaign.id}`;
-    
-  const totalLeads = 
-    campaign.total_leads || 
-    campaign.leads_count || 
-    campaign.people_count ||
-    campaign.contacts_count ||
-    0;
-    
-  const sequenceType = 
-    campaign.sequence_type || 
-    campaign.type || 
-    campaign.campaign_type ||
-    null;
-}
+const { data: enrollmentCount } = await supabase
+  .from("sequence_enrollments")
+  .select("id", { count: "exact" })
+  .eq("status", "active");
 ```
 
-### File 2: `src/pages/Campaigns.tsx`
-
-**Changes:**
-- Add state for selected campaign
-- Create campaign detail dialog/sheet
-- Add click handler to View Details menu item
-- Add View Leads functionality to navigate to Customers filtered by campaign
-
+Query for open rate:
 ```typescript
-const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
-
-// In dropdown menu
-<DropdownMenuItem onClick={() => setSelectedCampaign(campaign)}>
-  View Details
-</DropdownMenuItem>
-<DropdownMenuItem onClick={() => navigate(`/customers?campaign=${campaign.name}`)}>
-  View Leads
-</DropdownMenuItem>
-
-// Add CampaignDetailSheet component
-<Sheet open={!!selectedCampaign} onOpenChange={() => setSelectedCampaign(null)}>
-  ...
-</Sheet>
+const { data: emailStats } = await supabase
+  .from("sequence_emails")
+  .select("opened_at, sent_at");
+// Calculate: emails with opened_at / total sent
 ```
-
-### File 3: `src/components/inbox/LinkedInMessageList.tsx`
-
-**Changes:**
-- Use `sender_name` from message as primary display name
-- Add campaign badge showing which campaign the message came from
-- Show company name if available
-
-```typescript
-// Line 71 - change from:
-{message.connection?.name || message.sender_linkedin_id}
-
-// To:
-{message.sender_name || message.connection?.name || message.sender_linkedin_id}
-
-// Add campaign badge
-{message.campaign_name && (
-  <Badge variant="outline" className="text-xs">
-    {message.campaign_name}
-  </Badge>
-)}
-```
-
-### File 4: `src/hooks/useLinkedInMessages.ts`
-
-**Changes:**
-- Ensure `sender_name`, `campaign_name`, `company_name` are included in select
-- Update interface if needed
-
-```typescript
-export interface LinkedInMessage {
-  // ... existing fields
-  sender_name: string | null;
-  campaign_name: string | null;
-  company_name: string | null;
-}
-```
-
-### File 5: New Component `src/components/campaigns/CampaignDetailSheet.tsx`
-
-Create a sheet/dialog component that displays:
-- Campaign name, status badge, type
-- Sequence type and configuration
-- Stats (leads, sent count, open rate)
-- Lead list from the campaign (query leads table filtered by source)
-- Recent activities related to the campaign
 
 ---
 
-## Database: Add unique constraint for leads table
+## Files Summary
 
-The edge function logs show: `"Lead upsert: there is no unique or exclusion constraint matching the ON CONFLICT specification"`
-
-Need to add a unique constraint on the `leads` table:
-
-```sql
--- Add unique constraint on email (if not null)
-ALTER TABLE leads ADD CONSTRAINT leads_email_unique UNIQUE (email);
-```
-
-This will allow the upsert to work correctly for leads with emails.
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/components/sequences/SequenceBuilderSheet.tsx` | Create | Create/edit sequences |
+| `src/components/sequences/EnrollContactModal.tsx` | Create | Enroll contacts in sequences |
+| `src/components/sequences/SequenceEnrollmentsSheet.tsx` | Create | View enrollments per sequence |
+| `src/pages/Sequences.tsx` | Modify | Wire up all actions and stats |
+| `src/hooks/useSequences.ts` | Modify | Add stats and enrollment management hooks |
 
 ---
 
-## Summary of Changes
+## User Interface Flow
 
-| File | Change |
-|------|--------|
-| `supabase/functions/meetalfred-sync/index.ts` | Add campaign field name fallbacks, full logging |
-| `src/pages/Campaigns.tsx` | Add campaign detail sheet, fix dropdown handlers |
-| `src/components/campaigns/CampaignDetailSheet.tsx` | New component for campaign details |
-| `src/components/inbox/LinkedInMessageList.tsx` | Use sender_name, show campaign badge |
-| `src/hooks/useLinkedInMessages.ts` | Ensure all fields in interface |
-| Database migration | Add unique constraint on leads.email |
+### Creating a Sequence
+1. Click "Create Sequence" button
+2. SequenceBuilderSheet opens with empty form
+3. Fill in name, trigger type, from email
+4. Add email steps (Day 0, Day 3, etc.) with subjects
+5. Select templates for each step
+6. Click "Save as Draft" or "Activate"
+
+### Editing a Sequence
+1. Click dropdown menu on sequence card
+2. Select "Edit Sequence"
+3. SequenceBuilderSheet opens with existing data
+4. Make changes
+5. Save
+
+### Enrolling Contacts
+1. Click dropdown menu on sequence card
+2. Select "Enroll Contacts"
+3. EnrollContactModal opens
+4. Search and select contacts
+5. Click "Enroll"
+6. Contact is added to sequence_enrollments with next_email_at calculated
+
+### Viewing Enrollments
+1. Click dropdown menu on sequence card
+2. Select "View Enrollments"
+3. SequenceEnrollmentsSheet opens
+4. See list of enrolled contacts with progress
+5. Option to pause/cancel individual enrollments
+
+### Pause/Activate Sequence
+1. Click dropdown on sequence card
+2. Click "Pause" (if active) or "Activate" (if draft/paused)
+3. Sequence status updates immediately
+4. Toast notification confirms action
 
 ---
 
 ## Expected Outcome
+After implementation:
+1. All buttons and menu items will be functional
+2. Users can create and edit sequences with a visual builder
+3. Users can enroll contacts into sequences
+4. Users can view and manage enrollments
+5. Dashboard stats show real data (enrolled count, open rates)
+6. Sequences can be paused, activated, and duplicated
 
-After these fixes:
-1. Campaign names will display correctly from Meet Alfred
-2. Campaign stats (leads, sent) will show actual values if available from API
-3. "View Details" opens a sheet with full campaign information
-4. "View Leads" navigates to Customers filtered by campaign
-5. LinkedIn message list shows sender names correctly
-6. Campaign badges show in message list
-7. Lead syncing won't fail due to missing unique constraint
