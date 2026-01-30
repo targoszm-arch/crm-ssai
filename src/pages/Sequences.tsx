@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
   Mail, Play, Pause, MoreHorizontal, Plus, 
-  Users, Clock, CheckCircle, BarChart3
+  Users, Clock, BarChart3, UserPlus, Copy, Edit
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -15,9 +15,11 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { useSequences, Sequence } from "@/hooks/useSequences";
+import { useSequences, useUpdateSequence, useCreateSequence, useSequenceStats, Sequence } from "@/hooks/useSequences";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { SequenceBuilderSheet } from "@/components/sequences/SequenceBuilderSheet";
+import { EnrollContactModal } from "@/components/sequences/EnrollContactModal";
+import { SequenceEnrollmentsSheet } from "@/components/sequences/SequenceEnrollmentsSheet";
 
 const triggerTypeLabels: Record<string, string> = {
   new_customer: "New Customer",
@@ -36,6 +38,15 @@ const statusColors: Record<string, string> = {
 export default function Sequences() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const { data: sequences, isLoading } = useSequences(statusFilter === "all" ? undefined : statusFilter);
+  const { data: stats } = useSequenceStats();
+  const updateSequence = useUpdateSequence();
+  const createSequence = useCreateSequence();
+
+  // Modal/sheet states
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [enrollModalOpen, setEnrollModalOpen] = useState(false);
+  const [enrollmentsOpen, setEnrollmentsOpen] = useState(false);
+  const [selectedSequence, setSelectedSequence] = useState<Sequence | null>(null);
 
   const getSequenceStats = (sequence: Sequence) => {
     const steps = sequence.steps || [];
@@ -44,6 +55,43 @@ export default function Sequences() {
       stepCount: steps.length,
       duration: totalDays,
     };
+  };
+
+  const handleCreateNew = () => {
+    setSelectedSequence(null);
+    setBuilderOpen(true);
+  };
+
+  const handleEdit = (sequence: Sequence) => {
+    setSelectedSequence(sequence);
+    setBuilderOpen(true);
+  };
+
+  const handleViewEnrollments = (sequence: Sequence) => {
+    setSelectedSequence(sequence);
+    setEnrollmentsOpen(true);
+  };
+
+  const handleEnrollContacts = (sequence: Sequence) => {
+    setSelectedSequence(sequence);
+    setEnrollModalOpen(true);
+  };
+
+  const handleToggleStatus = (sequence: Sequence) => {
+    const newStatus = sequence.status === "active" ? "paused" : "active";
+    updateSequence.mutate({ id: sequence.id, status: newStatus });
+  };
+
+  const handleDuplicate = (sequence: Sequence) => {
+    createSequence.mutate({
+      name: `${sequence.name} (Copy)`,
+      description: sequence.description,
+      trigger_type: sequence.trigger_type,
+      steps: sequence.steps,
+      from_email: sequence.from_email,
+      from_name: sequence.from_name,
+      status: "draft",
+    });
   };
 
   return (
@@ -55,7 +103,7 @@ export default function Sequences() {
             Automate your email campaigns with pre-built sequences.
           </p>
         </div>
-        <Button>
+        <Button onClick={handleCreateNew}>
           <Plus className="mr-2 h-4 w-4" />
           Create Sequence
         </Button>
@@ -98,7 +146,7 @@ export default function Sequences() {
                 <Users className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">0</p>
+                <p className="text-2xl font-bold">{stats?.enrolledCount || 0}</p>
                 <p className="text-sm text-muted-foreground">Enrolled</p>
               </div>
             </div>
@@ -111,7 +159,7 @@ export default function Sequences() {
                 <BarChart3 className="h-5 w-5 text-purple-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">0%</p>
+                <p className="text-2xl font-bold">{stats?.openRate || 0}%</p>
                 <p className="text-sm text-muted-foreground">Avg Open Rate</p>
               </div>
             </div>
@@ -177,7 +225,7 @@ export default function Sequences() {
                 <CardDescription>
                   Create your first email sequence to start automating your outreach.
                 </CardDescription>
-                <Button className="mt-4">
+                <Button className="mt-4" onClick={handleCreateNew}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Sequence
                 </Button>
@@ -186,7 +234,7 @@ export default function Sequences() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sequences?.map((sequence) => {
-                const stats = getSequenceStats(sequence);
+                const seqStats = getSequenceStats(sequence);
                 return (
                   <Card key={sequence.id} className="hover:border-primary/50 transition-colors">
                     <CardHeader className="pb-3">
@@ -206,17 +254,30 @@ export default function Sequences() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem>Edit Sequence</DropdownMenuItem>
-                            <DropdownMenuItem>View Enrollments</DropdownMenuItem>
-                            <DropdownMenuItem>Duplicate</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEdit(sequence)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit Sequence
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEnrollContacts(sequence)}>
+                              <UserPlus className="mr-2 h-4 w-4" />
+                              Enroll Contacts
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewEnrollments(sequence)}>
+                              <Users className="mr-2 h-4 w-4" />
+                              View Enrollments
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDuplicate(sequence)}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              Duplicate
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {sequence.status === "active" ? (
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleToggleStatus(sequence)}>
                                 <Pause className="mr-2 h-4 w-4" />
                                 Pause
                               </DropdownMenuItem>
                             ) : (
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleToggleStatus(sequence)}>
                                 <Play className="mr-2 h-4 w-4" />
                                 Activate
                               </DropdownMenuItem>
@@ -238,11 +299,11 @@ export default function Sequences() {
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Mail className="h-4 w-4" />
-                          <span>{stats.stepCount} emails</span>
+                          <span>{seqStats.stepCount} emails</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Clock className="h-4 w-4" />
-                          <span>{stats.duration} days</span>
+                          <span>{seqStats.duration} days</span>
                         </div>
                       </div>
 
@@ -271,6 +332,23 @@ export default function Sequences() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Modals and Sheets */}
+      <SequenceBuilderSheet
+        open={builderOpen}
+        onOpenChange={setBuilderOpen}
+        sequence={selectedSequence}
+      />
+      <EnrollContactModal
+        open={enrollModalOpen}
+        onOpenChange={setEnrollModalOpen}
+        sequence={selectedSequence}
+      />
+      <SequenceEnrollmentsSheet
+        open={enrollmentsOpen}
+        onOpenChange={setEnrollmentsOpen}
+        sequence={selectedSequence}
+      />
     </div>
   );
 }

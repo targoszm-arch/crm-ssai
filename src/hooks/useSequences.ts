@@ -205,11 +205,85 @@ export function useEnrollContact() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sequence-enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ["sequence-stats"] });
       toast.success("Contact enrolled in sequence");
     },
     onError: (error) => {
       console.error("Enroll contact error:", error);
       toast.error("Failed to enroll contact");
+    },
+  });
+}
+
+export function useUpdateEnrollment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const updateData: Record<string, any> = { status };
+      
+      if (status === "completed") {
+        updateData.completed_at = new Date().toISOString();
+      }
+
+      const { data, error } = await supabase
+        .from("sequence_enrollments")
+        .update(updateData)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sequence-enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ["sequence-stats"] });
+      toast.success("Enrollment updated");
+    },
+    onError: (error) => {
+      console.error("Update enrollment error:", error);
+      toast.error("Failed to update enrollment");
+    },
+  });
+}
+
+export function useSequenceStats() {
+  return useQuery({
+    queryKey: ["sequence-stats"],
+    queryFn: async () => {
+      // Get active enrollments count
+      const { count: enrolledCount, error: enrollError } = await supabase
+        .from("sequence_enrollments")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "active");
+
+      if (enrollError) {
+        console.error("Error fetching enrollment count:", enrollError);
+      }
+
+      // Get sent emails with open tracking
+      const { data: emailStats, error: emailError } = await supabase
+        .from("sequence_emails")
+        .select("sent_at, opened_at")
+        .not("sent_at", "is", null);
+
+      if (emailError) {
+        console.error("Error fetching email stats:", emailError);
+      }
+
+      // Calculate open rate
+      let openRate = 0;
+      if (emailStats && emailStats.length > 0) {
+        const sentCount = emailStats.length;
+        const openedCount = emailStats.filter((e) => e.opened_at).length;
+        openRate = Math.round((openedCount / sentCount) * 100);
+      }
+
+      return {
+        enrolledCount: enrolledCount || 0,
+        openRate,
+      };
     },
   });
 }
