@@ -52,6 +52,7 @@ serve(async (req: Request): Promise<Response> => {
     console.log(`Generating ${tone} reply for email: ${emailId}`);
 
     // Fetch the email with contact and company info
+    // Use explicit FK name to avoid ambiguity (contacts has two FKs to companies)
     const { data: email, error: emailError } = await supabase
       .from("emails")
       .select(`
@@ -62,7 +63,7 @@ serve(async (req: Request): Promise<Response> => {
           last_name,
           title,
           company_id,
-          companies (
+          companies!contacts_company_id_fkey (
             company_name,
             industry
           )
