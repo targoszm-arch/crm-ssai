@@ -17,6 +17,28 @@ interface SendEmailRequest {
   from_name?: string;
 }
 
+// Add tracking pixel to email HTML
+function injectTrackingPixel(html: string, sequenceEmailId: string, supabaseUrl: string): string {
+  const trackingPixel = `<img src="${supabaseUrl}/functions/v1/track-sequence-open?seid=${sequenceEmailId}" width="1" height="1" style="display:none;visibility:hidden;" alt="" />`;
+  if (html.toLowerCase().includes("</body>")) {
+    return html.replace(/<\/body>/i, `${trackingPixel}</body>`);
+  }
+  return html + trackingPixel;
+}
+
+// Wrap links for click tracking
+function wrapLinksForTracking(html: string, sequenceEmailId: string, supabaseUrl: string): string {
+  const linkRegex = /href=["'](https?:\/\/[^"']+)["']/gi;
+  return html.replace(linkRegex, (match, url) => {
+    // Skip tracking URLs and unsubscribe links
+    if (url.includes("/functions/v1/track-") || url.includes("unsubscribe")) {
+      return match;
+    }
+    const encodedUrl = encodeURIComponent(url);
+    return `href="${supabaseUrl}/functions/v1/track-sequence-click?seid=${sequenceEmailId}&url=${encodedUrl}"`;
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -48,6 +70,7 @@ Deno.serve(async (req) => {
         subject,
         body_html,
         status: "sending",
+        delivery_status: "pending",
       })
       .select()
       .single();
@@ -57,6 +80,13 @@ Deno.serve(async (req) => {
       throw createError;
     }
 
+    // Add tracking to the email
+    let trackedHtml = body_html;
+    trackedHtml = wrapLinksForTracking(trackedHtml, sequenceEmail.id, supabaseUrl);
+    trackedHtml = injectTrackingPixel(trackedHtml, sequenceEmail.id, supabaseUrl);
+
+    console.log("Tracking added to email, sending via Resend...");
+
     // Send email via Resend
     const fromAddress = from_email || "noreply@crm-ssai.lovable.app";
     const fromDisplay = from_name ? `${from_name} <${fromAddress}>` : fromAddress;
@@ -65,7 +95,7 @@ Deno.serve(async (req) => {
       from: fromDisplay,
       to: [to_email],
       subject: subject,
-      html: body_html,
+      html: trackedHtml,
     });
 
     if (sendError) {
@@ -86,9 +116,12 @@ Deno.serve(async (req) => {
       .update({
         resend_message_id: emailResult?.id,
         status: "sent",
+        delivery_status: "delivered",
         sent_at: new Date().toISOString(),
       })
       .eq("id", sequenceEmail.id);
+
+    console.log(`✓ Sequence email sent to ${to_email} with tracking`);
 
     // Update enrollment with next step info
     const { data: enrollment } = await supabase
@@ -105,9 +138,19 @@ Deno.serve(async (req) => {
         .single();
 
       if (sequence?.steps) {
-        const steps = sequence.steps as any[];
+        // Handle double-encoded steps (JSON string inside JSONB)
+        let steps = sequence.steps;
+        if (typeof steps === "string") {
+          try {
+            steps = JSON.parse(steps);
+            console.log(`Parsed steps from string: ${steps.length} steps`);
+          } catch (e) {
+            console.error("Failed to parse steps:", e);
+            steps = [];
+          }
+        }
         const nextStepIndex = step_number + 1;
-        const currentStep = steps[step_number];
+        const currentStep = Array.isArray(steps) ? steps[step_number] : null;
         
         if (nextStepIndex < steps.length && currentStep) {
           const nextStep = steps[nextStepIndex];
