@@ -1,273 +1,173 @@
 
-# Enhanced Rich Text Editor with Gmail-like Features
-
-## What You Asked For
-
-1. **Click embedded image → Add trackable link** - Like Gmail, click an image to attach a link
-2. **Select text → Wrap with link** - When text is selected, clicking link button wraps it
-3. **CTA Buttons** - Insert styled call-to-action buttons with links
-4. **Direct file upload** - Upload images/videos from computer, not just URL
+## Goals
+1. Fix Inbox folder views so **Inbox / Sent / Drafts / Archive** actually show different emails (not “everything in Inbox”).
+2. Fix the rich email editor so:
+   - inserting an image/video reliably inserts into the editor,
+   - the cursor does not jump / editor doesn’t lose focus,
+   - inserted media goes exactly where the cursor was.
 
 ---
 
-## Implementation Plan
+## What’s actually broken (root causes)
 
-### 1. Selection-Aware Link Insertion
+### A) “Mailbox not sorted” (UI bug, not primarily data)
+- `Inbox.tsx` correctly passes `folder={currentFolder}` into `<EmailList />`.
+- But `EmailList.tsx` **ignores that folder prop** when fetching emails:
+  - It calls `useEmails({ accountId, linkedOnly, search })` and does **not** pass `folder`.
+- Result: regardless of which folder you click in the sidebar, the list query returns the same dataset, making it look like “everything is in Inbox”.
 
-**Current Behavior**: Link button always opens dialog asking for URL + text, then inserts at cursor
+### B) Sync logic has a Gmail API issue that can prevent proper folder detection (and reduce coverage)
+In `supabase/functions/sync-emails/index.ts`:
+- The list endpoint is called with:
+  - `labelIds=INBOX`
+  - `labelIds=SENT`
+- Gmail’s `labelIds` filter behaves like an AND (message must match all listed labels). A message usually won’t be both Inbox and Sent at the same time.
+- Even if you already have emails, this can cause inconsistent syncing and poor label coverage (drafts/archived etc).
 
-**New Behavior**:
-- If text is selected: Save selection, open dialog with only URL field, wrap selection in link
-- If no selection: Open dialog asking for URL + text (current behavior)
-
-```text
-User Flow:
-+------------------+        +------------------+
-| Select text in   |  --->  | Click Link       |
-| editor           |        | button           |
-+------------------+        +------------------+
-                                    |
-                                    v
-                    +---------------------------+
-                    | Dialog shows:             |
-                    | - Selected text preview   |
-                    | - URL input only          |
-                    | - Track clicks checkbox   |
-                    +---------------------------+
-                                    |
-                                    v
-                    +---------------------------+
-                    | Selected text wrapped in  |
-                    | <a href="url">text</a>    |
-                    +---------------------------+
+### C) “Inserting images doesn’t work” / editor jumping & losing cursor
+Both `RichTextComposer.tsx` and `EmailTemplateEditor.tsx` have this sync effect:
+```ts
+useEffect(() => {
+  if (editorRef.current && mode === "visual") {
+    if (editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value;
+    }
+  }
+}, [value, mode]);
 ```
+This can break editing because:
+- `contentEditable` HTML is frequently “normalized” by the browser.
+- `innerHTML !== value` can be true even when content is effectively the same.
+- That causes React to force-reset `innerHTML`, which:
+  - blows away the cursor position,
+  - can make the caret jump outside,
+  - can make insertions appear to “do nothing” (they insert, then get overwritten immediately).
 
-### 2. Clickable Images with Link Support
-
-**Current Behavior**: Images are inserted as standalone `<img>` tags
-
-**New Behavior**:
-- Click on image in editor → Show floating toolbar with "Add Link" option
-- Insert images wrapped in clickable `<a>` tags when link is provided
-- Track clicks when link is used
-
-```text
-+---------------------------+
-| Floating Image Toolbar    |
-| [Link] [Remove] [Resize]  |
-+---------------------------+
-         |
-         v
-+---------------------------+
-| Link Dialog:              |
-| - URL input               |
-| - Open in new tab toggle  |
-| - Track clicks toggle     |
-+---------------------------+
-```
-
-### 3. CTA Button Insertion
-
-**New Feature**: Add "Button" option to toolbar
-
-```text
-+---------------------------+
-| Insert CTA Button Dialog  |
-|                           |
-| Button Text: [Get Started]|
-| Link URL: [https://...]   |
-| Style: [Primary v]        |
-|   - Primary (blue)        |
-|   - Secondary (gray)      |
-|   - Success (green)       |
-| Track clicks: [x]         |
-+---------------------------+
-```
-
-Generated HTML:
-```html
-<a href="https://..." style="display: inline-block; padding: 12px 24px; 
-   background-color: #3b82f6; color: white; text-decoration: none; 
-   border-radius: 6px; font-weight: 500;">
-  Get Started
-</a>
-```
-
-### 4. Direct File Upload for Images/Videos
-
-Replace URL-only input with tabbed interface:
-
-```text
-+---------------------------+
-| Insert Image              |
-| [Upload] [URL]            |
-+---------------------------+
-| Tab: Upload               |
-| +---------------------+   |
-| | Drop image here     |   |
-| | or click to browse  |   |
-| +---------------------+   |
-| Max size: 10MB            |
-+---------------------------+
-```
-
-**Storage**: Uses Supabase Storage bucket `email-attachments`
+Also, the image upload flow currently:
+- uploads file successfully (confirmed via network log: Storage upload returns 200),
+- sets `imageUrl`,
+- but requires a separate “Insert” action; if the cursor/selection isn’t preserved, insertion can end up at the wrong place or get overwritten by the effect above.
 
 ---
 
-## Technical Changes
+## Implementation Plan (what I will change)
 
-### Files to Modify
+### 1) Fix folder filtering end-to-end (Inbox / Sent / Drafts / Archive)
+**Files:**
+- `src/components/inbox/EmailList.tsx`
+- `src/hooks/useEmails.ts`
+- (optionally) `src/components/inbox/InboxSidebar.tsx` (only if folder names mismatch)
 
-| File | Changes |
-|------|---------|
-| `src/components/shared/RichTextComposer.tsx` | Add selection handling, image click events, CTA button dialog, file upload |
-| `src/components/templates/EmailTemplateEditor.tsx` | Same enhancements |
-| `supabase/migrations/NEW.sql` | Create storage bucket with policies |
+**Steps:**
+1. Update `EmailList.tsx` so the `useEmails()` call includes:
+   - `folder`
+   - the `filters` prop
+   - and its own local filter states (linked/unlinked/search)
+2. Decide the “source of truth” for filtering:
+   - Recommended: keep data querying in `useEmails(filters)` as much as possible, and only do minimal post-filtering in the component.
+3. Ensure the `folder` passed matches the DB values (`inbox`, `sent`, `drafts`, `archive`).
+4. Add a small debug indicator in the EmailList header (temporary) showing which folder and query filters are active, so we can confirm the UI is actually filtering.
 
-### Key Technical Implementation
-
-**1. Selection Detection**
-```typescript
-const [savedSelection, setSavedSelection] = useState<Range | null>(null);
-const [hasSelection, setHasSelection] = useState(false);
-
-const handleLinkButtonClick = () => {
-  const selection = window.getSelection();
-  if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
-    const range = selection.getRangeAt(0);
-    setSavedSelection(range.cloneRange());
-    setLinkText(selection.toString());
-    setHasSelection(true);
-  } else {
-    setHasSelection(false);
-  }
-  setLinkDialogOpen(true);
-};
-
-const handleInsertLink = () => {
-  if (hasSelection && savedSelection) {
-    // Restore selection and wrap in link
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(savedSelection);
-    document.execCommand('createLink', false, linkUrl);
-  } else {
-    // Insert new link at cursor
-    execCommand("insertHTML", `<a href="${linkUrl}">${linkText}</a>`);
-  }
-};
-```
-
-**2. Image Click Detection**
-```typescript
-const handleEditorClick = (e: React.MouseEvent) => {
-  const target = e.target as HTMLElement;
-  if (target.tagName === 'IMG') {
-    setSelectedImage(target as HTMLImageElement);
-    setImageLinkDialogOpen(true);
-  }
-};
-
-const handleAddLinkToImage = () => {
-  if (selectedImage && imageLinkUrl) {
-    const link = document.createElement('a');
-    link.href = imageLinkUrl;
-    link.target = '_blank';
-    selectedImage.parentNode?.insertBefore(link, selectedImage);
-    link.appendChild(selectedImage);
-  }
-};
-```
-
-**3. CTA Button Generation**
-```typescript
-const ctaStyles = {
-  primary: 'background-color: #3b82f6; color: white;',
-  secondary: 'background-color: #6b7280; color: white;',
-  success: 'background-color: #10b981; color: white;',
-  outline: 'background-color: transparent; color: #3b82f6; border: 2px solid #3b82f6;',
-};
-
-const handleInsertCTA = () => {
-  const style = ctaStyles[ctaButtonStyle];
-  const buttonHtml = `<a href="${ctaUrl}" target="_blank" style="display: inline-block; padding: 12px 24px; ${style} text-decoration: none; border-radius: 6px; font-weight: 500; margin: 8px 0;">${ctaText}</a>`;
-  execCommand("insertHTML", buttonHtml);
-};
-```
-
-**4. Storage Bucket Creation**
-```sql
--- Create bucket for email attachments
-INSERT INTO storage.buckets (id, name, public, file_size_limit)
-VALUES ('email-attachments', 'email-attachments', true, 10485760);
-
--- Public read access for email rendering
-CREATE POLICY "Public read" ON storage.objects
-  FOR SELECT USING (bucket_id = 'email-attachments');
-
--- Authenticated upload
-CREATE POLICY "Auth upload" ON storage.objects
-  FOR INSERT WITH CHECK (bucket_id = 'email-attachments' AND auth.role() = 'authenticated');
-```
-
-**5. File Upload Handler**
-```typescript
-const handleFileUpload = async (file: File) => {
-  const fileName = `${Date.now()}-${file.name}`;
-  const { data, error } = await supabase.storage
-    .from('email-attachments')
-    .upload(fileName, file);
-
-  if (data) {
-    const { data: urlData } = supabase.storage
-      .from('email-attachments')
-      .getPublicUrl(data.path);
-    return urlData.publicUrl;
-  }
-  return null;
-};
-```
+**Expected result:**
+- Clicking “Sent” shows only `emails.folder='sent'`.
+- Clicking “Inbox” shows only `emails.folder='inbox'`.
+- No more “everything is in inbox” feeling.
 
 ---
 
-## New Toolbar Buttons
+### 2) Fix Gmail sync so it fetches the right messages and assigns folders reliably
+**File:**
+- `supabase/functions/sync-emails/index.ts`
 
-Current toolbar:
-```
-[B] [I] [U] | [H1] [H2] | [•] [1.] | [Link] [Image] [Video] [📎] | [Templates] [Merge Tags]
-```
+**Steps:**
+1. Change Gmail list calls to avoid `labelIds=INBOX` AND `labelIds=SENT`.
+2. Use one of these safer approaches:
+   - Option A (recommended): Use query string:
+     - `q="after:TIMESTAMP (in:inbox OR in:sent OR in:drafts)"`
+     - and do not pass multiple `labelIds`.
+   - Option B: Do separate list calls for INBOX and SENT and merge results.
+3. Ensure folder assignment logic is correct order:
+   - Draft detection should come before direction-based sent detection if you want drafts to be drafts.
+   - Example:
+     - if `labelIds.includes("DRAFT")` => folder `drafts`
+     - else if outbound => folder `sent`
+     - else if trash => folder `trash` (if you want it)
+     - else folder `inbox`
+4. Add logging in the edge function response counts by folder (temporary), to verify it’s assigning.
 
-Updated toolbar:
-```
-[B] [I] [U] | [H1] [H2] | [•] [1.] | [Link] [Image] [Video] [📎] [CTA Button] | [Templates] [Merge Tags]
-```
-
----
-
-## User Experience Improvements
-
-1. **Link Dialog adapts to context**:
-   - Text selected → Shows "Link selected text" with preview
-   - No selection → Shows "Insert new link" with text field
-
-2. **Image click shows floating menu**:
-   - Options: Add Link, Remove, Resize
-
-3. **CTA Button preview**:
-   - Live preview of button style in dialog before inserting
-
-4. **Drag and drop images**:
-   - Drop zone appears when dragging files over editor
-   - Auto-uploads and inserts
+**Expected result:**
+- Newly synced emails get correct `folder`.
+- Drafts stop being misclassified.
+- Sync results are more complete and consistent.
 
 ---
 
-## Verification Checklist
+### 3) Fix editor cursor jumping + “insert image/video does nothing”
+**Files:**
+- `src/components/shared/RichTextComposer.tsx`
+- `src/components/templates/EmailTemplateEditor.tsx`
 
-After implementation:
-- [ ] Select text, click Link → Only URL field shown, text is wrapped
-- [ ] Click on embedded image → Link dialog appears, image becomes clickable
-- [ ] Insert CTA button → Styled button appears in editor
-- [ ] Upload image file → Uploads to storage, inserts in editor
-- [ ] Same features work in EmailTemplateEditor (sequence templates)
+**Core changes:**
+1. Add an “isEditing” guard:
+   - Track focus and active user typing using refs:
+     - `isFocusedRef`
+     - `isApplyingExternalUpdateRef`
+   - Only run the `innerHTML = value` sync when:
+     - editor is not focused OR user is not actively editing,
+     - and the update is truly external (template load / reset / initial mount).
+2. Replace naive `innerHTML !== value` compare with a safer approach:
+   - Keep `lastAppliedValueRef`
+   - Only apply external updates if `value` changed from outside and the editor is not focused.
+3. Preserve selection for insert operations:
+   - When opening Image/Video/CTA dialogs, store current selection range (like you already do for linking text).
+   - When inserting, restore that selection before `execCommand("insertHTML", ...)`.
+4. Improve image/video upload UX:
+   - After upload completes, either:
+     - auto-insert immediately at the saved cursor position, OR
+     - keep “Insert” button but ensure selection restore + focus is correct so it inserts exactly where expected.
+
+**Expected result:**
+- Cursor stays where you put it.
+- Typing is stable.
+- Inserting images/videos reliably inserts into the editor content and remains there.
+
+---
+
+### 4) Quick safety checks (so we don’t regress)
+1. Verify Storage upload is working (it is, per network logs).
+2. Verify editor still supports:
+   - link wrapping selected text,
+   - clicking images to add a link,
+   - CTA insertion.
+
+---
+
+## Validation / What you’ll test after I implement
+1. Go to **/inbox**:
+   - Click Inbox vs Sent vs Drafts and confirm the list changes (counts and items).
+2. Click **Sync**:
+   - Confirm newly synced outbound emails show in Sent.
+3. Compose an email:
+   - Place cursor mid-text, insert image, ensure it appears exactly there.
+   - Keep typing after image, cursor should not jump outside editor.
+4. Template editor:
+   - Same tests in Sequence template editor.
+
+---
+
+## Notes / Known constraints
+- Gmail folder concepts are label-based; “Archive” means “not in inbox” and may require additional label logic if you want a true archive view (we can implement that next once Inbox/Sent are correct).
+- Many email clients don’t autoplay video; embedding video is often best as a thumbnail image with a link. We can improve this further after stability fixes.
+
+---
+
+## Deliverables (exact code areas I’ll change)
+- Email folder filtering:
+  - `src/components/inbox/EmailList.tsx` (pass folder/filters into useEmails)
+  - `src/hooks/useEmails.ts` (support more filter fields at query level where possible)
+- Gmail sync:
+  - `supabase/functions/sync-emails/index.ts` (fix Gmail list query)
+- Editor stability:
+  - `src/components/shared/RichTextComposer.tsx` (focus/edit guard + selection restore)
+  - `src/components/templates/EmailTemplateEditor.tsx` (same)
+
