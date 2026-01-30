@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
 import { DataTable } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageSquare, Mail, Plus, Search, MoreHorizontal, RefreshCw, Linkedin } from "lucide-react";
+import { MessageSquare, Mail, Plus, Search, MoreHorizontal, RefreshCw, Linkedin, Users, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { 
   DropdownMenu, 
@@ -17,10 +18,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCampaigns, useSyncCampaigns, Campaign } from "@/hooks/useCampaigns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CampaignDetailSheet } from "@/components/campaigns/CampaignDetailSheet";
 
 export default function Campaigns() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   
   const { data: campaigns, isLoading } = useCampaigns(statusFilter);
   const syncMutation = useSyncCampaigns();
@@ -118,7 +122,7 @@ export default function Campaigns() {
     { 
       accessorKey: "actions", 
       header: "",
-      cell: () => (
+      cell: (campaign: Campaign) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon">
@@ -128,9 +132,18 @@ export default function Campaigns() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>View Details</DropdownMenuItem>
-            <DropdownMenuItem>View Leads</DropdownMenuItem>
-            <DropdownMenuItem>View Reports</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setSelectedCampaign(campaign)}>
+              <ExternalLink className="h-4 w-4 mr-2" />
+              View Details
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate(`/customers?campaign=${encodeURIComponent(campaign.name)}`)}>
+              <Users className="h-4 w-4 mr-2" />
+              View Leads
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate(`/inbox?tab=linkedin&campaign=${encodeURIComponent(campaign.name)}`)}>
+              <Mail className="h-4 w-4 mr-2" />
+              View Messages
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )
@@ -224,6 +237,12 @@ export default function Campaigns() {
           )}
         </TabsContent>
       </Tabs>
+
+      <CampaignDetailSheet 
+        campaign={selectedCampaign}
+        open={!!selectedCampaign}
+        onOpenChange={(open) => !open && setSelectedCampaign(null)}
+      />
     </div>
   );
 }

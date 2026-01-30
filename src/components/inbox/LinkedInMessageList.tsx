@@ -68,7 +68,7 @@ export function LinkedInMessageList({
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
                 <span className={cn("text-sm truncate", !message.is_read && "font-semibold")}>
-                  {message.connection?.name || message.sender_linkedin_id}
+                  {message.sender_name || message.connection?.name || message.sender_linkedin_id}
                 </span>
                 <span className="text-xs text-muted-foreground flex-shrink-0">
                   {formatDistanceToNow(new Date(message.message_timestamp), { addSuffix: true })}
@@ -82,11 +82,21 @@ export function LinkedInMessageList({
               <p className={cn("text-sm truncate mt-0.5", !message.is_read && "font-medium")}>
                 {message.message_text}
               </p>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <Badge variant="outline" className="text-xs py-0 bg-[#0A66C2]/5 border-[#0A66C2]/20 text-[#0A66C2]">
                   <Linkedin className="h-3 w-3 mr-1" />
                   LinkedIn
                 </Badge>
+                {message.campaign_name && (
+                  <Badge variant="outline" className="text-xs py-0">
+                    {message.campaign_name}
+                  </Badge>
+                )}
+                {message.company_name && (
+                  <Badge variant="secondary" className="text-xs py-0">
+                    {message.company_name}
+                  </Badge>
+                )}
                 {message.connection?.contacts && (
                   <Badge variant="secondary" className="text-xs py-0">
                     <Link2 className="h-3 w-3 mr-1" />
