@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Email, useSendEmail, useLinkEmailToContact } from "@/hooks/useEmails";
+import { Email, useSendEmail, useLinkEmailToContact, useMarkEmailRead } from "@/hooks/useEmails";
 import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { useContacts, Contact } from "@/hooks/useContacts";
 import { useGenerateEmailReply, ReplyTone } from "@/hooks/useEmailReply";
@@ -36,12 +36,38 @@ interface EmailThreadProps {
 export function EmailThread({ email, account, onClose }: EmailThreadProps) {
   const [replyBody, setReplyBody] = useState("");
   const [isReplying, setIsReplying] = useState(false);
+  const markedAsReadRef = useRef(false);
 
   const sendEmail = useSendEmail();
   const linkEmail = useLinkEmailToContact();
+  const markEmailRead = useMarkEmailRead();
   const generateReply = useGenerateEmailReply();
   const { data: contacts } = useContacts({});
   const { data: signature } = useEmailSignature();
+
+  // Auto-mark as read when viewing email (with 1 second delay)
+  useEffect(() => {
+    if (!email.is_read && !markedAsReadRef.current) {
+      markedAsReadRef.current = true;
+      const timer = setTimeout(() => {
+        markEmailRead.mutate(
+          { emailId: email.id, isRead: true },
+          {
+            onError: (error) => {
+              console.error("Failed to mark email as read:", error);
+            },
+          }
+        );
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [email.id, email.is_read, markEmailRead]);
+
+  // Reset ref when email changes
+  useEffect(() => {
+    markedAsReadRef.current = false;
+  }, [email.id]);
 
   // Get reply recipient
   const replyTo = email.direction === "inbound" ? email.from_email : email.to_emails?.[0];

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Email {
@@ -35,6 +36,32 @@ export interface EmailFilters {
 }
 
 export function useEmails(filters: EmailFilters = {}) {
+  const queryClient = useQueryClient();
+
+  // Set up realtime subscription for emails table
+  useEffect(() => {
+    const channel = supabase
+      .channel('emails-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'emails',
+        },
+        (payload) => {
+          console.log('Realtime email update:', payload.eventType);
+          // Invalidate queries to refresh the list
+          queryClient.invalidateQueries({ queryKey: ["emails"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ["emails", filters],
     queryFn: async () => {
@@ -167,6 +194,27 @@ export function useLinkEmailToContact() {
         .eq("id", emailId);
 
       if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-emails"] });
+    },
+  });
+}
+
+export function useMarkEmailRead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ emailId, isRead }: { emailId: string; isRead: boolean }) => {
+      const { data, error } = await supabase.functions.invoke("mark-email-read", {
+        body: { emailId, isRead },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["emails"] });

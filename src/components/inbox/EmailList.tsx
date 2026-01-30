@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
-import { Mail, User, RefreshCw, Search, Link2, Link2Off } from "lucide-react";
+import { Mail, User, RefreshCw, Search, Link2, Link2Off, MailOpen, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Email, useEmails, useSyncEmails } from "@/hooks/useEmails";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Email, useEmails, useSyncEmails, useMarkEmailRead } from "@/hooks/useEmails";
 import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -30,6 +36,30 @@ export function EmailList({ accounts, selectedEmail, onSelectEmail }: EmailListP
   });
 
   const syncEmails = useSyncEmails();
+  const markEmailRead = useMarkEmailRead();
+
+  const handleToggleRead = (e: React.MouseEvent, email: Email) => {
+    e.stopPropagation(); // Prevent selecting the email
+    
+    markEmailRead.mutate(
+      { emailId: email.id, isRead: !email.is_read },
+      {
+        onSuccess: () => {
+          toast({
+            title: email.is_read ? "Marked as Unread" : "Marked as Read",
+            description: "Email status updated",
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: "Update Failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        },
+      }
+    );
+  };
 
   const handleSync = () => {
     if (!accountId) return;
@@ -113,16 +143,42 @@ export function EmailList({ accounts, selectedEmail, onSelectEmail }: EmailListP
           </div>
         ) : filteredEmails && filteredEmails.length > 0 ? (
           <div className="divide-y">
-            {filteredEmails.map((email) => (
-              <button
+          {filteredEmails.map((email) => (
+              <div
                 key={email.id}
-                onClick={() => onSelectEmail(email)}
                 className={cn(
-                  "w-full text-left p-4 hover:bg-accent transition-colors",
+                  "w-full text-left p-4 hover:bg-accent transition-colors cursor-pointer relative group",
                   selectedEmail?.id === email.id && "bg-accent",
                   !email.is_read && "bg-primary/5"
                 )}
+                onClick={() => onSelectEmail(email)}
               >
+                {/* Mark read/unread button - appears on hover */}
+                <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={(e) => handleToggleRead(e as unknown as React.MouseEvent, email)}>
+                        {email.is_read ? (
+                          <>
+                            <Mail className="h-4 w-4 mr-2" />
+                            Mark as Unread
+                          </>
+                        ) : (
+                          <>
+                            <MailOpen className="h-4 w-4 mr-2" />
+                            Mark as Read
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                     {email.contacts ? (
@@ -131,7 +187,7 @@ export function EmailList({ accounts, selectedEmail, onSelectEmail }: EmailListP
                       <Mail className="h-4 w-4 text-muted-foreground" />
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 pr-8">
                     <div className="flex items-center justify-between gap-2">
                       <span className={cn("text-sm truncate", !email.is_read && "font-semibold")}>
                         {email.direction === "inbound"
@@ -158,10 +214,13 @@ export function EmailList({ accounts, selectedEmail, onSelectEmail }: EmailListP
                       {email.direction === "outbound" && (
                         <Badge variant="outline" className="text-xs py-0">Sent</Badge>
                       )}
+                      {!email.is_read && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
                     </div>
                   </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         ) : (

@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Settings, Mail, Linkedin, RefreshCw, Loader2, FileSignature } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEmailAccounts, useDisconnectEmailAccount } from "@/hooks/useEmailAccounts";
-import { Email } from "@/hooks/useEmails";
+import { Email, useSyncEmails } from "@/hooks/useEmails";
 import { LinkedInMessage } from "@/hooks/useLinkedInMessages";
 import { ConnectGmail } from "@/components/inbox/ConnectGmail";
 import { EmailList } from "@/components/inbox/EmailList";
@@ -32,13 +32,45 @@ export default function Inbox() {
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<InboxTab>("email");
   const [isSyncingMeetAlfred, setIsSyncingMeetAlfred] = useState(false);
+  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
+  const autoSyncTriggered = useRef(false);
 
   const { data: accounts, isLoading: accountsLoading } = useEmailAccounts();
   const disconnectAccount = useDisconnectEmailAccount();
+  const syncEmails = useSyncEmails();
   const queryClient = useQueryClient();
 
   const hasConnectedAccount = accounts && accounts.length > 0;
   const currentAccount = accounts?.[0] || null;
+
+  // Auto-sync emails on mount when email tab is active and account exists
+  useEffect(() => {
+    if (activeTab === "email" && currentAccount && !autoSyncTriggered.current && !isAutoSyncing) {
+      autoSyncTriggered.current = true;
+      setIsAutoSyncing(true);
+      
+      console.log("Auto-syncing emails (last 24 hours)...");
+      
+      syncEmails.mutate(
+        { accountId: currentAccount.id, maxResults: 100, daysBack: 1 },
+        {
+          onSuccess: (data) => {
+            if (data.syncedCount > 0) {
+              toast({
+                title: "Inbox Updated",
+                description: `${data.syncedCount} new email${data.syncedCount > 1 ? 's' : ''} synced`,
+              });
+            }
+            setIsAutoSyncing(false);
+          },
+          onError: (error) => {
+            console.error("Auto-sync failed:", error);
+            setIsAutoSyncing(false);
+          },
+        }
+      );
+    }
+  }, [activeTab, currentAccount, syncEmails, isAutoSyncing]);
 
   const handleSyncMeetAlfred = async () => {
     setIsSyncingMeetAlfred(true);
