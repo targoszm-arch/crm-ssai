@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { 
   ExternalLink, 
@@ -24,13 +23,17 @@ import {
   X,
   Sparkles,
   Loader2,
-  Lightbulb
+  Lightbulb,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { Contact, useUpdateContact } from "@/hooks/useContacts";
 import { enrichContact } from "@/lib/api/enrichment";
 import { toast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ContactHistoryTabs } from "./ContactHistoryTabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -65,6 +68,7 @@ function getConnectionStrengthBadge(strength: string | null) {
 export function ContactDetail({ contact: initialContact, open, onOpenChange }: ContactDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -532,24 +536,6 @@ export function ContactDetail({ contact: initialContact, open, onOpenChange }: C
             )}
           </div>
 
-          {/* Notes */}
-          <Separator />
-          <div>
-            <h4 className="text-sm font-medium mb-2">Notes</h4>
-            {isEditing ? (
-              <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Add notes about this contact..."
-                rows={4}
-              />
-            ) : contact.notes ? (
-              <p className="text-sm text-muted-foreground">{contact.notes}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">No notes added</p>
-            )}
-          </div>
-
           {/* Labels */}
           {contact.labels && (
             <>
@@ -576,6 +562,18 @@ export function ContactDetail({ contact: initialContact, open, onOpenChange }: C
               </Button>
             </div>
           )}
+
+          {/* History Tabs Section */}
+          <Separator />
+          <div>
+            <h4 className="text-sm font-medium mb-4">History</h4>
+            <ContactHistoryTabs 
+              contact={contact}
+              manualNotes={formData.notes}
+              isEditing={isEditing}
+              onNotesChange={(notes) => setFormData({ ...formData, notes })}
+            />
+          </div>
         </div>
       </SheetContent>
     </Sheet>

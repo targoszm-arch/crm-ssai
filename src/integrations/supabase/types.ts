@@ -905,6 +905,84 @@ export type Database = {
         }
         Relationships: []
       }
+      meeting_notes: {
+        Row: {
+          action_items: Json | null
+          audio_url: string | null
+          bullet_gist: string | null
+          company_id: string | null
+          contact_id: string | null
+          created_at: string
+          duration_minutes: number | null
+          fireflies_meeting_id: string | null
+          id: string
+          meeting_date: string
+          meeting_type: string | null
+          overview: string | null
+          participants: string[] | null
+          raw_data: Json | null
+          summary: string | null
+          title: string
+          transcript_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_items?: Json | null
+          audio_url?: string | null
+          bullet_gist?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          duration_minutes?: number | null
+          fireflies_meeting_id?: string | null
+          id?: string
+          meeting_date: string
+          meeting_type?: string | null
+          overview?: string | null
+          participants?: string[] | null
+          raw_data?: Json | null
+          summary?: string | null
+          title: string
+          transcript_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_items?: Json | null
+          audio_url?: string | null
+          bullet_gist?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          duration_minutes?: number | null
+          fireflies_meeting_id?: string | null
+          id?: string
+          meeting_date?: string
+          meeting_type?: string | null
+          overview?: string | null
+          participants?: string[] | null
+          raw_data?: Json | null
+          summary?: string | null
+          title?: string
+          transcript_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_notes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_notes_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_documents: {
         Row: {
           created_at: string
