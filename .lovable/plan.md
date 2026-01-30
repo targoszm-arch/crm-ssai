@@ -1,157 +1,108 @@
 
 
-# Email Templates with Rich Text and HTML Editing
+# Create Shareable Rich Text Composer with Template Integration
 
-## Overview
+## Problem Summary
 
-This plan adds a complete email template management system to the Sequences page, allowing users to:
-- Create and edit email templates with a rich text editor
-- Switch between visual (rich text) and HTML code editing modes
-- Save templates to the database for reuse
-- Select saved templates when building sequence steps
+Currently, there are three different email/message composition interfaces in the codebase:
+1. **EmailThread.tsx** - Simple contentEditable for email replies (no rich formatting toolbar)
+2. **LinkedInMessageView.tsx** - Basic textarea for draft replies (plain text only)
+3. **ComposeEmail.tsx** - Simple textarea for new emails (no rich text)
 
----
+Meanwhile, **EmailTemplateEditor.tsx** has a full-featured rich text editor with:
+- Visual/HTML toggle
+- Formatting toolbar (bold, italic, underline, headers, lists)
+- Link insertion
+- Merge tag support
 
-## What Will Be Built
-
-### 1. Template Management UI
-A new "Templates" section accessible from the Sequences page with:
-- List of all saved templates with preview
-- Create, edit, duplicate, and delete templates
-- Search/filter templates by name
-
-### 2. Rich Text Editor Component
-A custom editor supporting:
-- Bold, italic, underline formatting
-- Links and images
-- Bullet and numbered lists
-- Headers (H1, H2, H3)
-- Toggle between Rich Text and HTML code view
-- Live preview
-
-### 3. Template Editor Modal
-A full-featured editing experience with:
-- Template name and category
-- Subject line field
-- Dual-mode editor (Visual / HTML)
-- Merge tags for personalization (e.g., `{{first_name}}`)
-- Save as new or update existing
+The goal is to create a single **RichTextComposer** component that combines the template editor's rich text capabilities with template selection, and use it across all composition contexts.
 
 ---
 
-## User Experience Flow
+## Solution Overview
 
-### Creating a Template
-1. Navigate to Sequences page
-2. Click "Templates" tab or button
-3. Click "New Template"
-4. Enter template name (e.g., "Welcome Email")
-5. Write subject line
-6. Use rich text editor to design the email body
-7. Toggle to "HTML" mode to fine-tune code if needed
-8. Click "Save Template"
+### Create a Reusable RichTextComposer Component
 
-### Using a Template in a Sequence
-1. Open Sequence Builder
-2. Add a step
-3. Select template from dropdown (now shows saved templates)
-4. Subject auto-fills from template (can override)
-5. Template body is used when sending
+A new component that provides:
+- Rich text editing (formatting toolbar)
+- Template selection button (opens TemplateListModal)
+- Auto-populate content when template is selected
+- AI draft generation integration
+- Compact mode for inline replies vs. full mode for compose dialogs
+- Merge tag support
+
+### Update Existing Components
+
+Replace the basic contentEditable/textarea in:
+- `EmailThread.tsx` - Use RichTextComposer for replies
+- `LinkedInMessageView.tsx` - Use RichTextComposer for draft generation
+- `ComposeEmail.tsx` - Use RichTextComposer for new emails
 
 ---
 
-## Technical Changes
+## Technical Implementation
 
-### Database
+### New Component: `src/components/shared/RichTextComposer.tsx`
 
-**New table: `email_templates`**
+A self-contained component with the following props:
 
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| name | text | Template name |
-| category | text | Category (welcome, follow_up, etc.) |
-| subject | text | Default subject line |
-| body_html | text | HTML content |
-| body_text | text | Plain text version |
-| is_default | boolean | System template flag |
-| created_at | timestamp | Creation date |
-| updated_at | timestamp | Last modified |
-
-RLS policies: Allow authenticated users full access
-
-### New Components
-
-**`src/components/templates/EmailTemplateEditor.tsx`**
-- Rich text editor with formatting toolbar
-- HTML code editor toggle (uses contenteditable + textarea for code)
-- Merge tag inserter
-- Live preview pane
-
-**`src/components/templates/TemplateListModal.tsx`**
-- Grid/list view of all templates
-- Quick preview on hover
-- Actions: Edit, Duplicate, Delete
-
-**`src/components/templates/EditTemplateSheet.tsx`**
-- Full editing sheet for template details
-- Name, category, subject fields
-- Embeds EmailTemplateEditor
-- Save/Cancel actions
-
-### Modified Components
-
-**`src/pages/Sequences.tsx`**
-- Add "Templates" button/tab
-- Open TemplateListModal on click
-
-**`src/components/sequences/SequenceBuilderSheet.tsx`**
-- Template dropdown now queries `email_templates` table
-- Shows template preview when selected
-- Option to "Edit Template" inline
-
-### New Hook
-
-**`src/hooks/useEmailTemplates.ts`**
 ```typescript
-// CRUD operations for email templates
-useEmailTemplates() - fetch all templates
-useEmailTemplate(id) - fetch single template
-useCreateTemplate() - create new
-useUpdateTemplate() - update existing
-useDeleteTemplate() - delete template
+interface RichTextComposerProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  minHeight?: number;
+  maxHeight?: number;
+  compact?: boolean; // Smaller toolbar for inline use
+  showTemplates?: boolean; // Show "Use Template" button
+  showMergeTags?: boolean; // Show merge tag dropdown
+  onTemplateSelect?: (template: EmailTemplate) => void;
+  className?: string;
+}
 ```
 
-### Edge Function Update
+**Features:**
+- Formatting toolbar (Bold, Italic, Underline, Links, Lists)
+- "Use Template" button that opens TemplateListModal in selection mode
+- When template selected: populates content and notifies parent
+- Merge tag insertion dropdown
+- Visual/HTML mode toggle (optional, can be hidden in compact mode)
 
-**`supabase/functions/process-sequences/index.ts`**
-- Remove hardcoded templates
-- Query `email_templates` table for template content
-- Fallback to basic content if template not found
+### Component Structure
 
----
+```
+RichTextComposer
+├── Toolbar
+│   ├── Format buttons (Bold, Italic, Underline)
+│   ├── Separator
+│   ├── Header buttons (H1, H2)
+│   ├── List buttons (UL, OL)
+│   ├── Separator
+│   ├── Link button
+│   ├── Separator
+│   ├── Template button → Opens TemplateListModal
+│   └── Merge Tags dropdown
+├── Editor Area (contentEditable or textarea for HTML mode)
+└── Optional: Mode toggle (Visual/HTML)
+```
 
-## Rich Text Editor Implementation
+### Updates to Existing Files
 
-The editor uses native browser `contentEditable` (similar to existing EmailThread.tsx) with a custom toolbar. This approach:
-- Requires no additional dependencies
-- Works well for email HTML
-- Matches existing patterns in the codebase
+**File: `src/components/inbox/EmailThread.tsx`**
+- Replace the basic contentEditable with RichTextComposer
+- Pass the reply body value and onChange handler
+- Enable templates and merge tags
+- Keep existing AI suggest functionality alongside
 
-**Toolbar Features:**
-- Bold (Ctrl+B)
-- Italic (Ctrl+I)
-- Underline (Ctrl+U)
-- Link insert
-- Bullet list
-- Numbered list
-- Header formatting
-- Merge tag dropdown
+**File: `src/components/inbox/LinkedInMessageView.tsx`**
+- Replace the Textarea with RichTextComposer
+- Enable templates for pre-written responses
+- Merge tags still work (contact info)
 
-**HTML Mode:**
-- Textarea with monospace font
-- Syntax highlighting optional
-- Validates HTML on save
+**File: `src/components/inbox/ComposeEmail.tsx`**
+- Replace the Textarea with RichTextComposer
+- Enable templates for quick email composition
+- Full formatting toolbar visible
 
 ---
 
@@ -159,37 +110,100 @@ The editor uses native browser `contentEditable` (similar to existing EmailThrea
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `supabase/migrations/[timestamp].sql` | Create | Add email_templates table |
-| `src/hooks/useEmailTemplates.ts` | Create | Template CRUD hooks |
-| `src/components/templates/EmailTemplateEditor.tsx` | Create | Rich text/HTML editor |
-| `src/components/templates/TemplateListModal.tsx` | Create | Template library view |
-| `src/components/templates/EditTemplateSheet.tsx` | Create | Template editing sheet |
-| `src/pages/Sequences.tsx` | Modify | Add Templates button |
-| `src/components/sequences/SequenceBuilderSheet.tsx` | Modify | Use saved templates |
-| `supabase/functions/process-sequences/index.ts` | Modify | Load templates from DB |
+| `src/components/shared/RichTextComposer.tsx` | Create | Shareable rich text editor with template integration |
+| `src/components/inbox/EmailThread.tsx` | Modify | Use RichTextComposer for replies |
+| `src/components/inbox/LinkedInMessageView.tsx` | Modify | Use RichTextComposer for drafts |
+| `src/components/inbox/ComposeEmail.tsx` | Modify | Use RichTextComposer for new emails |
 
 ---
 
-## Seed Data
+## User Experience
 
-Pre-populate with useful starter templates:
-- Welcome Email
-- Follow-up
-- Value Proposition
-- Case Study
-- Special Offer
-- Meeting Request
-- Thank You
+### Using Templates in Email Reply
+1. User clicks "Reply" on an email
+2. RichTextComposer appears with formatting toolbar
+3. User clicks "Templates" button in toolbar
+4. TemplateListModal opens in selection mode
+5. User selects a template (e.g., "Meeting Follow-up")
+6. Template content populates the composer
+7. User can edit, add formatting, insert merge tags
+8. Click "Send" - email sent with formatted HTML
+
+### Using Templates in LinkedIn Draft
+1. User views a LinkedIn message
+2. Clicks "AI Draft" or manually starts typing
+3. Can click "Templates" to use a pre-written response
+4. Formats text as needed
+5. Copies formatted text to paste in LinkedIn
+
+### Using Templates in New Email
+1. User clicks "Compose" button
+2. Full RichTextComposer appears with all features
+3. Can start with a template or write from scratch
+4. Full formatting toolbar available
 
 ---
 
-## Merge Tags Support
+## Component Reuse
 
-The following merge tags will be supported:
-- `{{first_name}}` - Contact's first name
-- `{{last_name}}` - Contact's last name
-- `{{email}}` - Contact's email
-- `{{company}}` - Contact's company name
+The new RichTextComposer will be the single source of truth for:
+- Rich text editing
+- Template selection
+- Merge tag insertion
+- Formatting controls
 
-The process-sequences edge function already handles these replacements.
+This replaces duplicated code across three files and ensures consistent behavior and styling.
+
+---
+
+## Implementation Details
+
+### RichTextComposer Core Logic
+
+Based on the existing EmailTemplateEditor, but adapted for composition:
+
+```typescript
+// Key features from EmailTemplateEditor:
+- execCommand for formatting (bold, italic, etc.)
+- contentEditable for WYSIWYG editing
+- Link insertion dialog
+- Merge tag dropdown
+
+// New additions:
+- Template selection button + modal integration
+- Compact mode with smaller toolbar
+- onTemplateSelect callback
+- Better styling for inline use
+```
+
+### Template Selection Flow
+
+```typescript
+const [templateModalOpen, setTemplateModalOpen] = useState(false);
+
+const handleTemplateSelect = (template: EmailTemplate) => {
+  // Set the editor content to template body
+  if (editorRef.current) {
+    editorRef.current.innerHTML = template.body_html || '';
+  }
+  onChange(template.body_html || '');
+  
+  // Notify parent (for subject line updates, etc.)
+  onTemplateSelect?.(template);
+  
+  setTemplateModalOpen(false);
+};
+```
+
+---
+
+## Expected Outcome
+
+After implementation:
+1. All email/message composition uses consistent rich text editing
+2. Templates are accessible from any composition context
+3. Formatting is preserved in sent emails
+4. Merge tags work across all contexts
+5. Reduced code duplication
+6. Better user experience with familiar editing controls
 
