@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
           first_name,
           last_name,
           email,
-          companies (
+          companies!contacts_company_id_fkey (
             company_name
           )
         )
