@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { X, Send, Sparkles, Loader2 } from "lucide-react";
+import { X, Send, Sparkles, Loader2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useSendEmail } from "@/hooks/useEmails";
 import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { useContacts, Contact } from "@/hooks/useContacts";
@@ -52,6 +59,7 @@ export function ComposeEmail({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [selectedContactId, setSelectedContactId] = useState(defaultContactId || "");
+  const [isTracked, setIsTracked] = useState(true); // Default to tracking enabled
 
   const sendEmail = useSendEmail();
   const { data: contacts } = useContacts({});
@@ -132,12 +140,15 @@ export function ComposeEmail({
         subject,
         body: finalBody,
         contactId: selectedContactId || undefined,
+        isTracked,
       },
       {
         onSuccess: () => {
           toast({
             title: "Email Sent",
-            description: "Your email has been sent successfully.",
+            description: isTracked 
+              ? "Your email has been sent with tracking enabled."
+              : "Your email has been sent successfully.",
           });
           setTo("");
           setSubject("");
@@ -268,17 +279,44 @@ export function ComposeEmail({
             </div>
           )}
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSend}
-              disabled={!to.trim() || !subject.trim() || getPlainTextLength(body) === 0 || sendEmail.isPending}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Send
-            </Button>
+          <div className="flex items-center justify-between pt-2 border-t">
+            {/* Tracking Toggle */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="tracking"
+                      checked={isTracked}
+                      onCheckedChange={setIsTracked}
+                    />
+                    <Label 
+                      htmlFor="tracking" 
+                      className="text-sm cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Eye className="h-4 w-4" />
+                      Track opens & clicks
+                    </Label>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>When enabled, you'll be notified when recipients open the email or click links</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSend}
+                disabled={!to.trim() || !subject.trim() || getPlainTextLength(body) === 0 || sendEmail.isPending}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Send
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
