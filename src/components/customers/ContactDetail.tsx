@@ -23,12 +23,14 @@ import {
   Save,
   X,
   Sparkles,
-  Loader2
+  Loader2,
+  Lightbulb
 } from "lucide-react";
 import { Contact, useUpdateContact } from "@/hooks/useContacts";
 import { enrichContact } from "@/lib/api/enrichment";
 import { toast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -60,7 +62,7 @@ function getConnectionStrengthBadge(strength: string | null) {
   );
 }
 
-export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProps) {
+export function ContactDetail({ contact: initialContact, open, onOpenChange }: ContactDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
   const [formData, setFormData] = useState({
@@ -78,6 +80,27 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
 
   const updateContact = useUpdateContact();
   const queryClient = useQueryClient();
+
+  // Fetch fresh contact data when drawer is open
+  const { data: freshContact, refetch } = useQuery({
+    queryKey: ["contact-detail", initialContact?.id],
+    queryFn: async () => {
+      if (!initialContact?.id) return null;
+      const { data, error } = await supabase
+        .from("contacts")
+        .select("*, companies!contacts_company_id_fkey(company_name)")
+        .eq("id", initialContact.id)
+        .single();
+      
+      if (error) throw error;
+      return data as ContactWithCompany;
+    },
+    enabled: open && !!initialContact?.id,
+    staleTime: 0, // Always fetch fresh data
+  });
+
+  // Use fresh data if available, otherwise fall back to initial contact
+  const contact = freshContact || initialContact;
 
   useEffect(() => {
     if (contact) {
@@ -115,6 +138,7 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
         description: "The contact details have been saved successfully.",
       });
       setIsEditing(false);
+      refetch(); // Refresh the contact data
     } catch (error) {
       toast({
         title: "Error",
@@ -150,9 +174,15 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
       const result = await enrichContact(contact.id);
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       queryClient.invalidateQueries({ queryKey: ["company-contacts"] });
+      
+      // Refetch this specific contact to show updated data immediately
+      await refetch();
+      
       toast({
         title: "Contact Enriched",
-        description: `Updated ${result.enrichedFields.length} fields with AI insights.`,
+        description: result.enrichedFields.length > 0 
+          ? `Updated: ${result.enrichedFields.join(", ")}`
+          : result.message || "No new data found. Try adding email or LinkedIn for better results.",
       });
     } catch (error) {
       toast({
@@ -169,6 +199,10 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
 
   const fullName = [formData.first_name, formData.last_name].filter(Boolean).join(" ") || contact.name || "Unknown";
   const initials = fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
+
+  // Check if AI insights are available
+  const hasAiInsights = contact.buying_signals || contact.pain_point || contact.lqs || contact.interest_level || contact.next_recommended_action;
+  const hasProfessionalDetails = contact.function || contact.seniority_level;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -411,99 +445,110 @@ export function ContactDetail({ contact, open, onOpenChange }: ContactDetailProp
             </div>
           </>
 
-          {/* Professional Details */}
-          {(contact.function || contact.seniority_level) && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="text-sm font-medium mb-3">Professional Details</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  {contact.function && (
-                    <div className="p-3 rounded-lg border bg-card">
-                      <p className="text-xs text-muted-foreground mb-1">Function</p>
-                      <p className="text-sm font-medium">{contact.function}</p>
-                    </div>
-                  )}
-                  {contact.seniority_level && (
-                    <div className="p-3 rounded-lg border bg-card">
-                      <p className="text-xs text-muted-foreground mb-1">Seniority</p>
-                      <p className="text-sm font-medium">{contact.seniority_level}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* AI Insights */}
-          {(contact.buying_signals || contact.pain_point || contact.lqs) && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="text-sm font-medium mb-3">AI Insights</h4>
-                <div className="space-y-3">
-                  {contact.lqs !== null && contact.lqs !== undefined && (
-                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-card">
-                      <Star className="h-4 w-4 text-yellow-500 mt-0.5" />
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Lead Quality Score</p>
-                        <p className="text-lg font-semibold">{contact.lqs}</p>
-                      </div>
-                    </div>
-                  )}
-                  {contact.buying_signals && (
-                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-card">
-                      <TrendingUp className="h-4 w-4 text-green-500 mt-0.5" />
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Buying Signals</p>
-                        <p className="text-sm">{contact.buying_signals}</p>
-                      </div>
-                    </div>
-                  )}
-                  {contact.pain_point && (
-                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-card">
-                      <AlertCircle className="h-4 w-4 text-orange-500 mt-0.5" />
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Pain Point</p>
-                        <p className="text-sm">{contact.pain_point}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Notes & Next Action */}
-          <>
-            <Separator />
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-sm font-medium mb-2">Notes</h4>
-                {isEditing ? (
-                  <Textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Add notes about this contact..."
-                    rows={4}
-                  />
-                ) : contact.notes ? (
-                  <p className="text-sm text-muted-foreground">{contact.notes}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">No notes added</p>
+          {/* Professional Details - Always show section */}
+          <Separator />
+          <div>
+            <h4 className="text-sm font-medium mb-3">Professional Details</h4>
+            {hasProfessionalDetails ? (
+              <div className="grid grid-cols-2 gap-3">
+                {contact.function && (
+                  <div className="p-3 rounded-lg border bg-card">
+                    <p className="text-xs text-muted-foreground mb-1">Function</p>
+                    <p className="text-sm font-medium">{contact.function}</p>
+                  </div>
+                )}
+                {contact.seniority_level && (
+                  <div className="p-3 rounded-lg border bg-card">
+                    <p className="text-xs text-muted-foreground mb-1">Seniority</p>
+                    <p className="text-sm font-medium">{contact.seniority_level}</p>
+                  </div>
                 )}
               </div>
-              {contact.next_recommended_action && (
-                <div className="flex items-start gap-3 p-3 rounded-lg border bg-primary/5">
-                  <Target className="h-4 w-4 text-primary mt-0.5" />
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Next Recommended Action</p>
-                    <p className="text-sm font-medium">{contact.next_recommended_action}</p>
+            ) : (
+              <div className="flex items-center gap-2 p-3 rounded-lg border border-dashed bg-muted/30 text-muted-foreground">
+                <Lightbulb className="h-4 w-4" />
+                <p className="text-sm">Click <Sparkles className="h-3 w-3 inline mx-1" /> to enrich with AI</p>
+              </div>
+            )}
+          </div>
+
+          {/* AI Insights - Always show section */}
+          <Separator />
+          <div>
+            <h4 className="text-sm font-medium mb-3">AI Insights</h4>
+            {hasAiInsights ? (
+              <div className="space-y-3">
+                {contact.lqs !== null && contact.lqs !== undefined && (
+                  <div className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                    <Star className="h-4 w-4 text-yellow-500 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5">Lead Quality Score</p>
+                      <p className="text-lg font-semibold">{contact.lqs}</p>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </>
+                )}
+                {contact.interest_level && (
+                  <div className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                    <Target className="h-4 w-4 text-blue-500 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5">Interest Level</p>
+                      <p className="text-sm font-medium">{contact.interest_level}</p>
+                    </div>
+                  </div>
+                )}
+                {contact.buying_signals && (
+                  <div className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                    <TrendingUp className="h-4 w-4 text-green-500 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5">Buying Signals</p>
+                      <p className="text-sm">{contact.buying_signals}</p>
+                    </div>
+                  </div>
+                )}
+                {contact.pain_point && (
+                  <div className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                    <AlertCircle className="h-4 w-4 text-orange-500 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5">Pain Point</p>
+                      <p className="text-sm">{contact.pain_point}</p>
+                    </div>
+                  </div>
+                )}
+                {contact.next_recommended_action && (
+                  <div className="flex items-start gap-3 p-3 rounded-lg border bg-primary/5">
+                    <Target className="h-4 w-4 text-primary mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5">Next Recommended Action</p>
+                      <p className="text-sm font-medium">{contact.next_recommended_action}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 p-3 rounded-lg border border-dashed bg-muted/30 text-muted-foreground">
+                <Sparkles className="h-4 w-4" />
+                <p className="text-sm">No AI insights yet. Click the sparkle icon to enrich.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          <Separator />
+          <div>
+            <h4 className="text-sm font-medium mb-2">Notes</h4>
+            {isEditing ? (
+              <Textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Add notes about this contact..."
+                rows={4}
+              />
+            ) : contact.notes ? (
+              <p className="text-sm text-muted-foreground">{contact.notes}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">No notes added</p>
+            )}
+          </div>
 
           {/* Labels */}
           {contact.labels && (
