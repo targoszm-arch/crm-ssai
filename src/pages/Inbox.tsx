@@ -313,6 +313,15 @@ export default function Inbox() {
         </Sheet>
       )}
 
+      {/* LinkedIn message sheet overlay for full mode */}
+      {effectiveViewMode === "full" && selectedItem?.type === "linkedin" && (
+        <Sheet open={true} onOpenChange={() => setSelectedItem(null)}>
+          <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0">
+            <LinkedInMessageView message={selectedItem.item} onClose={handleCloseDetail} />
+          </SheetContent>
+        </Sheet>
+      )}
+
       <ComposeEmail open={composeOpen} onOpenChange={setComposeOpen} account={currentAccount} />
       <SignatureSettings open={signatureOpen} onOpenChange={setSignatureOpen} />
     </div>
