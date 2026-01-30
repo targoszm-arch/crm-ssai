@@ -1,7 +1,6 @@
-
 import { useState } from "react";
 import { 
-  Bell, Search, User, Menu, X, 
+  Bell, Search, User, X, 
   ChevronDown, LogOut, Settings
 } from "lucide-react";
 import { 
@@ -16,38 +15,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
-interface HeaderProps {
-  onMenuToggle?: () => void;
-}
-
-export default function Header({ onMenuToggle }: HeaderProps) {
+export default function Header() {
   const [showSearch, setShowSearch] = useState(false);
-  const isMobile = useIsMobile();
 
   return (
     <header className="flex h-14 items-center gap-4 border-b bg-background px-4 lg:px-6">
-      {isMobile && (
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={onMenuToggle}
-          className="mr-2"
-        >
-          <Menu className="h-5 w-5" />
-          <span className="sr-only">Toggle menu</span>
-        </Button>
-      )}
+      <SidebarTrigger className="-ml-1" />
       
       <div className={cn(
         "transition-all duration-200 flex items-center",
-        showSearch && isMobile ? "w-full" : "w-auto",
+        showSearch ? "w-full md:w-auto" : "w-auto",
       )}>
         {showSearch ? (
-          <div className="flex items-center w-full">
+          <div className="flex items-center w-full md:w-auto">
             <Input
-              className="rounded-md"
+              className="rounded-md w-full md:w-64"
               placeholder="Search..."
               autoFocus
             />
@@ -73,10 +57,10 @@ export default function Header({ onMenuToggle }: HeaderProps) {
         )}
       </div>
       
-      <div className="ml-auto flex items-center gap-4">
+      <div className="ml-auto flex items-center gap-2 md:gap-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
               <span className="sr-only">Notifications</span>
               <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary" />
@@ -98,12 +82,10 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                 <AvatarImage src="" alt="User" />
                 <AvatarFallback>SE</AvatarFallback>
               </Avatar>
-              {!isMobile && (
-                <>
-                  <div className="text-sm font-medium">Sarah Emerson</div>
-                  <ChevronDown className="h-4 w-4 opacity-50" />
-                </>
-              )}
+              <div className="hidden md:flex items-center gap-1">
+                <span className="text-sm font-medium">Sarah Emerson</span>
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </div>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
