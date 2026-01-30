@@ -13,6 +13,9 @@ import {
   Type,
   ChevronDown,
   FileText,
+  Image,
+  Video,
+  Paperclip,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -74,6 +77,21 @@ export function RichTextComposer({
   const [linkUrl, setLinkUrl] = useState("");
   const [linkText, setLinkText] = useState("");
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  
+  // Image dialog state
+  const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageAlt, setImageAlt] = useState("");
+  
+  // Video dialog state
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+  const [videoUrl, setVideoUrl] = useState("");
+  
+  // Attachment dialog state
+  const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [attachmentName, setAttachmentName] = useState("");
+  
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Sync external value changes to editor
@@ -129,6 +147,55 @@ export function RichTextComposer({
     setLinkDialogOpen(false);
     setLinkUrl("");
     setLinkText("");
+  };
+
+  const handleInsertImage = () => {
+    if (imageUrl) {
+      const imgHtml = `<img src="${imageUrl}" alt="${imageAlt || 'Image'}" style="max-width: 100%; height: auto;" />`;
+      execCommand("insertHTML", imgHtml);
+    }
+    setImageDialogOpen(false);
+    setImageUrl("");
+    setImageAlt("");
+  };
+
+  const handleInsertVideo = () => {
+    if (videoUrl) {
+      let embedHtml = "";
+      
+      // YouTube detection
+      const ytMatch = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
+      if (ytMatch) {
+        embedHtml = `<iframe width="560" height="315" src="https://www.youtube.com/embed/${ytMatch[1]}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="max-width: 100%;"></iframe>`;
+      } 
+      // Vimeo detection
+      else if (videoUrl.includes("vimeo.com")) {
+        const vimeoMatch = videoUrl.match(/vimeo\.com\/(\d+)/);
+        if (vimeoMatch) {
+          embedHtml = `<iframe src="https://player.vimeo.com/video/${vimeoMatch[1]}" width="560" height="315" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen style="max-width: 100%;"></iframe>`;
+        }
+      }
+      // Direct video URL
+      else {
+        embedHtml = `<video src="${videoUrl}" controls style="max-width: 100%;"></video>`;
+      }
+      
+      if (embedHtml) {
+        execCommand("insertHTML", embedHtml);
+      }
+    }
+    setVideoDialogOpen(false);
+    setVideoUrl("");
+  };
+
+  const handleInsertAttachment = () => {
+    if (attachmentUrl) {
+      const attachHtml = `<a href="${attachmentUrl}" download class="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded text-sm">📎 ${attachmentName || 'Attachment'}</a>`;
+      execCommand("insertHTML", attachHtml);
+    }
+    setAttachmentDialogOpen(false);
+    setAttachmentUrl("");
+    setAttachmentName("");
   };
 
   const handleInsertMergeTag = (tag: string) => {
@@ -255,6 +322,39 @@ export function RichTextComposer({
         title="Insert Link"
       >
         <Link2 className={iconSize} />
+      </Button>
+      
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={buttonSize}
+        onClick={() => setImageDialogOpen(true)}
+        title="Insert Image"
+      >
+        <Image className={iconSize} />
+      </Button>
+      
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={buttonSize}
+        onClick={() => setVideoDialogOpen(true)}
+        title="Insert Video"
+      >
+        <Video className={iconSize} />
+      </Button>
+      
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={buttonSize}
+        onClick={() => setAttachmentDialogOpen(true)}
+        title="Insert Attachment Link"
+      >
+        <Paperclip className={iconSize} />
       </Button>
 
       {showTemplates && (
@@ -402,6 +502,111 @@ export function RichTextComposer({
               Cancel
             </Button>
             <Button onClick={handleInsertLink}>Insert</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Dialog */}
+      <Dialog open={imageDialogOpen} onOpenChange={setImageDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Insert Image</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="composer-image-url">Image URL</Label>
+              <Input
+                id="composer-image-url"
+                placeholder="https://example.com/image.jpg"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="composer-image-alt">Alt Text (optional)</Label>
+              <Input
+                id="composer-image-alt"
+                placeholder="Image description"
+                value={imageAlt}
+                onChange={(e) => setImageAlt(e.target.value)}
+              />
+            </div>
+            {imageUrl && (
+              <div className="mt-2 p-2 border rounded bg-muted/50">
+                <p className="text-xs text-muted-foreground mb-2">Preview:</p>
+                <img src={imageUrl} alt={imageAlt || 'Preview'} className="max-h-32 object-contain" />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImageDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleInsertImage} disabled={!imageUrl}>Insert</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Video Dialog */}
+      <Dialog open={videoDialogOpen} onOpenChange={setVideoDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Insert Video</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="composer-video-url">Video URL</Label>
+              <Input
+                id="composer-video-url"
+                placeholder="https://youtube.com/watch?v=... or https://vimeo.com/..."
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Supports YouTube, Vimeo, or direct video URLs (.mp4, .webm)
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVideoDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleInsertVideo} disabled={!videoUrl}>Insert</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Attachment Dialog */}
+      <Dialog open={attachmentDialogOpen} onOpenChange={setAttachmentDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Insert Attachment Link</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="composer-attach-url">File URL</Label>
+              <Input
+                id="composer-attach-url"
+                placeholder="https://example.com/document.pdf"
+                value={attachmentUrl}
+                onChange={(e) => setAttachmentUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="composer-attach-name">Display Name (optional)</Label>
+              <Input
+                id="composer-attach-name"
+                placeholder="Document.pdf"
+                value={attachmentName}
+                onChange={(e) => setAttachmentName(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttachmentDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleInsertAttachment} disabled={!attachmentUrl}>Insert</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

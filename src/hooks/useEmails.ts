@@ -43,6 +43,13 @@ export interface EmailFilters {
   linkedOnly?: boolean;
   search?: string;
   folder?: string;
+  followUpDays?: "0-3" | "4-7" | "8-30";
+  labels?: string[];
+  isUnread?: boolean;
+  linkedWithDeal?: boolean | null;
+  isTracked?: boolean;
+  hasAttachments?: boolean;
+  fromContact?: boolean;
 }
 
 export function useEmails(filters: EmailFilters = {}) {
