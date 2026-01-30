@@ -108,22 +108,53 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  
+  // Track if user is actively editing to prevent external updates from destroying cursor
+  const isFocusedRef = useRef(false);
+  const lastValueRef = useRef(value);
+  const savedCursorRangeRef = useRef<Range | null>(null);
 
-  // Sync value to editor
+  // Sync external value changes to editor - but NOT while user is editing
   useEffect(() => {
     if (editorRef.current && mode === "visual") {
-      if (editorRef.current.innerHTML !== value) {
+      // Only update if: not focused AND value actually changed externally
+      const isExternalChange = value !== lastValueRef.current;
+      if (isExternalChange && !isFocusedRef.current) {
         editorRef.current.innerHTML = value;
       }
+      lastValueRef.current = value;
     }
   }, [value, mode]);
 
+  // Save cursor position before opening dialogs
+  const saveCursorPosition = useCallback(() => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      savedCursorRangeRef.current = selection.getRangeAt(0).cloneRange();
+    }
+  }, []);
+
+  // Restore cursor and focus editor before inserting content
+  const restoreCursorAndFocus = useCallback(() => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+      if (savedCursorRangeRef.current) {
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(savedCursorRangeRef.current);
+      }
+    }
+  }, []);
+
   const execCommand = useCallback((command: string, cmdValue?: string) => {
+    restoreCursorAndFocus();
     document.execCommand(command, false, cmdValue);
     if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
+      const newValue = editorRef.current.innerHTML;
+      lastValueRef.current = newValue;
+      onChange(newValue);
     }
-  }, [onChange]);
+  }, [onChange, restoreCursorAndFocus]);
 
   const handleFormat = (format: string) => {
     switch (format) {
@@ -393,8 +424,18 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
 
   const handleEditorInput = () => {
     if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
+      const newValue = editorRef.current.innerHTML;
+      lastValueRef.current = newValue;
+      onChange(newValue);
     }
+  };
+
+  const handleEditorFocus = () => {
+    isFocusedRef.current = true;
+  };
+
+  const handleEditorBlur = () => {
+    isFocusedRef.current = false;
   };
 
   const handleHtmlChange = (html: string) => {
@@ -472,19 +513,19 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
                 <Link2 className="h-3.5 w-3.5" />
               </Button>
               
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setImageDialogOpen(true)} title="Insert Image">
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { saveCursorPosition(); setImageDialogOpen(true); }} title="Insert Image">
                 <Image className="h-3.5 w-3.5" />
               </Button>
               
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setVideoDialogOpen(true)} title="Insert Video">
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { saveCursorPosition(); setVideoDialogOpen(true); }} title="Insert Video">
                 <Video className="h-3.5 w-3.5" />
               </Button>
               
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAttachmentDialogOpen(true)} title="Insert Attachment Link">
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { saveCursorPosition(); setAttachmentDialogOpen(true); }} title="Insert Attachment Link">
                 <Paperclip className="h-3.5 w-3.5" />
               </Button>
               
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCtaDialogOpen(true)} title="Insert CTA Button">
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { saveCursorPosition(); setCtaDialogOpen(true); }} title="Insert CTA Button">
                 <MousePointer2 className="h-3.5 w-3.5" />
               </Button>
 
@@ -515,7 +556,8 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
             className="min-h-[300px] p-4 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring prose prose-sm max-w-none dark:prose-invert"
             onInput={handleEditorInput}
             onClick={handleEditorClick}
-            dangerouslySetInnerHTML={{ __html: value }}
+            onFocus={handleEditorFocus}
+            onBlur={handleEditorBlur}
             style={{ whiteSpace: "pre-wrap" }}
           />
         </TabsContent>

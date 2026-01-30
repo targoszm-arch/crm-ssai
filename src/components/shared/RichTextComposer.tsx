@@ -133,22 +133,53 @@ export function RichTextComposer({
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  
+  // Track if user is actively editing to prevent external updates from destroying cursor
+  const isFocusedRef = useRef(false);
+  const lastValueRef = useRef(value);
+  const savedCursorRangeRef = useRef<Range | null>(null);
 
-  // Sync external value changes to editor
+  // Sync external value changes to editor - but NOT while user is editing
   useEffect(() => {
     if (editorRef.current && mode === "visual") {
-      if (editorRef.current.innerHTML !== value) {
+      // Only update if: not focused AND value actually changed externally
+      const isExternalChange = value !== lastValueRef.current;
+      if (isExternalChange && !isFocusedRef.current) {
         editorRef.current.innerHTML = value;
       }
+      lastValueRef.current = value;
     }
   }, [value, mode]);
 
+  // Save cursor position before opening dialogs
+  const saveCursorPosition = useCallback(() => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      savedCursorRangeRef.current = selection.getRangeAt(0).cloneRange();
+    }
+  }, []);
+
+  // Restore cursor and focus editor before inserting content
+  const restoreCursorAndFocus = useCallback(() => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+      if (savedCursorRangeRef.current) {
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(savedCursorRangeRef.current);
+      }
+    }
+  }, []);
+
   const execCommand = useCallback((command: string, cmdValue?: string) => {
+    restoreCursorAndFocus();
     document.execCommand(command, false, cmdValue);
     if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
+      const newValue = editorRef.current.innerHTML;
+      lastValueRef.current = newValue;
+      onChange(newValue);
     }
-  }, [onChange]);
+  }, [onChange, restoreCursorAndFocus]);
 
   const handleFormat = (format: string) => {
     switch (format) {
@@ -427,8 +458,18 @@ export function RichTextComposer({
 
   const handleEditorInput = () => {
     if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
+      const newValue = editorRef.current.innerHTML;
+      lastValueRef.current = newValue;
+      onChange(newValue);
     }
+  };
+
+  const handleEditorFocus = () => {
+    isFocusedRef.current = true;
+  };
+
+  const handleEditorBlur = () => {
+    isFocusedRef.current = false;
   };
 
   const handleHtmlChange = (html: string) => {
@@ -507,19 +548,19 @@ export function RichTextComposer({
         <Link2 className={iconSize} />
       </Button>
       
-      <Button type="button" variant="ghost" size="icon" className={buttonSize} onClick={() => setImageDialogOpen(true)} title="Insert Image">
+      <Button type="button" variant="ghost" size="icon" className={buttonSize} onClick={() => { saveCursorPosition(); setImageDialogOpen(true); }} title="Insert Image">
         <Image className={iconSize} />
       </Button>
       
-      <Button type="button" variant="ghost" size="icon" className={buttonSize} onClick={() => setVideoDialogOpen(true)} title="Insert Video">
+      <Button type="button" variant="ghost" size="icon" className={buttonSize} onClick={() => { saveCursorPosition(); setVideoDialogOpen(true); }} title="Insert Video">
         <Video className={iconSize} />
       </Button>
       
-      <Button type="button" variant="ghost" size="icon" className={buttonSize} onClick={() => setAttachmentDialogOpen(true)} title="Insert Attachment Link">
+      <Button type="button" variant="ghost" size="icon" className={buttonSize} onClick={() => { saveCursorPosition(); setAttachmentDialogOpen(true); }} title="Insert Attachment Link">
         <Paperclip className={iconSize} />
       </Button>
       
-      <Button type="button" variant="ghost" size="icon" className={buttonSize} onClick={() => setCtaDialogOpen(true)} title="Insert CTA Button">
+      <Button type="button" variant="ghost" size="icon" className={buttonSize} onClick={() => { saveCursorPosition(); setCtaDialogOpen(true); }} title="Insert CTA Button">
         <MousePointer2 className={iconSize} />
       </Button>
 
@@ -575,6 +616,8 @@ export function RichTextComposer({
               className="p-3 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring prose prose-sm max-w-none dark:prose-invert overflow-auto"
               onInput={handleEditorInput}
               onClick={handleEditorClick}
+              onFocus={handleEditorFocus}
+              onBlur={handleEditorBlur}
               style={{ minHeight: `${minHeight}px`, maxHeight: `${maxHeight}px`, whiteSpace: "pre-wrap" }}
               data-placeholder={placeholder}
             />
@@ -599,6 +642,8 @@ export function RichTextComposer({
             className="p-3 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring prose prose-sm max-w-none dark:prose-invert overflow-auto"
             onInput={handleEditorInput}
             onClick={handleEditorClick}
+            onFocus={handleEditorFocus}
+            onBlur={handleEditorBlur}
             style={{ minHeight: `${minHeight}px`, maxHeight: `${maxHeight}px`, whiteSpace: "pre-wrap" }}
             data-placeholder={placeholder}
           />
