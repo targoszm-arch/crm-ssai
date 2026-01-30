@@ -217,7 +217,7 @@ export default function Inbox() {
           {activeTab === "email" && (
             <InboxSidebar currentFolder={currentFolder} onFolderChange={(f) => { setCurrentFolder(f); setSelectedItem(null); }} />
           )}
-          <div className={cn("border-r flex-shrink-0 overflow-hidden flex flex-col", viewMode === "split" ? "w-96" : "flex-1")}>
+          <div className={cn("border-r flex-shrink-0 overflow-hidden flex flex-col min-w-0", viewMode === "split" ? "w-96" : "flex-1 max-w-2xl")}>
             {activeTab === "email" ? (
               <EmailList 
                 accounts={accounts || []} 
