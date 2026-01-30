@@ -14,6 +14,37 @@ interface SendEmailRequest {
   subject: string;
   body: string;
   contactId?: string;
+  isTracked?: boolean;
+}
+
+// Inject tracking pixel into HTML body
+function injectTrackingPixel(html: string, emailId: string, supabaseUrl: string): string {
+  const trackingPixel = `<img src="${supabaseUrl}/functions/v1/track-email-open?eid=${emailId}" width="1" height="1" style="display:none;" alt="" />`;
+  
+  // Try to inject before </body> if it exists
+  if (html.toLowerCase().includes("</body>")) {
+    return html.replace(/<\/body>/i, `${trackingPixel}</body>`);
+  }
+  
+  // Otherwise append at the end
+  return html + trackingPixel;
+}
+
+// Wrap links for click tracking
+function wrapLinksForTracking(html: string, emailId: string, supabaseUrl: string): string {
+  // Match href attributes with http/https URLs
+  const linkRegex = /href=["'](https?:\/\/[^"']+)["']/gi;
+  
+  return html.replace(linkRegex, (match, url) => {
+    // Don't wrap tracking URLs or unsubscribe links
+    if (url.includes("/functions/v1/track-") || url.includes("unsubscribe")) {
+      return match;
+    }
+    
+    const encodedUrl = encodeURIComponent(url);
+    const trackingUrl = `${supabaseUrl}/functions/v1/track-email-click?eid=${emailId}&url=${encodedUrl}`;
+    return `href="${trackingUrl}"`;
+  });
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -34,13 +65,13 @@ serve(async (req: Request): Promise<Response> => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { accountId, to, subject, body, contactId }: SendEmailRequest = await req.json();
+    const { accountId, to, subject, body, contactId, isTracked = false }: SendEmailRequest = await req.json();
 
     if (!accountId || !to || to.length === 0 || !subject || !body) {
       throw new Error("accountId, to, subject, and body are required");
     }
 
-    console.log(`Sending email from account: ${accountId}`);
+    console.log(`Sending email from account: ${accountId}, tracked: ${isTracked}`);
 
     // Get email account
     const { data: account, error: accountError } = await supabase
@@ -91,6 +122,52 @@ serve(async (req: Request): Promise<Response> => {
         .eq("id", accountId);
     }
 
+    // First, store the email to get an ID for tracking
+    const { data: storedEmail, error: storeError } = await supabase
+      .from("emails")
+      .insert({
+        account_id: accountId,
+        gmail_id: `pending-${Date.now()}`, // Temporary ID until we get the real one
+        thread_id: null,
+        contact_id: contactId || null,
+        subject,
+        snippet: body.substring(0, 200).replace(/<[^>]*>/g, ''), // Strip HTML for snippet
+        from_email: account.email_address,
+        from_name: account.email_address.split("@")[0],
+        to_emails: to,
+        received_at: new Date().toISOString(),
+        is_read: true,
+        direction: "outbound",
+        labels: ["SENT"],
+        folder: "sent",
+        is_tracked: isTracked,
+        open_count: 0,
+        click_count: 0,
+      })
+      .select()
+      .single();
+
+    if (storeError) {
+      console.error("Error storing email before send:", storeError);
+      throw new Error("Failed to prepare email for sending");
+    }
+
+    // Apply tracking if enabled
+    let finalBody = body;
+    if (isTracked && storedEmail) {
+      console.log(`Injecting tracking for email ${storedEmail.id}`);
+      finalBody = wrapLinksForTracking(finalBody, storedEmail.id, supabaseUrl);
+      finalBody = injectTrackingPixel(finalBody, storedEmail.id, supabaseUrl);
+    }
+
+    // Store the final body with tracking
+    if (isTracked && storedEmail) {
+      await supabase
+        .from("emails")
+        .update({ body_html: finalBody })
+        .eq("id", storedEmail.id);
+    }
+
     // Create email in RFC 2822 format
     const emailLines = [
       `To: ${to.join(", ")}`,
@@ -98,7 +175,7 @@ serve(async (req: Request): Promise<Response> => {
       `Subject: ${subject}`,
       "Content-Type: text/html; charset=utf-8",
       "",
-      body,
+      finalBody,
     ];
     const rawEmail = emailLines.join("\r\n");
     
@@ -124,42 +201,36 @@ serve(async (req: Request): Promise<Response> => {
     if (!sendResponse.ok) {
       const errorText = await sendResponse.text();
       console.error("Gmail send error:", errorText);
+      
+      // Clean up the pending email record on failure
+      if (storedEmail) {
+        await supabase.from("emails").delete().eq("id", storedEmail.id);
+      }
+      
       throw new Error(`Failed to send email: ${sendResponse.status}`);
     }
 
     const sentMessage = await sendResponse.json();
     console.log(`Email sent successfully: ${sentMessage.id}`);
 
-    // Store the sent email in our database
-    const { data: storedEmail, error: storeError } = await supabase
+    // Update the stored email with the real Gmail ID
+    const { error: updateError } = await supabase
       .from("emails")
-      .insert({
-        account_id: accountId,
+      .update({
         gmail_id: sentMessage.id,
         thread_id: sentMessage.threadId,
-        contact_id: contactId || null,
-        subject,
-        snippet: body.substring(0, 200),
-        from_email: account.email_address,
-        from_name: account.email_address.split("@")[0],
-        to_emails: to,
-        received_at: new Date().toISOString(),
-        is_read: true,
-        direction: "outbound",
-        labels: ["SENT"],
       })
-      .select()
-      .single();
+      .eq("id", storedEmail.id);
 
-    if (storeError) {
-      console.error("Error storing sent email:", storeError);
+    if (updateError) {
+      console.error("Error updating email with Gmail ID:", updateError);
     }
 
     return new Response(
       JSON.stringify({
         success: true,
         messageId: sentMessage.id,
-        email: storedEmail,
+        email: { ...storedEmail, gmail_id: sentMessage.id, thread_id: sentMessage.threadId },
       }),
       {
         status: 200,

@@ -25,7 +25,8 @@ import {
   Loader2,
   Lightbulb,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  DollarSign
 } from "lucide-react";
 import { Contact, useUpdateContact } from "@/hooks/useContacts";
 import { enrichContact } from "@/lib/api/enrichment";
@@ -35,6 +36,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ContactHistoryTabs } from "./ContactHistoryTabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { EditableLabels } from "./EditableLabels";
+import { AddDealModal } from "@/components/deals/AddDealModal";
 
 type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -70,6 +72,7 @@ export function ContactDetail({ contact: initialContact, open, onOpenChange }: C
   const [isEditing, setIsEditing] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(true);
+  const [showAddDeal, setShowAddDeal] = useState(false);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -210,6 +213,7 @@ export function ContactDetail({ contact: initialContact, open, onOpenChange }: C
   const hasProfessionalDetails = contact.function || contact.seniority_level;
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader className="space-y-4">
@@ -270,6 +274,14 @@ export function ContactDetail({ contact: initialContact, open, onOpenChange }: C
             </div>
             {!isEditing ? (
               <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowAddDeal(true)}
+                  title="Create Deal"
+                >
+                  <DollarSign className="h-4 w-4" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -593,5 +605,16 @@ export function ContactDetail({ contact: initialContact, open, onOpenChange }: C
         </div>
       </SheetContent>
     </Sheet>
+
+    {/* Add Deal Modal */}
+    <AddDealModal
+      open={showAddDeal}
+      onOpenChange={setShowAddDeal}
+      initialData={{ 
+        contact_id: contact.id, 
+        company_id: contact.company_id || undefined 
+      }}
+    />
+  </>
   );
 }
