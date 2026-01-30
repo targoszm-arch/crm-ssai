@@ -1,12 +1,11 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
 import { DataTable } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageSquare, Send, Mail, Phone, Plus, Search, Filter, MoreHorizontal } from "lucide-react";
+import { MessageSquare, Mail, Plus, Search, MoreHorizontal, RefreshCw, Linkedin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { 
   DropdownMenu, 
@@ -16,92 +15,40 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-
-// Mock campaign data
-const campaignData = [
-  {
-    id: "camp-001",
-    name: "Summer Sale Promotion",
-    type: "email",
-    audience: "All Customers",
-    status: "active",
-    sentCount: 1250,
-    openRate: 32,
-    conversionRate: 8,
-    lastSent: "2023-06-15"
-  },
-  {
-    id: "camp-002",
-    name: "Abandoned Cart Recovery",
-    type: "whatsapp",
-    audience: "Cart Abandoners",
-    status: "active",
-    sentCount: 450,
-    openRate: 68,
-    conversionRate: 15,
-    lastSent: "2023-06-18"
-  },
-  {
-    id: "camp-003",
-    name: "New Product Launch",
-    type: "sms",
-    audience: "Premium Customers",
-    status: "scheduled",
-    sentCount: 0,
-    openRate: 0,
-    conversionRate: 0,
-    lastSent: "Not sent yet"
-  },
-  {
-    id: "camp-004",
-    name: "Customer Feedback Request",
-    type: "email",
-    audience: "Recent Buyers",
-    status: "ended",
-    sentCount: 850,
-    openRate: 41,
-    conversionRate: 12,
-    lastSent: "2023-05-20"
-  },
-  {
-    id: "camp-005",
-    name: "Birthday Discount",
-    type: "email",
-    audience: "All Customers",
-    status: "draft",
-    sentCount: 0,
-    openRate: 0,
-    conversionRate: 0,
-    lastSent: "Not sent yet"
-  }
-];
+import { useCampaigns, useSyncCampaigns, Campaign } from "@/hooks/useCampaigns";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Campaigns() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  
+  const { data: campaigns, isLoading } = useCampaigns(statusFilter);
+  const syncMutation = useSyncCampaigns();
 
   const renderCampaignIcon = (type: string) => {
     switch (type) {
       case "email":
         return <Mail className="h-4 w-4" />;
+      case "linkedin":
+        return <Linkedin className="h-4 w-4" />;
       case "whatsapp":
         return <MessageSquare className="h-4 w-4" />;
-      case "sms":
-        return <Phone className="h-4 w-4" />;
       default:
-        return <Mail className="h-4 w-4" />;
+        return <Linkedin className="h-4 w-4" />;
     }
   };
 
   const renderCampaignStatus = (status: string) => {
     const statusMap: Record<string, { color: string; label: string }> = {
-      active: { color: "bg-green-100 text-green-800", label: "Active" },
-      draft: { color: "bg-gray-100 text-gray-800", label: "Draft" },
-      scheduled: { color: "bg-blue-100 text-blue-800", label: "Scheduled" },
-      ended: { color: "bg-red-100 text-red-800", label: "Ended" }
+      active: { color: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400", label: "Active" },
+      draft: { color: "bg-muted text-muted-foreground", label: "Draft" },
+      scheduled: { color: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400", label: "Scheduled" },
+      archived: { color: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400", label: "Archived" },
+      ended: { color: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400", label: "Ended" },
+      paused: { color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400", label: "Paused" },
     };
 
-    const { color, label } = statusMap[status] || { color: "bg-gray-100 text-gray-800", label: status };
+    const { color, label } = statusMap[status?.toLowerCase()] || { color: "bg-muted text-muted-foreground", label: status };
 
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${color}`}>
@@ -110,74 +57,63 @@ export default function Campaigns() {
     );
   };
 
-  const filteredCampaigns = campaignData.filter(campaign => {
+  const filteredCampaigns = (campaigns || []).filter(campaign => {
     const matchesSearch = !searchQuery || 
-      campaign.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      campaign.audience.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesType = !typeFilter || campaign.type === typeFilter;
-    
-    return matchesSearch && matchesType;
+      campaign.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
   });
 
   const campaignColumns = [
     { 
       accessorKey: "name", 
       header: "Campaign Name",
-      cell: (campaign: any) => (
+      cell: (campaign: Campaign) => (
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
             {renderCampaignIcon(campaign.type)}
           </div>
           <div>
             <div className="font-medium">{campaign.name}</div>
-            <div className="text-sm text-muted-foreground">ID: {campaign.id}</div>
+            {campaign.meetalfred_id && (
+              <div className="text-sm text-muted-foreground">ID: {campaign.meetalfred_id}</div>
+            )}
           </div>
-        </div>
-      )
-    },
-    { 
-      accessorKey: "audience", 
-      header: "Audience",
-      cell: (campaign: any) => (
-        <div>
-          <Badge variant="outline" className="rounded-full">
-            {campaign.audience}
-          </Badge>
         </div>
       )
     },
     { 
       accessorKey: "type", 
       header: "Type",
-      cell: (campaign: any) => {
-        const typeDisplay: Record<string, string> = {
-          email: "Email",
-          whatsapp: "WhatsApp",
-          sms: "SMS"
-        };
-        return typeDisplay[campaign.type] || campaign.type;
-      }
+      cell: (campaign: Campaign) => (
+        <Badge variant="outline" className="capitalize">
+          {campaign.type}
+        </Badge>
+      )
     },
     { 
-      accessorKey: "sentCount", 
+      accessorKey: "sequence_type", 
+      header: "Sequence",
+      cell: (campaign: Campaign) => campaign.sequence_type || "-"
+    },
+    { 
+      accessorKey: "total_leads", 
+      header: "Leads",
+      cell: (campaign: Campaign) => campaign.total_leads?.toLocaleString() || "0"
+    },
+    { 
+      accessorKey: "sent_count", 
       header: "Sent",
-      cell: (campaign: any) => campaign.sentCount.toLocaleString()
+      cell: (campaign: Campaign) => campaign.sent_count?.toLocaleString() || "0"
     },
     { 
-      accessorKey: "openRate", 
+      accessorKey: "open_rate", 
       header: "Open Rate",
-      cell: (campaign: any) => `${campaign.openRate}%`
-    },
-    { 
-      accessorKey: "conversionRate", 
-      header: "Conversion",
-      cell: (campaign: any) => `${campaign.conversionRate}%`
+      cell: (campaign: Campaign) => `${campaign.open_rate || 0}%`
     },
     { 
       accessorKey: "status", 
       header: "Status",
-      cell: (campaign: any) => renderCampaignStatus(campaign.status)
+      cell: (campaign: Campaign) => renderCampaignStatus(campaign.status)
     },
     { 
       accessorKey: "actions", 
@@ -192,11 +128,9 @@ export default function Campaigns() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Edit Campaign</DropdownMenuItem>
+            <DropdownMenuItem>View Details</DropdownMenuItem>
+            <DropdownMenuItem>View Leads</DropdownMenuItem>
             <DropdownMenuItem>View Reports</DropdownMenuItem>
-            <DropdownMenuItem>Duplicate</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )
@@ -205,27 +139,31 @@ export default function Campaigns() {
 
   return (
     <div className="container mx-auto py-6 space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Marketing Campaigns</h1>
-        <p className="text-muted-foreground">
-          Create, manage, and track your marketing campaigns across multiple channels.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Marketing Campaigns</h1>
+          <p className="text-muted-foreground">
+            View and manage your Meet Alfred LinkedIn campaigns.
+          </p>
+        </div>
+        <Button 
+          onClick={() => syncMutation.mutate()}
+          disabled={syncMutation.isPending}
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+          {syncMutation.isPending ? "Syncing..." : "Sync Meet Alfred"}
+        </Button>
       </div>
 
-      <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
-          <TabsTrigger value="all">
-            All Campaigns
-          </TabsTrigger>
-          <TabsTrigger value="active">
-            Active
-          </TabsTrigger>
-          <TabsTrigger value="drafts">
-            Drafts
-          </TabsTrigger>
+      <Tabs defaultValue="all" className="w-full" onValueChange={setStatusFilter}>
+        <TabsList className="grid w-full max-w-md grid-cols-4">
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="active">Active</TabsTrigger>
+          <TabsTrigger value="draft">Drafts</TabsTrigger>
+          <TabsTrigger value="archived">Archived</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="all" className="space-y-6 mt-6">
+        <TabsContent value={statusFilter} className="space-y-6 mt-6">
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -239,16 +177,10 @@ export default function Campaigns() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                  <Button variant="outline">
-                    <Filter className="mr-2 h-4 w-4" />
-                    Filter
-                  </Button>
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Campaign
-                  </Button>
-                </div>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Campaign
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -259,41 +191,37 @@ export default function Campaigns() {
             className="mt-8 mb-4"
           />
 
-          <DataTable
-            columns={campaignColumns}
-            data={filteredCampaigns}
-            emptyMessage="No campaigns found"
-          />
-        </TabsContent>
-        
-        <TabsContent value="active" className="space-y-4 mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Active Campaigns</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <DataTable
-                columns={campaignColumns}
-                data={campaignData.filter(campaign => campaign.status === "active")}
-                emptyMessage="No active campaigns found"
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="drafts" className="space-y-4 mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Draft Campaigns</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <DataTable
-                columns={campaignColumns}
-                data={campaignData.filter(campaign => campaign.status === "draft")}
-                emptyMessage="No draft campaigns found"
-              />
-            </CardContent>
-          </Card>
+          {isLoading ? (
+            <Card>
+              <CardContent className="p-6 space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                    <Skeleton className="h-6 w-16" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : filteredCampaigns.length === 0 ? (
+            <Card>
+              <CardHeader className="text-center">
+                <CardTitle>No campaigns found</CardTitle>
+                <CardDescription>
+                  Click "Sync Meet Alfred" to import your campaigns, or create a new one.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
+            <DataTable
+              columns={campaignColumns}
+              data={filteredCampaigns}
+              emptyMessage="No campaigns found"
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>

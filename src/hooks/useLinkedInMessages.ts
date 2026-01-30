@@ -14,6 +14,8 @@ export interface LinkedInMessage {
   sender_name?: string | null;
   campaign_name?: string | null;
   profile_url?: string | null;
+  linkedin_conversation_url?: string | null;
+  company_name?: string | null;
   raw_payload?: Record<string, unknown> | null;
   connection?: {
     id: string;
