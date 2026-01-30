@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
   Mail, Play, Pause, MoreHorizontal, Plus, 
-  Users, Clock, BarChart3, UserPlus, Copy, Edit, FileText
+  Users, Clock, BarChart3, UserPlus, Copy, Edit, FileText, Loader2, Zap
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { useSequences, useUpdateSequence, useCreateSequence, useSequenceStats, Sequence } from "@/hooks/useSequences";
+import { useSequences, useUpdateSequence, useCreateSequence, useSequenceStats, useProcessSequences, Sequence } from "@/hooks/useSequences";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SequenceBuilderSheet } from "@/components/sequences/SequenceBuilderSheet";
 import { EnrollContactModal } from "@/components/sequences/EnrollContactModal";
@@ -42,6 +42,7 @@ export default function Sequences() {
   const { data: stats } = useSequenceStats();
   const updateSequence = useUpdateSequence();
   const createSequence = useCreateSequence();
+  const processSequences = useProcessSequences();
 
   // Modal/sheet states
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -106,6 +107,18 @@ export default function Sequences() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => processSequences.mutate()}
+            disabled={processSequences.isPending}
+          >
+            {processSequences.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="mr-2 h-4 w-4" />
+            )}
+            Process Now
+          </Button>
           <Button variant="outline" onClick={() => setTemplatesOpen(true)}>
             <FileText className="mr-2 h-4 w-4" />
             Templates
@@ -175,32 +188,6 @@ export default function Sequences() {
         </Card>
       </div>
 
-      {/* Resend Configuration Notice */}
-      <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Mail className="h-5 w-5" />
-            Resend Configuration
-          </CardTitle>
-          <CardDescription>
-            Configure these settings in your Resend dashboard to enable email sending:
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <p className="text-sm font-medium">Webhook URL:</p>
-            <code className="text-xs bg-muted px-2 py-1 rounded block mt-1 break-all">
-              https://getqcxnjsohtlagscmfc.supabase.co/functions/v1/resend-webhook
-            </code>
-          </div>
-          <div>
-            <p className="text-sm font-medium">Domain to verify:</p>
-            <code className="text-xs bg-muted px-2 py-1 rounded block mt-1">
-              crm-ssai.lovable.app
-            </code>
-          </div>
-        </CardContent>
-      </Card>
 
       <Tabs defaultValue="all" className="w-full" onValueChange={setStatusFilter}>
         <TabsList>
