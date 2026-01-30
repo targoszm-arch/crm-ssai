@@ -27,6 +27,7 @@ interface SequenceBuilderSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sequence?: Sequence | null;
+  defaultTriggerType?: string;
 }
 
 const triggerTypes = [
@@ -35,9 +36,10 @@ const triggerTypes = [
   { value: "post_purchase", label: "Post Purchase" },
   { value: "signup", label: "Signup" },
   { value: "content_download", label: "Content Download" },
+  { value: "signup_abandonment", label: "Signup Abandonment Recovery" },
 ];
 
-export function SequenceBuilderSheet({ open, onOpenChange, sequence }: SequenceBuilderSheetProps) {
+export function SequenceBuilderSheet({ open, onOpenChange, sequence, defaultTriggerType }: SequenceBuilderSheetProps) {
   const createSequence = useCreateSequence();
   const updateSequence = useUpdateSequence();
   const { data: templates } = useEmailTemplates();
@@ -67,12 +69,12 @@ export function SequenceBuilderSheet({ open, onOpenChange, sequence }: SequenceB
       // Reset form for new sequence
       setName("");
       setDescription("");
-      setTriggerType("manual");
+      setTriggerType(defaultTriggerType || "manual");
       setFromEmail("");
       setFromName("");
       setSteps([{ day: 0, subject: "", template: "" }]);
     }
-  }, [sequence, open]);
+  }, [sequence, open, defaultTriggerType]);
 
   const addStep = () => {
     const lastDay = steps.length > 0 ? steps[steps.length - 1].day : 0;
