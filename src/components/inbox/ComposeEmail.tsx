@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Send, UserPlus } from "lucide-react";
+import { X, Send, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,9 +17,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useSendEmail } from "@/hooks/useEmails";
 import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { useContacts, Contact } from "@/hooks/useContacts";
+import { useEmailSignature } from "@/hooks/useEmailSignature";
+import { useGenerateEmailDraft, DraftTone } from "@/hooks/useGenerateEmailDraft";
 import { toast } from "@/hooks/use-toast";
 
 interface ComposeEmailProps {
@@ -44,6 +52,8 @@ export function ComposeEmail({
 
   const sendEmail = useSendEmail();
   const { data: contacts } = useContacts({});
+  const { data: signature } = useEmailSignature();
+  const generateDraft = useGenerateEmailDraft();
 
   const handleSelectContact = (contactId: string) => {
     setSelectedContactId(contactId);
@@ -51,6 +61,37 @@ export function ComposeEmail({
     if (contact?.email) {
       setTo(contact.email);
     }
+  };
+
+  const handleGenerateDraft = (tone: DraftTone) => {
+    if (!subject.trim()) {
+      toast({
+        title: "Subject Required",
+        description: "Please enter a subject before generating a draft.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    generateDraft.mutate(
+      { to, subject, tone },
+      {
+        onSuccess: (draft) => {
+          setBody(draft);
+          toast({
+            title: "Draft Generated",
+            description: `${tone.charAt(0).toUpperCase() + tone.slice(1)} draft created. Feel free to edit before sending.`,
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: "Generation Failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        },
+      }
+    );
   };
 
   const handleSend = () => {
@@ -63,12 +104,20 @@ export function ComposeEmail({
       return;
     }
 
+    // Append signature if exists
+    let finalBody = body;
+    if (signature?.signature_html) {
+      finalBody = `<div style="font-family: sans-serif;">${body.replace(/\n/g, '<br>')}</div>
+        <br><div style="margin-top: 16px; border-top: 1px solid #ddd; padding-top: 12px;">
+        ${signature.signature_html}</div>`;
+    }
+
     sendEmail.mutate(
       {
         accountId: account.id,
         to: to.split(",").map((e) => e.trim()),
         subject,
-        body,
+        body: finalBody,
         contactId: selectedContactId || undefined,
       },
       {
@@ -147,9 +196,38 @@ export function ComposeEmail({
           </div>
 
           <div>
-            <Label htmlFor="body" className="text-xs text-muted-foreground">
-              Message
-            </Label>
+            <div className="flex items-center justify-between mb-1">
+              <Label htmlFor="body" className="text-xs text-muted-foreground">
+                Message
+              </Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    disabled={generateDraft.isPending}
+                  >
+                    {generateDraft.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-1" />
+                    )}
+                    {generateDraft.isPending ? "Generating..." : "AI Draft"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleGenerateDraft("professional")}>
+                    Professional tone
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleGenerateDraft("casual")}>
+                    Casual tone
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleGenerateDraft("brief")}>
+                    Brief & concise
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <Textarea
               id="body"
               value={body}
@@ -158,6 +236,14 @@ export function ComposeEmail({
               rows={10}
             />
           </div>
+
+          {/* Signature preview */}
+          {signature?.signature_text && (
+            <div className="text-xs text-muted-foreground border-t pt-2">
+              <span className="font-medium">Signature will be added:</span>
+              <div className="mt-1 whitespace-pre-wrap opacity-60">{signature.signature_text}</div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>

@@ -3,7 +3,6 @@ import { format } from "date-fns";
 import { Mail, User, Send, Link2, X, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -21,6 +20,7 @@ import { Email, useSendEmail, useLinkEmailToContact } from "@/hooks/useEmails";
 import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { useContacts, Contact } from "@/hooks/useContacts";
 import { useGenerateEmailReply, ReplyTone } from "@/hooks/useEmailReply";
+import { useEmailSignature } from "@/hooks/useEmailSignature";
 import { toast } from "@/hooks/use-toast";
 
 interface EmailThreadProps {
@@ -38,6 +38,7 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
   const linkEmail = useLinkEmailToContact();
   const generateReply = useGenerateEmailReply();
   const { data: contacts } = useContacts({});
+  const { data: signature } = useEmailSignature();
 
   // Get reply recipient
   const replyTo = email.direction === "inbound" ? email.from_email : email.to_emails?.[0];
@@ -49,8 +50,8 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
     if (!account || !replyBody.trim()) return;
     if (!replyTo) return;
 
-    // Format reply with quoted original message
-    const formattedBody = formatReplyHtml(replyBody, email);
+    // Format reply with quoted original message and signature
+    const formattedBody = formatReplyHtml(replyBody, email, signature?.signature_html);
 
     sendEmail.mutate(
       {
@@ -188,22 +189,8 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
         </div>
       </div>
 
-      {/* Email Body - scrollable middle section */}
-      <div className="flex-1 min-h-0 overflow-auto p-4">
-        <div className="prose prose-sm max-w-none dark:prose-invert">
-          {email.body_html ? (
-            <div 
-              dangerouslySetInnerHTML={{ __html: email.body_html }} 
-              className="email-content"
-            />
-          ) : (
-            <p className="whitespace-pre-wrap">{email.snippet}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Reply Section - FIXED at bottom, always visible */}
-      <div className="flex-shrink-0 border-t bg-muted/30 p-4">
+      {/* Reply Section - FIXED AT TOP, directly under Link to Contact */}
+      <div className="flex-shrink-0 border-b bg-muted/30 p-4">
         {isReplying ? (
           <div className="space-y-3">
             {/* Reply header */}
@@ -220,6 +207,14 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
               data-placeholder="Write your reply..."
               style={{ whiteSpace: 'pre-wrap' }}
             />
+
+            {/* Signature preview */}
+            {signature?.signature_text && (
+              <div className="text-xs text-muted-foreground border-t pt-2">
+                <span className="font-medium">Signature will be added:</span>
+                <div className="mt-1 whitespace-pre-wrap opacity-60">{signature.signature_text}</div>
+              </div>
+            )}
 
             {/* Action buttons */}
             <div className="flex items-center justify-between">
@@ -273,12 +268,26 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
           </Button>
         )}
       </div>
+
+      {/* Email Body - scrollable section at bottom */}
+      <div className="flex-1 min-h-0 overflow-auto p-4">
+        <div className="prose prose-sm max-w-none dark:prose-invert">
+          {email.body_html ? (
+            <div 
+              dangerouslySetInnerHTML={{ __html: email.body_html }} 
+              className="email-content"
+            />
+          ) : (
+            <p className="whitespace-pre-wrap">{email.snippet}</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-// Format reply with quoted original message
-function formatReplyHtml(replyText: string, originalEmail: Email): string {
+// Format reply with quoted original message and signature
+function formatReplyHtml(replyText: string, originalEmail: Email, signatureHtml?: string): string {
   const replyHtml = replyText.replace(/\n/g, '<br>');
   
   const quotedDate = format(new Date(originalEmail.received_at), "EEE, MMM d, yyyy 'at' h:mm a");
@@ -286,10 +295,15 @@ function formatReplyHtml(replyText: string, originalEmail: Email): string {
     ? `${originalEmail.from_name} &lt;${originalEmail.from_email}&gt;` 
     : originalEmail.from_email;
   
+  const signatureSection = signatureHtml 
+    ? `<br><div style="margin-top: 16px; border-top: 1px solid #ddd; padding-top: 12px;">${signatureHtml}</div>`
+    : '';
+  
   return `
     <div style="font-family: sans-serif;">
       ${replyHtml}
     </div>
+    ${signatureSection}
     <br>
     <div style="color: #666; border-left: 2px solid #ccc; padding-left: 12px; margin-top: 16px;">
       <p style="margin: 0 0 8px 0; font-size: 12px;">

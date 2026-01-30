@@ -491,6 +491,36 @@ export type Database = {
         }
         Relationships: []
       }
+      email_signatures: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          signature_html: string
+          signature_text: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          signature_html?: string
+          signature_text?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          signature_html?: string
+          signature_text?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       emails: {
         Row: {
           account_id: string | null
@@ -827,36 +857,45 @@ export type Database = {
       }
       linkedin_messages: {
         Row: {
+          campaign_name: string | null
           connection_id: string | null
           created_at: string
           id: string
           is_read: boolean | null
           message_text: string
           message_timestamp: string
+          profile_url: string | null
           recipient_linkedin_id: string
           sender_linkedin_id: string
+          sender_name: string | null
           updated_at: string
         }
         Insert: {
+          campaign_name?: string | null
           connection_id?: string | null
           created_at?: string
           id?: string
           is_read?: boolean | null
           message_text: string
           message_timestamp?: string
+          profile_url?: string | null
           recipient_linkedin_id: string
           sender_linkedin_id: string
+          sender_name?: string | null
           updated_at?: string
         }
         Update: {
+          campaign_name?: string | null
           connection_id?: string | null
           created_at?: string
           id?: string
           is_read?: boolean | null
           message_text?: string
           message_timestamp?: string
+          profile_url?: string | null
           recipient_linkedin_id?: string
           sender_linkedin_id?: string
+          sender_name?: string | null
           updated_at?: string
         }
         Relationships: [
