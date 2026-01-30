@@ -1,68 +1,76 @@
 
-
-# Fix Visual Editor Showing Empty When Full HTML Is Pasted
+# Fix Visual Editor Content Being Deleted on Tab Switch
 
 ## Problem Identified
 
-When pasting **full HTML documents** (containing `<!DOCTYPE>`, `<html>`, `<head>`, `<body>` tags) into the HTML tab, switching to the Visual tab shows empty content.
+When switching from Visual to HTML mode, the Visual editor content gets deleted. This is happening because:
 
-**Why this happens**: The Visual mode uses a `contentEditable` `<div>`. When you set its `innerHTML` to a full HTML document with `<html>`, `<head>`, `<body>` tags, **browsers sanitize/strip those invalid nested elements**. A `<div>` cannot contain document-level elements, so the browser removes them - often leaving the content empty or garbled.
-
-```text
-Full HTML pasted:
-<!DOCTYPE html>
-<html>
-  <head><style>...</style></head>
-  <body>
-    <p>Hello World</p>
-  </body>
-</html>
-
-After browser sanitizes for contentEditable <div>:
-<p>Hello World</p>   ← Only body content survives (sometimes even this is lost)
-```
+1. **Browser HTML normalization mismatch**: The contentEditable div's `innerHTML` gets normalized by the browser (whitespace changes, tag restructuring), so `editorRef.current.innerHTML !== safeHtml` returns `true` even when the content is logically the same
+2. **Race condition on blur + mode change**: When clicking the HTML tab, blur fires first (setting `isFocusedRef = false`), then mode changes - the useEffect might re-run and overwrite content incorrectly
+3. **Non-greedy regex issue**: The regex `([\s\S]*?)` is non-greedy and may fail to capture all body content in certain HTML structures
 
 ---
 
 ## Solution
 
-**Sanitize the HTML before rendering in Visual mode** by extracting only the `<body>` content when full HTML documents are detected.
+### 1. Only sync when switching TO visual mode, not while in visual mode
 
-### Implementation Approach
-
-Add a helper function that:
-1. Detects if the HTML contains `<html>` or `<body>` tags
-2. If yes, extracts only the content inside `<body>...</body>`
-3. If no, uses the HTML as-is
+Track the previous mode and only update innerHTML when switching from HTML to Visual:
 
 ```typescript
-// Extract body content from full HTML documents for safe rendering
-const extractBodyContent = (html: string): string => {
-  // Check if this looks like a full HTML document
-  if (/<html[\s>]/i.test(html) || /<!DOCTYPE/i.test(html)) {
-    // Extract body content using regex
-    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    if (bodyMatch && bodyMatch[1]) {
-      return bodyMatch[1].trim();
-    }
-  }
-  return html;
-};
-```
+const prevModeRef = useRef(mode);
 
-### Where to Apply
-
-In the `useEffect` that syncs content to the Visual editor:
-
-```typescript
 useEffect(() => {
-  if (editorRef.current && mode === "visual" && !isFocusedRef.current) {
-    // Extract body content if full HTML document was pasted
-    const safeHtml = extractBodyContent(value);
-    if (editorRef.current.innerHTML !== safeHtml) {
+  const switchingToVisual = mode === "visual" && prevModeRef.current !== "visual";
+  
+  if (editorRef.current && mode === "visual") {
+    // Only set innerHTML when:
+    // 1. Switching TO visual mode (from HTML), OR
+    // 2. On initial mount (innerHTML is empty)
+    const shouldInitialize = switchingToVisual || editorRef.current.innerHTML === "";
+    
+    if (shouldInitialize && !isFocusedRef.current) {
+      const safeHtml = extractBodyContent(value);
       editorRef.current.innerHTML = safeHtml;
     }
   }
+  
+  prevModeRef.current = mode;
+  lastValueRef.current = value;
+}, [value, mode]);
+```
+
+### 2. Fix the regex to be greedy (capture all body content)
+
+Change from non-greedy `*?` to greedy `*`:
+
+```typescript
+// Before (non-greedy - might miss content)
+const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+
+// After (greedy - captures all content between body tags)
+const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+```
+
+### 3. Handle external value changes separately
+
+For cases where the value changes externally (template selection) while in visual mode:
+
+```typescript
+useEffect(() => {
+  // Handle external value changes (template selection, reset, etc.)
+  const isExternalChange = value !== lastValueRef.current;
+  const switchingToVisual = mode === "visual" && prevModeRef.current !== "visual";
+  
+  if (editorRef.current && mode === "visual") {
+    if ((switchingToVisual || isExternalChange || editorRef.current.innerHTML === "") 
+        && !isFocusedRef.current) {
+      const safeHtml = extractBodyContent(value);
+      editorRef.current.innerHTML = safeHtml;
+    }
+  }
+  
+  prevModeRef.current = mode;
   lastValueRef.current = value;
 }, [value, mode]);
 ```
@@ -73,85 +81,75 @@ useEffect(() => {
 
 | File | Changes |
 |------|---------|
-| `src/components/templates/EmailTemplateEditor.tsx` | Add `extractBodyContent` helper, use it in visual mode sync |
-| `src/components/shared/RichTextComposer.tsx` | Same fix for consistency |
+| `src/components/templates/EmailTemplateEditor.tsx` | Add `prevModeRef`, update sync logic, fix regex |
+| `src/components/shared/RichTextComposer.tsx` | Same fixes for consistency |
 
 ---
 
 ## Technical Details
 
-### Helper Function
+### Complete Updated useEffect
 
 ```typescript
-// Extract body content from full HTML documents for safe rendering in contentEditable
+const prevModeRef = useRef(mode);
+
+// Extract body content - fixed with greedy regex
 const extractBodyContent = (html: string): string => {
-  // Check if this looks like a full HTML document
   if (/<html[\s>]/i.test(html) || /<!DOCTYPE/i.test(html)) {
-    // Try to extract body content
-    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    // Greedy match to capture ALL body content
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
     if (bodyMatch && bodyMatch[1]) {
       return bodyMatch[1].trim();
     }
-    // If no body tag but has html tag, try to extract content after head
     const htmlMatch = html.match(/<html[^>]*>([\s\S]*)<\/html>/i);
     if (htmlMatch) {
-      // Remove head section and return the rest
       const content = htmlMatch[1].replace(/<head[\s\S]*?<\/head>/gi, '').trim();
       return content;
     }
   }
   return html;
 };
-```
 
-### Updated useEffect
-
-```typescript
+// Sync content to visual editor
 useEffect(() => {
-  if (editorRef.current && mode === "visual" && !isFocusedRef.current) {
-    // Extract body content if full HTML document was pasted
-    const safeHtml = extractBodyContent(value);
-    if (editorRef.current.innerHTML !== safeHtml) {
+  const switchingToVisual = mode === "visual" && prevModeRef.current !== "visual";
+  const isExternalChange = value !== lastValueRef.current;
+  
+  if (editorRef.current && mode === "visual") {
+    // Update innerHTML when:
+    // 1. Switching from HTML to Visual mode
+    // 2. External value change (template selection) while not focused
+    // 3. Initial mount (innerHTML is empty)
+    const isEmpty = editorRef.current.innerHTML === "";
+    const shouldUpdate = (switchingToVisual || isExternalChange || isEmpty) && !isFocusedRef.current;
+    
+    if (shouldUpdate) {
+      const safeHtml = extractBodyContent(value);
       editorRef.current.innerHTML = safeHtml;
     }
   }
+  
+  prevModeRef.current = mode;
   lastValueRef.current = value;
 }, [value, mode]);
 ```
 
 ---
 
-## Important Notes
+## Why This Fixes the Issue
 
-1. **The full HTML is preserved** in the `value` state (what gets saved to the database)
-2. **Only the Visual rendering** is sanitized - the HTML tab still shows the full document
-3. **Preview panel** also needs the same sanitization since it uses `dangerouslySetInnerHTML`
-
-### Preview Panel Fix
-
-```tsx
-{/* Preview Panel */}
-<div className="mt-4 border-t pt-4">
-  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-    <Eye className="h-4 w-4" />
-    Preview
-  </div>
-  <div
-    className="p-4 border rounded-md bg-white ..."
-    dangerouslySetInnerHTML={{ __html: extractBodyContent(value) }}
-  />
-</div>
-```
+1. **No more innerHTML comparison**: We removed `editorRef.current.innerHTML !== safeHtml` which was causing false positives due to browser normalization
+2. **Mode tracking**: By tracking `prevModeRef`, we only re-initialize content when actually switching TO visual mode
+3. **Greedy regex**: Ensures all body content is captured, even in complex HTML structures
+4. **Preserved typing stability**: The `!isFocusedRef.current` check still protects cursor position while editing
 
 ---
 
 ## Verification
 
 After fix:
-1. Open template editor
-2. Switch to HTML tab
-3. Paste full HTML document with `<!DOCTYPE>`, `<html>`, `<body>` tags
-4. Switch to Visual tab → **should now show the body content correctly**
-5. Preview should also render the content
-6. Regular HTML fragments (without document tags) should continue working normally
-
+1. Type in Visual mode → content stays
+2. Switch to HTML tab → Visual content preserved in state
+3. Switch back to Visual → content re-renders correctly
+4. Paste full HTML in HTML mode → Visual shows extracted body
+5. Edit in Visual → switch tabs repeatedly → no content loss
