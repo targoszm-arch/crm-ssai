@@ -128,19 +128,19 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
         </div>
       </div>
 
+      {/* Reply action - fixed at top */}
+      <div className="flex-shrink-0 border-b bg-muted/30 p-4">
+        <Button className="w-full" variant="outline" onClick={openInLinkedIn}>
+          <Linkedin className="h-4 w-4 mr-2" />
+          Reply in LinkedIn
+        </Button>
+      </div>
+
       {/* Message Body - scrollable */}
       <div className="flex-1 min-h-0 overflow-auto p-4">
         <div className="bg-muted/30 rounded-lg p-4">
           <p className="whitespace-pre-wrap">{message.message_text}</p>
         </div>
-      </div>
-
-      {/* Footer - fixed at bottom */}
-      <div className="flex-shrink-0 border-t bg-muted/30 p-4">
-        <Button className="w-full" variant="outline" onClick={openInLinkedIn}>
-          <Linkedin className="h-4 w-4 mr-2" />
-          Reply in LinkedIn
-        </Button>
       </div>
     </div>
   );
