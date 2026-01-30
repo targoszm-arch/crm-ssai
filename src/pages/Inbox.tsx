@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Settings, Mail, Linkedin } from "lucide-react";
+import { Plus, Settings, Mail, Linkedin, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEmailAccounts, useDisconnectEmailAccount } from "@/hooks/useEmailAccounts";
@@ -18,6 +18,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 type InboxTab = "email" | "linkedin";
 type SelectedItem = { type: "email"; item: Email } | { type: "linkedin"; item: LinkedInMessage } | null;
@@ -26,12 +28,45 @@ export default function Inbox() {
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<InboxTab>("email");
+  const [isSyncingMeetAlfred, setIsSyncingMeetAlfred] = useState(false);
 
   const { data: accounts, isLoading: accountsLoading } = useEmailAccounts();
   const disconnectAccount = useDisconnectEmailAccount();
+  const queryClient = useQueryClient();
 
   const hasConnectedAccount = accounts && accounts.length > 0;
   const currentAccount = accounts?.[0] || null;
+
+  const handleSyncMeetAlfred = async () => {
+    setIsSyncingMeetAlfred(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("meetalfred-sync", {
+        body: {},
+      });
+
+      if (error) throw error;
+
+      const results = data?.results;
+      toast({
+        title: "Meet Alfred Sync Complete",
+        description: `Synced ${results?.replies?.synced || 0} replies, ${results?.connections?.synced || 0} connections, ${results?.leads?.synced || 0} leads`,
+      });
+
+      // Refresh LinkedIn messages
+      queryClient.invalidateQueries({ queryKey: ["linkedin-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["linkedin-connections"] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    } catch (error) {
+      console.error("Meet Alfred sync error:", error);
+      toast({
+        title: "Sync Failed",
+        description: error instanceof Error ? error.message : "Failed to sync with Meet Alfred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingMeetAlfred(false);
+    }
+  };
 
   const handleDisconnect = (accountId: string) => {
     disconnectAccount.mutate(accountId, {
@@ -101,6 +136,20 @@ export default function Inbox() {
             <Button onClick={() => setComposeOpen(true)}>
               <Plus className="h-4 w-4 mr-1" />
               Compose
+            </Button>
+          )}
+          {activeTab === "linkedin" && (
+            <Button
+              variant="outline"
+              onClick={handleSyncMeetAlfred}
+              disabled={isSyncingMeetAlfred}
+            >
+              {isSyncingMeetAlfred ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-1.5" />
+              )}
+              Sync Meet Alfred
             </Button>
           )}
           {activeTab === "email" && hasConnectedAccount && (
