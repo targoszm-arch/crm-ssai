@@ -287,3 +287,24 @@ export function useSequenceStats() {
     },
   });
 }
+
+export function useProcessSequences() {
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("process-sequences");
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data: any) => {
+      const results = data?.results;
+      if (results) {
+        toast.success(`Processed ${results.processed} enrollments, sent ${results.sent} emails`);
+      } else {
+        toast.success("Sequence processing triggered");
+      }
+    },
+    onError: (error: any) => {
+      toast.error("Failed to process sequences: " + error.message);
+    },
+  });
+}

@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Search, User, Mail, Loader2 } from "lucide-react";
 import { useContacts } from "@/hooks/useContacts";
 import { Sequence, useEnrollContact } from "@/hooks/useSequences";
+import { supabase } from "@/integrations/supabase/client";
 
 interface EnrollContactModalProps {
   open: boolean;
@@ -55,6 +56,13 @@ export function EnrollContactModal({ open, onOpenChange, sequence }: EnrollConta
         sequenceId: sequence.id,
         contactId,
       });
+    }
+
+    // Trigger immediate processing for day 0 steps
+    const firstStepDay = sequence.steps?.[0]?.day;
+    if (firstStepDay === 0 || firstStepDay === undefined) {
+      // Fire and forget - don't wait for the result
+      supabase.functions.invoke("process-sequences").catch(console.error);
     }
 
     setSelectedContactIds([]);
