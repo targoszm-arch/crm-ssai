@@ -1258,6 +1258,93 @@ export type Database = {
         }
         Relationships: []
       }
+      lms_leads: {
+        Row: {
+          company_id: string | null
+          company_size: string | null
+          contact_id: string | null
+          created_at: string | null
+          credits_total: number | null
+          credits_used: number | null
+          email: string
+          full_name: string
+          id: string
+          learning_objectives: string | null
+          lms_created_at: string | null
+          lms_user_id: string | null
+          marketing_consent: boolean | null
+          plan: string | null
+          raw_payload: Json | null
+          role: string | null
+          source: string | null
+          updated_at: string | null
+          use_case: string | null
+          user_id: string
+          verified: boolean | null
+        }
+        Insert: {
+          company_id?: string | null
+          company_size?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          credits_total?: number | null
+          credits_used?: number | null
+          email: string
+          full_name: string
+          id?: string
+          learning_objectives?: string | null
+          lms_created_at?: string | null
+          lms_user_id?: string | null
+          marketing_consent?: boolean | null
+          plan?: string | null
+          raw_payload?: Json | null
+          role?: string | null
+          source?: string | null
+          updated_at?: string | null
+          use_case?: string | null
+          user_id: string
+          verified?: boolean | null
+        }
+        Update: {
+          company_id?: string | null
+          company_size?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          credits_total?: number | null
+          credits_used?: number | null
+          email?: string
+          full_name?: string
+          id?: string
+          learning_objectives?: string | null
+          lms_created_at?: string | null
+          lms_user_id?: string | null
+          marketing_consent?: boolean | null
+          plan?: string | null
+          raw_payload?: Json | null
+          role?: string | null
+          source?: string | null
+          updated_at?: string | null
+          use_case?: string | null
+          user_id?: string
+          verified?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lms_leads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lms_leads_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_notes: {
         Row: {
           action_items: Json | null
