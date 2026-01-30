@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.lms-webhook]
 verify_jwt = false
+
+[functions.fetch-lms-customers]
+verify_jwt = false
