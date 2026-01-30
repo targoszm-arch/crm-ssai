@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, differenceInDays } from "date-fns";
 import { Mail, User, RefreshCw, Search, Link2, Link2Off, MailOpen, MoreVertical, Eye, MousePointerClick } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,13 +19,36 @@ import { LabelBadge } from "@/components/shared/LabelBadge";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+export interface EmailFilters {
+  isUnread?: boolean;
+  hasTracking?: boolean;
+  linkedWithDeal?: boolean | null;
+  hasAttachments?: boolean;
+  followUpDays?: string;
+  labels: string[];
+}
+
 interface EmailListProps {
   accounts: EmailAccount[];
   selectedEmail: Email | null;
   onSelectEmail: (email: Email) => void;
+  folder?: string;
+  filters?: EmailFilters;
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
+  showCheckboxes?: boolean;
 }
 
-export function EmailList({ accounts, selectedEmail, onSelectEmail }: EmailListProps) {
+export function EmailList({ 
+  accounts, 
+  selectedEmail, 
+  onSelectEmail,
+  folder = "inbox",
+  filters,
+  selectedIds = [],
+  onSelectionChange,
+  showCheckboxes = false,
+}: EmailListProps) {
   const [filter, setFilter] = useState<"all" | "linked" | "unlinked">("all");
   const [search, setSearch] = useState("");
   
@@ -158,7 +181,7 @@ export function EmailList({ accounts, selectedEmail, onSelectEmail }: EmailListP
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {showCheckboxes && filteredEmails && filteredEmails.length > 0 && (
-              <CheckboxUI
+              <Checkbox
                 checked={allSelected}
                 onCheckedChange={handleSelectAll}
                 className={cn(someSelected && "data-[state=checked]:bg-primary/50")}
@@ -229,7 +252,7 @@ export function EmailList({ accounts, selectedEmail, onSelectEmail }: EmailListP
                   {/* Checkbox */}
                   {showCheckboxes && (
                     <div className="pt-1" onClick={(e) => e.stopPropagation()}>
-                      <CheckboxUI
+                      <Checkbox
                         checked={selectedIds.includes(email.id)}
                         onCheckedChange={(checked) => handleCheckboxChange(email.id, checked as boolean)}
                       />
