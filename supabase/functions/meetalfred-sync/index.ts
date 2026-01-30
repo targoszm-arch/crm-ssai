@@ -65,9 +65,9 @@ Deno.serve(async (req) => {
     const perPage = url.searchParams.get("per_page") || "100";
 
     const results = {
-      replies: { synced: 0, errors: [] as string[] },
-      connections: { synced: 0, errors: [] as string[] },
-      leads: { synced: 0, errors: [] as string[] },
+      replies: { found: 0, synced: 0, errors: [] as string[] },
+      connections: { found: 0, synced: 0, errors: [] as string[] },
+      leads: { found: 0, synced: 0, errors: [] as string[] },
     };
 
     // Sync Replies
@@ -83,53 +83,70 @@ Deno.serve(async (req) => {
         
         const repliesData = await repliesRes.json();
         const replies: MeetAlfredReply[] = repliesData.actions || [];
+        results.replies.found = replies.length;
         
         console.log(`Found ${replies.length} replies`);
 
         for (const reply of replies) {
           try {
             const linkedinId = extractLinkedInId(reply.person?.linkedin_profile_url);
-            if (!linkedinId) continue;
+            if (!linkedinId) {
+              console.log("Skipping reply - no LinkedIn ID found");
+              continue;
+            }
 
-            // Find or create linkedin connection
-            let { data: connection } = await supabase
+            // Find or create linkedin connection using upsert
+            const connectionName = `${reply.person?.first_name || ""} ${reply.person?.last_name || ""}`.trim() || "Unknown";
+            
+            const { data: connection, error: connError } = await supabase
               .from("linkedin_connections")
-              .select("id")
-              .eq("linkedin_id", linkedinId)
-              .single();
-
-            if (!connection) {
-              const { data: newConn } = await supabase
-                .from("linkedin_connections")
-                .insert({
+              .upsert(
+                {
                   linkedin_id: linkedinId,
-                  name: `${reply.person?.first_name || ""} ${reply.person?.last_name || ""}`.trim() || "Unknown",
+                  name: connectionName,
                   headline: reply.person?.headline,
                   company: reply.person?.company,
                   profile_url: reply.person?.linkedin_profile_url,
                   connection_status: "Connected",
-                })
-                .select("id")
-                .single();
-              connection = newConn;
+                  synced_at: new Date().toISOString(),
+                },
+                { onConflict: "linkedin_id" }
+              )
+              .select("id")
+              .single();
+
+            if (connError) {
+              console.error("Connection upsert error:", connError);
+              results.replies.errors.push(`Connection upsert: ${connError.message}`);
+              continue;
             }
 
             // Insert reply as linkedin message
             if (connection) {
-              await supabase.from("linkedin_messages").upsert(
+              const messageTimestamp = reply.reply_detected_on || new Date().toISOString();
+              
+              const { error: msgError } = await supabase.from("linkedin_messages").upsert(
                 {
                   sender_linkedin_id: linkedinId,
                   recipient_linkedin_id: "me",
                   message_text: reply.message || `Reply from ${reply.campaign?.name || "campaign"}`,
-                  message_timestamp: reply.reply_detected_on || new Date().toISOString(),
+                  message_timestamp: messageTimestamp,
                   connection_id: connection.id,
                   is_read: false,
                 },
                 { onConflict: "sender_linkedin_id,message_timestamp" }
               );
-              results.replies.synced++;
+              
+              if (msgError) {
+                console.error("Message upsert error:", msgError);
+                results.replies.errors.push(`Message upsert: ${msgError.message}`);
+              } else {
+                results.replies.synced++;
+                console.log(`Synced reply from ${connectionName}`);
+              }
             }
           } catch (e) {
+            console.error("Error processing reply:", e);
             results.replies.errors.push(String(e));
           }
         }
@@ -152,13 +169,17 @@ Deno.serve(async (req) => {
         
         const connectionsData = await connectionsRes.json();
         const connections: MeetAlfredConnection[] = connectionsData.actions || [];
+        results.connections.found = connections.length;
         
         console.log(`Found ${connections.length} connections`);
 
         for (const conn of connections) {
           try {
             const linkedinId = extractLinkedInId(conn.person?.linkedin_profile_url);
-            if (!linkedinId) continue;
+            if (!linkedinId) {
+              console.log("Skipping connection - no LinkedIn ID found");
+              continue;
+            }
 
             // Try to find matching contact by linkedin URL
             const { data: existingContact } = await supabase
@@ -167,10 +188,12 @@ Deno.serve(async (req) => {
               .eq("linkedin_url", conn.person?.linkedin_profile_url)
               .single();
 
-            await supabase.from("linkedin_connections").upsert(
+            const connectionName = `${conn.person?.first_name || ""} ${conn.person?.last_name || ""}`.trim() || "Unknown";
+            
+            const { error: connError } = await supabase.from("linkedin_connections").upsert(
               {
                 linkedin_id: linkedinId,
-                name: `${conn.person?.first_name || ""} ${conn.person?.last_name || ""}`.trim() || "Unknown",
+                name: connectionName,
                 headline: conn.person?.headline,
                 company: conn.person?.company,
                 profile_url: conn.person?.linkedin_profile_url,
@@ -180,8 +203,16 @@ Deno.serve(async (req) => {
               },
               { onConflict: "linkedin_id" }
             );
-            results.connections.synced++;
+            
+            if (connError) {
+              console.error("Connection upsert error:", connError);
+              results.connections.errors.push(`Connection upsert: ${connError.message}`);
+            } else {
+              results.connections.synced++;
+              console.log(`Synced connection: ${connectionName}`);
+            }
           } catch (e) {
+            console.error("Error processing connection:", e);
             results.connections.errors.push(String(e));
           }
         }
@@ -204,6 +235,7 @@ Deno.serve(async (req) => {
         
         const leadsData = await leadsRes.json();
         const leads: MeetAlfredLead[] = leadsData.actions || [];
+        results.leads.found = leads.length;
         
         console.log(`Found ${leads.length} leads`);
 
@@ -230,21 +262,52 @@ Deno.serve(async (req) => {
               contactId = linkedinContact?.id || null;
             }
 
-            // Create lead record
-            await supabase.from("leads").upsert(
-              {
+            const leadName = `${lead.person?.first_name || ""} ${lead.person?.last_name || ""}`.trim() || null;
+            
+            // For leads without email, use insert to avoid conflict issues
+            if (!lead.person?.email) {
+              const { error: leadError } = await supabase.from("leads").insert({
                 contact_id: contactId,
-                contact_name: `${lead.person?.first_name || ""} ${lead.person?.last_name || ""}`.trim() || null,
+                contact_name: leadName,
                 company_name: lead.person?.company || null,
-                email: lead.person?.email || null,
+                email: null,
                 source: `Meet Alfred - ${lead.campaign?.name || "Campaign"}`,
                 status: "New",
                 notes: lead.person?.headline ? `Headline: ${lead.person.headline}` : null,
-              },
-              { onConflict: "email", ignoreDuplicates: true }
-            );
-            results.leads.synced++;
+              });
+              
+              if (leadError) {
+                console.error("Lead insert error:", leadError);
+                results.leads.errors.push(`Lead insert: ${leadError.message}`);
+              } else {
+                results.leads.synced++;
+                console.log(`Synced lead: ${leadName || "Unknown"}`);
+              }
+            } else {
+              // Use upsert for leads with email
+              const { error: leadError } = await supabase.from("leads").upsert(
+                {
+                  contact_id: contactId,
+                  contact_name: leadName,
+                  company_name: lead.person?.company || null,
+                  email: lead.person.email,
+                  source: `Meet Alfred - ${lead.campaign?.name || "Campaign"}`,
+                  status: "New",
+                  notes: lead.person?.headline ? `Headline: ${lead.person.headline}` : null,
+                },
+                { onConflict: "email", ignoreDuplicates: true }
+              );
+              
+              if (leadError) {
+                console.error("Lead upsert error:", leadError);
+                results.leads.errors.push(`Lead upsert: ${leadError.message}`);
+              } else {
+                results.leads.synced++;
+                console.log(`Synced lead: ${leadName || "Unknown"}`);
+              }
+            }
           } catch (e) {
+            console.error("Error processing lead:", e);
             results.leads.errors.push(String(e));
           }
         }
@@ -254,7 +317,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log("Sync complete:", results);
+    console.log("Sync complete:", JSON.stringify(results, null, 2));
 
     return new Response(JSON.stringify({ success: true, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
