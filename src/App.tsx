@@ -17,6 +17,7 @@ import AIRecommendations from "./pages/AIRecommendations";
 import Payments from "./pages/Payments";
 import Inbox from "./pages/Inbox";
 import Calendar from "./pages/Calendar";
+import Deals from "./pages/Deals";
 import Auth from "./pages/Auth";
 import OAuthCallback from "./pages/OAuthCallback";
 import NotFound from "./pages/NotFound";
@@ -49,6 +50,16 @@ const App = () => (
               <AuthGuard>
                 <AppShell>
                   <Customers />
+                </AppShell>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/deals"
+            element={
+              <AuthGuard>
+                <AppShell>
+                  <Deals />
                 </AppShell>
               </AuthGuard>
             }

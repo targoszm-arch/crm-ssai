@@ -326,6 +326,9 @@ export type Database = {
           seniority_level: string | null
           talent_partner_name: string | null
           title: string | null
+          total_clicks: number | null
+          total_emails_sent: number | null
+          total_opens: number | null
           updated_at: string
           video_link: string | null
           work_location: string | null
@@ -361,6 +364,9 @@ export type Database = {
           seniority_level?: string | null
           talent_partner_name?: string | null
           title?: string | null
+          total_clicks?: number | null
+          total_emails_sent?: number | null
+          total_opens?: number | null
           updated_at?: string
           video_link?: string | null
           work_location?: string | null
@@ -396,6 +402,9 @@ export type Database = {
           seniority_level?: string | null
           talent_partner_name?: string | null
           title?: string | null
+          total_clicks?: number | null
+          total_emails_sent?: number | null
+          total_opens?: number | null
           updated_at?: string
           video_link?: string | null
           work_location?: string | null
@@ -466,9 +475,15 @@ export type Database = {
           expected_close_date: string | null
           id: string
           industry: string | null
+          labels: string | null
+          lead_source: string | null
           notes: string | null
           owner_id: string | null
+          pipeline_id: string | null
+          position: number | null
           probability: number | null
+          source_channel: string | null
+          source_channel_id: string | null
           stage: string | null
           type: string | null
           updated_at: string
@@ -482,9 +497,15 @@ export type Database = {
           expected_close_date?: string | null
           id?: string
           industry?: string | null
+          labels?: string | null
+          lead_source?: string | null
           notes?: string | null
           owner_id?: string | null
+          pipeline_id?: string | null
+          position?: number | null
           probability?: number | null
+          source_channel?: string | null
+          source_channel_id?: string | null
           stage?: string | null
           type?: string | null
           updated_at?: string
@@ -498,9 +519,15 @@ export type Database = {
           expected_close_date?: string | null
           id?: string
           industry?: string | null
+          labels?: string | null
+          lead_source?: string | null
           notes?: string | null
           owner_id?: string | null
+          pipeline_id?: string | null
+          position?: number | null
           probability?: number | null
+          source_channel?: string | null
+          source_channel_id?: string | null
           stage?: string | null
           type?: string | null
           updated_at?: string
@@ -518,6 +545,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
             referencedColumns: ["id"]
           },
         ]
@@ -662,20 +696,80 @@ export type Database = {
         }
         Relationships: []
       }
+      email_tracking_events: {
+        Row: {
+          contact_id: string | null
+          created_at: string | null
+          email_id: string | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          link_url: string | null
+          occurred_at: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string | null
+          email_id?: string | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          link_url?: string | null
+          occurred_at?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string | null
+          email_id?: string | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          link_url?: string | null
+          occurred_at?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_tracking_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_tracking_events_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "emails"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       emails: {
         Row: {
           account_id: string | null
           body_html: string | null
+          click_count: number | null
           company_id: string | null
           contact_id: string | null
           created_at: string
+          deal_id: string | null
           direction: string | null
+          email_labels: string | null
+          first_opened_at: string | null
+          folder: string | null
           from_email: string
           from_name: string | null
           gmail_id: string
+          has_attachments: boolean | null
           id: string
           is_read: boolean | null
+          is_tracked: boolean | null
           labels: string[] | null
+          last_opened_at: string | null
+          open_count: number | null
           received_at: string
           snippet: string | null
           subject: string | null
@@ -686,16 +780,25 @@ export type Database = {
         Insert: {
           account_id?: string | null
           body_html?: string | null
+          click_count?: number | null
           company_id?: string | null
           contact_id?: string | null
           created_at?: string
+          deal_id?: string | null
           direction?: string | null
+          email_labels?: string | null
+          first_opened_at?: string | null
+          folder?: string | null
           from_email: string
           from_name?: string | null
           gmail_id: string
+          has_attachments?: boolean | null
           id?: string
           is_read?: boolean | null
+          is_tracked?: boolean | null
           labels?: string[] | null
+          last_opened_at?: string | null
+          open_count?: number | null
           received_at: string
           snippet?: string | null
           subject?: string | null
@@ -706,16 +809,25 @@ export type Database = {
         Update: {
           account_id?: string | null
           body_html?: string | null
+          click_count?: number | null
           company_id?: string | null
           contact_id?: string | null
           created_at?: string
+          deal_id?: string | null
           direction?: string | null
+          email_labels?: string | null
+          first_opened_at?: string | null
+          folder?: string | null
           from_email?: string
           from_name?: string | null
           gmail_id?: string
+          has_attachments?: boolean | null
           id?: string
           is_read?: boolean | null
+          is_tracked?: boolean | null
           labels?: string[] | null
+          last_opened_at?: string | null
+          open_count?: number | null
           received_at?: string
           snippet?: string | null
           subject?: string | null
@@ -743,6 +855,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "emails_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
             referencedColumns: ["id"]
           },
         ]
@@ -1171,6 +1290,71 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pipeline_stages: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: string
+          is_lost: boolean | null
+          is_won: boolean | null
+          name: string
+          pipeline_id: string | null
+          position: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          is_lost?: boolean | null
+          is_won?: boolean | null
+          name: string
+          pipeline_id?: string | null
+          position: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          is_lost?: boolean | null
+          is_won?: boolean | null
+          name?: string
+          pipeline_id?: string | null
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_stages_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pipelines: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       project_documents: {
         Row: {
