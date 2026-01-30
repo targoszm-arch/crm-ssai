@@ -47,3 +47,9 @@ verify_jwt = false
 
 [functions.generate-email-reply]
 verify_jwt = false
+
+[functions.generate-email-draft]
+verify_jwt = false
+
+[functions.generate-linkedin-draft]
+verify_jwt = false

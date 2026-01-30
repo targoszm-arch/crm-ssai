@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Settings, Mail, Linkedin, RefreshCw, Loader2 } from "lucide-react";
+import { Plus, Settings, Mail, Linkedin, RefreshCw, Loader2, FileSignature } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEmailAccounts, useDisconnectEmailAccount } from "@/hooks/useEmailAccounts";
@@ -11,10 +11,12 @@ import { EmailThread } from "@/components/inbox/EmailThread";
 import { ComposeEmail } from "@/components/inbox/ComposeEmail";
 import { LinkedInMessageList } from "@/components/inbox/LinkedInMessageList";
 import { LinkedInMessageView } from "@/components/inbox/LinkedInMessageView";
+import { SignatureSettings } from "@/components/inbox/SignatureSettings";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
@@ -27,6 +29,7 @@ type SelectedItem = { type: "email"; item: Email } | { type: "linkedin"; item: L
 export default function Inbox() {
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [signatureOpen, setSignatureOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<InboxTab>("email");
   const [isSyncingMeetAlfred, setIsSyncingMeetAlfred] = useState(false);
 
@@ -160,6 +163,11 @@ export default function Inbox() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setSignatureOpen(true)}>
+                  <FileSignature className="h-4 w-4 mr-2" />
+                  Email Signature
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 {accounts?.map((account) => (
                   <DropdownMenuItem
                     key={account.id}
@@ -247,6 +255,12 @@ export default function Inbox() {
         open={composeOpen}
         onOpenChange={setComposeOpen}
         account={currentAccount}
+      />
+
+      {/* Signature Settings Dialog */}
+      <SignatureSettings
+        open={signatureOpen}
+        onOpenChange={setSignatureOpen}
       />
     </div>
   );

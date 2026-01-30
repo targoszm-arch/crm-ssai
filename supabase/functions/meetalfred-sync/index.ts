@@ -87,22 +87,38 @@ Deno.serve(async (req) => {
         
         console.log(`Found ${replies.length} replies`);
         
-        // Log first reply structure for debugging
+        // Log first reply structure for debugging (full structure to understand API)
         if (replies.length > 0) {
-          console.log("Sample reply structure:", JSON.stringify(replies[0], null, 2));
+          console.log("=== FULL REPLY STRUCTURE FOR DEBUGGING ===");
+          console.log(JSON.stringify(replies[0], null, 2));
+          console.log("===========================================");
         }
 
         for (const reply of replies) {
           try {
             // Extract LinkedIn ID if available, otherwise use fallback
             const linkedinId = extractLinkedInId(reply.person?.linkedin_profile_url);
-            const personName = `${reply.person?.first_name || ""} ${reply.person?.last_name || ""}`.trim() || "Unknown";
+            const firstName = reply.person?.first_name || "";
+            const lastName = reply.person?.last_name || "";
+            const personName = `${firstName} ${lastName}`.trim() || "Unknown";
+            const campaignName = reply.campaign?.name || null;
+            const profileUrl = reply.person?.linkedin_profile_url || null;
+            
+            // Get the actual message text - prefer the message field, fall back to a descriptive text
+            const actualMessage = reply.message && reply.message.trim() 
+              ? reply.message 
+              : `Reply received from ${campaignName || "campaign"}`;
             
             // Generate a unique sender ID - use LinkedIn ID if available, otherwise use reply ID
             const senderId = linkedinId || `meetalfred_reply_${reply.id}`;
             const messageTimestamp = reply.reply_detected_on || new Date().toISOString();
             
-            console.log(`Processing reply ${reply.id} from ${personName}, senderId: ${senderId}`);
+            console.log(`Processing reply ${reply.id}:`);
+            console.log(`  - Name: ${personName}`);
+            console.log(`  - Campaign: ${campaignName}`);
+            console.log(`  - LinkedIn ID: ${linkedinId || "N/A"}`);
+            console.log(`  - Profile URL: ${profileUrl || "N/A"}`);
+            console.log(`  - Message preview: ${actualMessage.substring(0, 50)}...`);
 
             let connectionId: string | null = null;
 
@@ -116,7 +132,7 @@ Deno.serve(async (req) => {
                     name: personName,
                     headline: reply.person?.headline,
                     company: reply.person?.company,
-                    profile_url: reply.person?.linkedin_profile_url,
+                    profile_url: profileUrl,
                     connection_status: "Connected",
                     synced_at: new Date().toISOString(),
                   },
@@ -132,15 +148,19 @@ Deno.serve(async (req) => {
               }
             }
 
-            // Always insert the reply message, even without LinkedIn ID
+            // Insert the reply message with all available data
             const { error: msgError } = await supabase.from("linkedin_messages").upsert(
               {
                 sender_linkedin_id: senderId,
                 recipient_linkedin_id: "me",
-                message_text: reply.message || `Reply from ${reply.campaign?.name || "campaign"} - ${personName}`,
+                message_text: actualMessage,
                 message_timestamp: messageTimestamp,
                 connection_id: connectionId,
                 is_read: false,
+                // New columns for better display
+                sender_name: personName !== "Unknown" ? personName : null,
+                campaign_name: campaignName,
+                profile_url: profileUrl,
               },
               { onConflict: "sender_linkedin_id,message_timestamp" }
             );
