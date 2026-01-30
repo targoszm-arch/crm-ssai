@@ -71,8 +71,19 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const steps = sequence?.steps as any[];
-        if (!steps || enrollment.current_step >= steps.length) {
+        // Handle double-encoded steps (JSON string inside JSONB)
+        let steps = sequence?.steps;
+        if (typeof steps === "string") {
+          try {
+            steps = JSON.parse(steps);
+            console.log(`Parsed steps from string: ${steps.length} steps`);
+          } catch (e) {
+            console.error("Failed to parse steps string:", e);
+            steps = [];
+          }
+        }
+        
+        if (!steps || !Array.isArray(steps) || enrollment.current_step >= steps.length) {
           // Mark as completed
           await supabase
             .from("sequence_enrollments")

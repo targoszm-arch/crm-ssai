@@ -1622,45 +1622,72 @@ export type Database = {
       sequence_emails: {
         Row: {
           body_html: string | null
+          bounce_type: string | null
           bounced_at: string | null
           clicked_at: string | null
           created_at: string | null
+          delivery_status: string | null
           enrollment_id: string | null
           id: string
+          link_url: string | null
           opened_at: string | null
           resend_message_id: string | null
           sent_at: string | null
+          spam_reported_at: string | null
           status: string | null
           step_number: number | null
           subject: string | null
+          total_clicks: number | null
+          total_opens: number | null
+          unique_clicks: number | null
+          unique_opens: number | null
+          unsubscribed_at: string | null
         }
         Insert: {
           body_html?: string | null
+          bounce_type?: string | null
           bounced_at?: string | null
           clicked_at?: string | null
           created_at?: string | null
+          delivery_status?: string | null
           enrollment_id?: string | null
           id?: string
+          link_url?: string | null
           opened_at?: string | null
           resend_message_id?: string | null
           sent_at?: string | null
+          spam_reported_at?: string | null
           status?: string | null
           step_number?: number | null
           subject?: string | null
+          total_clicks?: number | null
+          total_opens?: number | null
+          unique_clicks?: number | null
+          unique_opens?: number | null
+          unsubscribed_at?: string | null
         }
         Update: {
           body_html?: string | null
+          bounce_type?: string | null
           bounced_at?: string | null
           clicked_at?: string | null
           created_at?: string | null
+          delivery_status?: string | null
           enrollment_id?: string | null
           id?: string
+          link_url?: string | null
           opened_at?: string | null
           resend_message_id?: string | null
           sent_at?: string | null
+          spam_reported_at?: string | null
           status?: string | null
           step_number?: number | null
           subject?: string | null
+          total_clicks?: number | null
+          total_opens?: number | null
+          unique_clicks?: number | null
+          unique_opens?: number | null
+          unsubscribed_at?: string | null
         }
         Relationships: [
           {

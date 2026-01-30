@@ -75,6 +75,11 @@ export default function Sequences() {
     setEnrollmentsOpen(true);
   };
 
+  const handleViewAnalytics = (sequence: Sequence) => {
+    // Navigate to analytics page with sequence selected
+    window.location.href = `/analytics?sequence=${sequence.id}`;
+  };
+
   const handleEnrollContacts = (sequence: Sequence) => {
     setSelectedSequence(sequence);
     setEnrollModalOpen(true);
@@ -260,6 +265,10 @@ export default function Sequences() {
                             <DropdownMenuItem onClick={() => handleViewEnrollments(sequence)}>
                               <Users className="mr-2 h-4 w-4" />
                               View Enrollments
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewAnalytics(sequence)}>
+                              <BarChart3 className="mr-2 h-4 w-4" />
+                              View Analytics
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleDuplicate(sequence)}>
                               <Copy className="mr-2 h-4 w-4" />

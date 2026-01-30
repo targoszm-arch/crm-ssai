@@ -20,6 +20,7 @@ import Calendar from "./pages/Calendar";
 import Deals from "./pages/Deals";
 import Auth from "./pages/Auth";
 import OAuthCallback from "./pages/OAuthCallback";
+import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -150,6 +151,16 @@ const App = () => (
               <AuthGuard>
                 <AppShell>
                   <Calendar />
+                </AppShell>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/analytics"
+            element={
+              <AuthGuard>
+                <AppShell>
+                  <Analytics />
                 </AppShell>
               </AuthGuard>
             }
