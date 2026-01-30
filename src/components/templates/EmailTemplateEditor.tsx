@@ -113,13 +113,14 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
   const isFocusedRef = useRef(false);
   const lastValueRef = useRef(value);
   const savedCursorRangeRef = useRef<Range | null>(null);
+  const prevModeRef = useRef(mode);
 
   // Extract body content from full HTML documents for safe rendering in contentEditable
   const extractBodyContent = (html: string): string => {
     // Check if this looks like a full HTML document
     if (/<html[\s>]/i.test(html) || /<!DOCTYPE/i.test(html)) {
-      // Try to extract body content
-      const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      // Try to extract body content - use GREEDY match to capture all content
+      const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
       if (bodyMatch && bodyMatch[1]) {
         return bodyMatch[1].trim();
       }
@@ -134,15 +135,26 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
     return html;
   };
 
-  // Sync external value changes to editor - but NOT while user is editing
+  // Sync external value changes to editor - only when switching TO visual mode or external changes
   useEffect(() => {
-    if (editorRef.current && mode === "visual" && !isFocusedRef.current) {
-      // Extract body content if full HTML document was pasted
-      const safeHtml = extractBodyContent(value);
-      if (editorRef.current.innerHTML !== safeHtml) {
+    const switchingToVisual = mode === "visual" && prevModeRef.current !== "visual";
+    const isExternalChange = value !== lastValueRef.current;
+    
+    if (editorRef.current && mode === "visual") {
+      // Update innerHTML when:
+      // 1. Switching from HTML to Visual mode
+      // 2. External value change (template selection) while not focused
+      // 3. Initial mount (innerHTML is empty)
+      const isEmpty = editorRef.current.innerHTML === "";
+      const shouldUpdate = (switchingToVisual || isExternalChange || isEmpty) && !isFocusedRef.current;
+      
+      if (shouldUpdate) {
+        const safeHtml = extractBodyContent(value);
         editorRef.current.innerHTML = safeHtml;
       }
     }
+    
+    prevModeRef.current = mode;
     lastValueRef.current = value;
   }, [value, mode]);
 
