@@ -1,169 +1,118 @@
 
-# Fix Plan: Email Reply Box Position, AI Integration, Email Signature, and Meet Alfred Sync
+# Fix: Meet Alfred Not Syncing Actual Reply Content
 
-## Summary
-Four issues to address:
-1. Move email reply box to TOP (like LinkedIn)
-2. Fix AI suggestions integration for emails, compose, and LinkedIn
-3. Add global email signature feature
-4. Fix Meet Alfred sync (showing "Unknown" names and broken LinkedIn links)
-
----
-
-## Issue 1: Move Email Reply Box to Top
-
-**Problem**: The email reply section is at the bottom of `EmailThread.tsx`, requiring scrolling to access it.
-
-**Solution**: Reposition the reply section to appear directly under the "Link to Contact" row (matching LinkedIn's layout).
-
-**File**: `src/components/inbox/EmailThread.tsx`
-
-**Changes**:
-- Move the reply section container from after the email body to before it
-- Change `border-t` to `border-b` styling
-- Keep the same flex layout structure with `flex-shrink-0`
-
----
-
-## Issue 2: Add AI Suggestions to Compose Email and LinkedIn
-
-**Problem**: AI Suggest button only works in EmailThread reply; not available in:
-- ComposeEmail modal
-- LinkedIn message drafts
-
-**Solution A - ComposeEmail AI Suggest**:
-
-**File**: `src/components/inbox/ComposeEmail.tsx`
-
-**Changes**:
-- Import `useGenerateEmailReply`, `Sparkles`, `Loader2`, and `DropdownMenu` components
-- Add a temporary placeholder approach: since compose creates new emails (not replies), we need a different approach
-- Add an "AI Draft" button that generates a starter email based on subject and recipient context
-- Create a new edge function `generate-email-draft` or modify existing to handle drafts
-
-**Solution B - LinkedIn AI Drafts**:
-
-**File**: `src/components/inbox/LinkedInMessageView.tsx`
-
-**Changes**:
-- Add state for draft reply text
-- Add AI Suggest dropdown similar to EmailThread
-- Create a collapsible text area that shows a suggested draft
-- User can copy the draft text, then click "Reply in LinkedIn" to paste it
-
----
-
-## Issue 3: Add Global Email Signature
-
-**Problem**: No way to add a signature to emails.
-
-**Solution**: Create a signature settings system stored in a database table.
-
-**Database Migration**:
-```sql
-CREATE TABLE email_signatures (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  signature_html text NOT NULL,
-  signature_text text NOT NULL,
-  is_default boolean DEFAULT true,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
-ALTER TABLE email_signatures ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can manage their own signatures" ON email_signatures
-  FOR ALL USING (auth.uid() = user_id);
+## Root Cause
+The `meetalfred-sync` edge function is calling the **wrong API endpoint**. It currently uses:
+```
+/api/integrations/webhook/new-reply-detected
 ```
 
-**New Files**:
-- `src/hooks/useEmailSignature.ts` - Hook to fetch/update signature
-- `src/components/inbox/SignatureSettings.tsx` - Modal to edit signature
+This is a **webhook push endpoint** that only returns minimal notification data (reply IDs and timestamps). It does NOT return the actual message content, person details, or campaign information - which is why everything shows as "Unknown" with "Reply received from campaign" as placeholder text.
 
-**Modified Files**:
-- `src/components/inbox/EmailThread.tsx` - Append signature when replying
-- `src/components/inbox/ComposeEmail.tsx` - Append signature when composing
-- `src/pages/Inbox.tsx` - Add "Signature" option in settings dropdown
+## Solution
+Switch to the correct **Get Replies** API endpoint that returns full reply data including:
+- Actual message text from the lead
+- Person information (name, LinkedIn profile URL, headline)
+- Campaign details (name, type)
 
 ---
 
-## Issue 4: Fix Meet Alfred Sync
+## Technical Changes
 
-**Root Cause Analysis**:
-The sync logs show:
-- "Reply from campaign - Unknown" because `reply.person` fields are null/empty
-- `connection_id: null` in messages because LinkedIn IDs are missing from the API response
-- "Reply in LinkedIn" link is broken because there's no `profile_url`
-
-The Meet Alfred API for replies is not returning the person's LinkedIn profile URL or name data.
-
-**Solution**: Improve the sync function to:
-1. Log the full API response structure for debugging
-2. Store more data from the reply (campaign name, actual message text)
-3. Use the full name from leads data as fallback
-4. Add a name column to `linkedin_messages` table for display purposes
-5. Store campaign info for context
-
-**Database Migration**:
-```sql
-ALTER TABLE linkedin_messages 
-ADD COLUMN IF NOT EXISTS sender_name text,
-ADD COLUMN IF NOT EXISTS campaign_name text,
-ADD COLUMN IF NOT EXISTS profile_url text;
-```
-
+### 1. Update Edge Function API Endpoint
 **File**: `supabase/functions/meetalfred-sync/index.ts`
 
-**Changes**:
-- Log full reply structure to understand what Meet Alfred actually returns
-- Extract and store sender_name from `reply.person.first_name + reply.person.last_name`
-- Extract and store campaign_name from `reply.campaign.name`
-- Store profile_url from `reply.person.linkedin_profile_url` if available
-- Improve message_text to show actual reply content, not just "Reply from campaign"
+Change the replies endpoint from:
+```
+new-reply-detected
+```
+to the proper get-replies endpoint.
 
+Based on Meet Alfred's API documentation patterns, the correct endpoint structure is:
+```
+https://app.meetalfred.com/api/v1/replies
+```
+OR
+```
+https://meetalfred.com/api/integrations/webhook/replies
+```
+
+The function will try the documented get-replies pattern and log the full response structure for debugging.
+
+### 2. Add Raw Payload Storage
+**Database Migration**: Add `raw_payload` column to `linkedin_messages` table
+
+```sql
+ALTER TABLE linkedin_messages 
+ADD COLUMN IF NOT EXISTS raw_payload jsonb;
+```
+
+This stores the complete API response for each synced reply so we never lose data again.
+
+### 3. Update Data Extraction Logic
+The edge function will:
+1. Log the FULL raw API response for debugging (to understand the actual structure Meet Alfred returns)
+2. Store the raw payload in the database
+3. Extract message text, sender name, profile URL from the correct fields in the response
+4. Support pagination for last 30 days of replies
+
+### 4. Implement Proper Pagination for 30-Day Backfill
+Add logic to page through replies until we've covered the last 30 days:
+- Call the API with incrementing page numbers
+- Stop when we hit replies older than 30 days or run out of data
+- Track sync progress and report totals
+
+---
+
+## Updated Edge Function Logic
+
+```typescript
+// Try the correct API endpoint for fetching replies
+const repliesUrl = `https://meetalfred.com/api/integrations/webhook/replies?webhook_key=${webhookKey}&page=${page}&per_page=${perPage}`;
+
+// If that fails, try alternative endpoint patterns
+// Log FULL response structure for debugging
+
+// For each reply, extract:
+const messageText = reply.message || reply.text || reply.content || "No message";
+const firstName = reply.person?.first_name || reply.lead?.first_name || "";
+const lastName = reply.person?.last_name || reply.lead?.last_name || "";
+const profileUrl = reply.person?.linkedin_profile_url || reply.lead?.profile_url || "";
+const campaignName = reply.campaign?.name || reply.sequence?.name || "";
+
+// Store raw payload for debugging
+raw_payload: reply
+```
+
+---
+
+## Updated UI Display
 **File**: `src/components/inbox/LinkedInMessageView.tsx`
 
-**Changes**:
-- Use `message.sender_name` as fallback when `connection?.name` is unavailable
-- Use `message.profile_url` as fallback for the "Reply in LinkedIn" button
-- Display campaign context when available
-
-**File**: `src/hooks/useLinkedInMessages.ts`
-
-**Changes**:
-- Update the interface to include new columns
+Update to show:
+- Sender name from `message.sender_name` (fallback to connection name)
+- Actual message text from `message.message_text`
+- Campaign badge showing `message.campaign_name` if available
+- "Reply in LinkedIn" button using `message.profile_url`
 
 ---
 
-## Technical Details
+## Summary of Changes
 
-### File Changes Summary
-
-| File | Change Type |
-|------|-------------|
-| `src/components/inbox/EmailThread.tsx` | Move reply section to top, add signature append |
-| `src/components/inbox/ComposeEmail.tsx` | Add AI Suggest button, add signature append |
-| `src/components/inbox/LinkedInMessageView.tsx` | Add AI draft feature, fix broken profile links |
-| `src/components/inbox/SignatureSettings.tsx` | New file for signature editor modal |
-| `src/hooks/useEmailSignature.ts` | New hook for signature management |
-| `src/hooks/useLinkedInMessages.ts` | Update interface for new columns |
-| `src/pages/Inbox.tsx` | Add signature settings menu item |
-| `supabase/functions/meetalfred-sync/index.ts` | Better data extraction, logging |
-| `supabase/functions/generate-email-draft/index.ts` | New function for compose AI drafts |
-
-### New Database Tables/Columns
-
-1. `email_signatures` table (for global signature)
-2. `linkedin_messages` additional columns: `sender_name`, `campaign_name`, `profile_url`
+| File | Change |
+|------|--------|
+| `supabase/functions/meetalfred-sync/index.ts` | Fix API endpoint, add full response logging, store raw payload, implement 30-day pagination |
+| Database migration | Add `raw_payload` jsonb column to `linkedin_messages` |
+| `src/components/inbox/LinkedInMessageView.tsx` | Display actual message content and sender info |
+| `src/hooks/useLinkedInMessages.ts` | Update interface to include `raw_payload` |
 
 ---
 
-## Implementation Order
-
-1. Move email reply box to top (quick UI fix)
-2. Database migrations for signatures and linkedin_messages columns
-3. Fix Meet Alfred sync to capture proper data
-4. Add email signature feature (settings + append on send)
-5. Add AI Suggest to ComposeEmail
-6. Add AI draft feature to LinkedIn messages
-
+## Expected Outcome After Fix
+When you click "Sync Meet Alfred":
+1. The function calls the correct API endpoint
+2. Full reply data is fetched including actual message text
+3. The inbox shows real sender names (not "meetalfred_reply_xxx")
+4. The inbox shows actual reply content (not "Reply received from campaign")
+5. "Reply in LinkedIn" button links to the actual person's profile
+6. Raw payloads are stored for debugging
