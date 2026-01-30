@@ -1,209 +1,184 @@
 
 
-# Create Shareable Rich Text Composer with Template Integration
+# Realtime Email Sync, Mark Read/Unread, and Daily MeetAlfred Cron
 
-## Problem Summary
+## Overview
 
-Currently, there are three different email/message composition interfaces in the codebase:
-1. **EmailThread.tsx** - Simple contentEditable for email replies (no rich formatting toolbar)
-2. **LinkedInMessageView.tsx** - Basic textarea for draft replies (plain text only)
-3. **ComposeEmail.tsx** - Simple textarea for new emails (no rich text)
-
-Meanwhile, **EmailTemplateEditor.tsx** has a full-featured rich text editor with:
-- Visual/HTML toggle
-- Formatting toolbar (bold, italic, underline, headers, lists)
-- Link insertion
-- Merge tag support
-
-The goal is to create a single **RichTextComposer** component that combines the template editor's rich text capabilities with template selection, and use it across all composition contexts.
+This plan implements four key features:
+1. **Realtime email sync** - Automatically sync last 24 hours of emails when opening the mailbox
+2. **Mark as read/unread** - Update read status locally and sync to Gmail server
+3. **Daily MeetAlfred sync** - Schedule automatic sync at 9am using pg_cron
+4. **Realtime database updates** - Subscribe to email table changes for instant UI updates
 
 ---
 
-## Solution Overview
+## Feature 1: Realtime Sync on Mailbox Open
 
-### Create a Reusable RichTextComposer Component
+### What Happens
+When a user navigates to the Inbox page with an email account connected, the system will:
+1. Automatically trigger a lightweight sync (last 24 hours, max 100 emails)
+2. Show a subtle loading indicator during sync
+3. Refresh the email list with any new messages
 
-A new component that provides:
-- Rich text editing (formatting toolbar)
-- Template selection button (opens TemplateListModal)
-- Auto-populate content when template is selected
-- AI draft generation integration
-- Compact mode for inline replies vs. full mode for compose dialogs
-- Merge tag support
+### Implementation
 
-### Update Existing Components
+**File: `src/pages/Inbox.tsx`**
+- Add `useEffect` that triggers sync when `activeTab === "email"` and account exists
+- Use `useSyncEmails` with parameters `{ daysBack: 1, maxResults: 100 }`
+- Add state to track if initial sync is happening
 
-Replace the basic contentEditable/textarea in:
-- `EmailThread.tsx` - Use RichTextComposer for replies
-- `LinkedInMessageView.tsx` - Use RichTextComposer for draft generation
-- `ComposeEmail.tsx` - Use RichTextComposer for new emails
+**File: `src/hooks/useEmails.ts`**
+- Add Supabase realtime subscription to `emails` table
+- When new emails are inserted/updated, automatically refetch
 
 ---
 
-## Technical Implementation
+## Feature 2: Mark as Read/Unread with Gmail Sync
 
-### New Component: `src/components/shared/RichTextComposer.tsx`
+### What Happens
+1. User clicks an email - it automatically marks as read
+2. User can manually mark emails as read or unread
+3. Both actions sync the status to Gmail via the API
+4. Visual indicator (bold text, colored background) reflects read state
 
-A self-contained component with the following props:
+### New Edge Function: `mark-email-read`
 
-```typescript
-interface RichTextComposerProps {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  minHeight?: number;
-  maxHeight?: number;
-  compact?: boolean; // Smaller toolbar for inline use
-  showTemplates?: boolean; // Show "Use Template" button
-  showMergeTags?: boolean; // Show merge tag dropdown
-  onTemplateSelect?: (template: EmailTemplate) => void;
-  className?: string;
-}
-```
+Creates a new edge function that:
+1. Receives email ID and read status (true/false)
+2. Updates local database
+3. Calls Gmail API to modify labels:
+   - Mark as read: Remove UNREAD label
+   - Mark as unread: Add UNREAD label
 
-**Features:**
-- Formatting toolbar (Bold, Italic, Underline, Links, Lists)
-- "Use Template" button that opens TemplateListModal in selection mode
-- When template selected: populates content and notifies parent
-- Merge tag insertion dropdown
-- Visual/HTML mode toggle (optional, can be hidden in compact mode)
+### UI Changes
 
-### Component Structure
-
-```
-RichTextComposer
-├── Toolbar
-│   ├── Format buttons (Bold, Italic, Underline)
-│   ├── Separator
-│   ├── Header buttons (H1, H2)
-│   ├── List buttons (UL, OL)
-│   ├── Separator
-│   ├── Link button
-│   ├── Separator
-│   ├── Template button → Opens TemplateListModal
-│   └── Merge Tags dropdown
-├── Editor Area (contentEditable or textarea for HTML mode)
-└── Optional: Mode toggle (Visual/HTML)
-```
-
-### Updates to Existing Files
+**File: `src/components/inbox/EmailList.tsx`**
+- Add right-click context menu or button to toggle read status
+- Call new mutation when clicked
 
 **File: `src/components/inbox/EmailThread.tsx`**
-- Replace the basic contentEditable with RichTextComposer
-- Pass the reply body value and onChange handler
-- Enable templates and merge tags
-- Keep existing AI suggest functionality alongside
+- Auto-mark as read when email is opened (with 1 second delay)
 
-**File: `src/components/inbox/LinkedInMessageView.tsx`**
-- Replace the Textarea with RichTextComposer
-- Enable templates for pre-written responses
-- Merge tags still work (contact info)
-
-**File: `src/components/inbox/ComposeEmail.tsx`**
-- Replace the Textarea with RichTextComposer
-- Enable templates for quick email composition
-- Full formatting toolbar visible
+**File: `src/hooks/useEmails.ts`**
+- Add `useMarkEmailRead` mutation hook
 
 ---
 
-## Files Summary
+## Feature 3: Daily MeetAlfred Sync at 9am
+
+### What Happens
+A scheduled cron job runs every day at 9:00 AM UTC that:
+1. Calls the `meetalfred-sync` edge function
+2. Syncs campaigns, replies, connections, and leads
+3. Logs results for monitoring
+
+### Implementation
+
+Using Supabase pg_cron extension to schedule the job:
+
+```sql
+-- Enable extensions
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- Schedule daily sync at 9am UTC
+SELECT cron.schedule(
+  'meetalfred-daily-sync',
+  '0 9 * * *',  -- 9:00 AM every day
+  $$
+  SELECT net.http_post(
+    url := 'https://getqcxnjsohtlagscmfc.supabase.co/functions/v1/meetalfred-sync',
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer [ANON_KEY]"}'::jsonb,
+    body := '{}'::jsonb
+  ) AS request_id;
+  $$
+);
+```
+
+---
+
+## Feature 4: Realtime Database Subscription
+
+### What Happens
+The email list subscribes to Supabase realtime for the `emails` table:
+- New emails appear instantly
+- Read status updates reflect immediately
+- No manual refresh needed
+
+### Implementation
+
+**File: `src/hooks/useEmails.ts`**
+- Add `useEffect` with Supabase channel subscription
+- Listen for INSERT and UPDATE events on `emails` table
+- Invalidate query cache when changes detected
+
+---
+
+## Technical Details
+
+### New Edge Function: `mark-email-read`
+
+```typescript
+// supabase/functions/mark-email-read/index.ts
+// Receives: { emailId, isRead, accountId }
+// 1. Updates emails table set is_read = isRead
+// 2. Gets email gmail_id
+// 3. Calls Gmail API: 
+//    POST /gmail/v1/users/me/messages/{id}/modify
+//    Body: { addLabelIds: ["UNREAD"] } or { removeLabelIds: ["UNREAD"] }
+// 4. Returns success
+```
+
+### Files Summary
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `src/components/shared/RichTextComposer.tsx` | Create | Shareable rich text editor with template integration |
-| `src/components/inbox/EmailThread.tsx` | Modify | Use RichTextComposer for replies |
-| `src/components/inbox/LinkedInMessageView.tsx` | Modify | Use RichTextComposer for drafts |
-| `src/components/inbox/ComposeEmail.tsx` | Modify | Use RichTextComposer for new emails |
+| `src/pages/Inbox.tsx` | Modify | Add auto-sync on mount |
+| `src/hooks/useEmails.ts` | Modify | Add realtime subscription, mark read mutation |
+| `src/components/inbox/EmailList.tsx` | Modify | Add mark read/unread buttons |
+| `src/components/inbox/EmailThread.tsx` | Modify | Auto-mark as read on open |
+| `supabase/functions/mark-email-read/index.ts` | Create | Sync read status to Gmail |
+| `supabase/config.toml` | Modify | Add mark-email-read function config |
+
+### Database Changes
+- No schema changes needed (is_read column already exists)
+- Run SQL to set up pg_cron job for MeetAlfred
 
 ---
 
 ## User Experience
 
-### Using Templates in Email Reply
-1. User clicks "Reply" on an email
-2. RichTextComposer appears with formatting toolbar
-3. User clicks "Templates" button in toolbar
-4. TemplateListModal opens in selection mode
-5. User selects a template (e.g., "Meeting Follow-up")
-6. Template content populates the composer
-7. User can edit, add formatting, insert merge tags
-8. Click "Send" - email sent with formatted HTML
+### Opening Inbox
+1. User navigates to /inbox
+2. Small "Syncing..." indicator appears briefly
+3. Any new emails from last 24 hours appear in list
+4. Realtime subscription keeps list updated
 
-### Using Templates in LinkedIn Draft
-1. User views a LinkedIn message
-2. Clicks "AI Draft" or manually starts typing
-3. Can click "Templates" to use a pre-written response
-4. Formats text as needed
-5. Copies formatted text to paste in LinkedIn
+### Reading an Email
+1. User clicks an email
+2. Email detail opens
+3. After 1 second, email is automatically marked as read
+4. Gmail server is notified
+5. Email list updates to show read state
 
-### Using Templates in New Email
-1. User clicks "Compose" button
-2. Full RichTextComposer appears with all features
-3. Can start with a template or write from scratch
-4. Full formatting toolbar available
+### Manually Changing Read Status
+1. User right-clicks email or clicks menu icon
+2. Selects "Mark as unread" or "Mark as read"
+3. Local database updates immediately
+4. Gmail server syncs in background
+5. List reflects new status
 
----
-
-## Component Reuse
-
-The new RichTextComposer will be the single source of truth for:
-- Rich text editing
-- Template selection
-- Merge tag insertion
-- Formatting controls
-
-This replaces duplicated code across three files and ensures consistent behavior and styling.
+### Daily MeetAlfred Sync
+- Runs automatically at 9am UTC every day
+- No user action required
+- LinkedIn messages and connections stay current
 
 ---
 
-## Implementation Details
+## Edge Cases Handled
 
-### RichTextComposer Core Logic
-
-Based on the existing EmailTemplateEditor, but adapted for composition:
-
-```typescript
-// Key features from EmailTemplateEditor:
-- execCommand for formatting (bold, italic, etc.)
-- contentEditable for WYSIWYG editing
-- Link insertion dialog
-- Merge tag dropdown
-
-// New additions:
-- Template selection button + modal integration
-- Compact mode with smaller toolbar
-- onTemplateSelect callback
-- Better styling for inline use
-```
-
-### Template Selection Flow
-
-```typescript
-const [templateModalOpen, setTemplateModalOpen] = useState(false);
-
-const handleTemplateSelect = (template: EmailTemplate) => {
-  // Set the editor content to template body
-  if (editorRef.current) {
-    editorRef.current.innerHTML = template.body_html || '';
-  }
-  onChange(template.body_html || '');
-  
-  // Notify parent (for subject line updates, etc.)
-  onTemplateSelect?.(template);
-  
-  setTemplateModalOpen(false);
-};
-```
-
----
-
-## Expected Outcome
-
-After implementation:
-1. All email/message composition uses consistent rich text editing
-2. Templates are accessible from any composition context
-3. Formatting is preserved in sent emails
-4. Merge tags work across all contexts
-5. Reduced code duplication
-6. Better user experience with familiar editing controls
+1. **Offline/failed sync**: Toast notification shows error, data remains as-is
+2. **Token expired**: Edge function refreshes token before making Gmail calls
+3. **Already synced emails**: Skipped efficiently (no duplicates)
+4. **Multiple browser tabs**: Realtime keeps all tabs in sync
 
