@@ -6,11 +6,12 @@ import { Separator } from "@/components/ui/separator";
 import { ExternalLink, UserPlus, Mail, Phone, MapPin, Calendar, Building2, Users, Sparkles, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useContactsByCompany } from "@/hooks/useContacts";
-import { Company } from "@/hooks/useCompanies";
+import { Company, useUpdateCompany } from "@/hooks/useCompanies";
 import { Skeleton } from "@/components/ui/skeleton";
 import { enrichCompany } from "@/lib/api/enrichment";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { EditableLabels } from "./EditableLabels";
 
 interface OrganisationDetailProps {
   company: Company | null;
@@ -43,6 +44,7 @@ export function OrganisationDetail({ company, open, onOpenChange, onAddContact }
   const [isEnriching, setIsEnriching] = useState(false);
   const { data: contacts, isLoading: contactsLoading } = useContactsByCompany(company?.id || null);
   const queryClient = useQueryClient();
+  const updateCompany = useUpdateCompany();
 
   const handleEnrich = async () => {
     if (!company) return;
@@ -167,6 +169,20 @@ export function OrganisationDetail({ company, open, onOpenChange, onAddContact }
               </div>
             </>
           )}
+
+          {/* Labels Section */}
+          <Separator />
+          <EditableLabels
+            labels={company.labels}
+            onSave={async (labels) => {
+              await updateCompany.mutateAsync({ id: company.id, labels });
+              toast({
+                title: "Labels updated",
+                description: "Company labels have been saved.",
+              });
+            }}
+            isLoading={updateCompany.isPending}
+          />
 
           <Separator />
 

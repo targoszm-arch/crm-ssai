@@ -34,6 +34,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ContactHistoryTabs } from "./ContactHistoryTabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { EditableLabels } from "./EditableLabels";
 
 type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -448,6 +449,21 @@ export function ContactDetail({ contact: initialContact, open, onOpenChange }: C
               )}
             </div>
           </>
+
+          {/* Labels Section */}
+          <Separator />
+          <EditableLabels
+            labels={contact.labels}
+            onSave={async (labels) => {
+              await updateContact.mutateAsync({ id: contact.id, labels });
+              refetch();
+              toast({
+                title: "Labels updated",
+                description: "Contact labels have been saved.",
+              });
+            }}
+            isLoading={updateContact.isPending}
+          />
 
           {/* Professional Details - Always show section */}
           <Separator />
