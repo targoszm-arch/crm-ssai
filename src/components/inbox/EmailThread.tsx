@@ -136,9 +136,9 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-4 border-b flex items-start justify-between">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header - fixed at top */}
+      <div className="flex-shrink-0 p-4 border-b flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <h2 className="font-semibold text-lg truncate">{email.subject || "(No subject)"}</h2>
           <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
@@ -158,8 +158,8 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
         </Button>
       </div>
 
-      {/* Link to Contact */}
-      <div className="px-4 py-3 border-b bg-muted/50">
+      {/* Link to Contact - fixed */}
+      <div className="flex-shrink-0 px-4 py-3 border-b bg-muted/50">
         <div className="flex items-center gap-3">
           <Link2 className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">Link to contact:</span>
@@ -188,8 +188,8 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
         </div>
       </div>
 
-      {/* Email Body */}
-      <div className="flex-1 overflow-auto p-4">
+      {/* Email Body - scrollable middle section */}
+      <div className="flex-1 min-h-0 overflow-auto p-4">
         <div className="prose prose-sm max-w-none dark:prose-invert">
           {email.body_html ? (
             <div 
@@ -202,9 +202,8 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
         </div>
       </div>
 
-      {/* Reply Section */}
-      <Separator />
-      <div className="p-4 bg-muted/30">
+      {/* Reply Section - FIXED at bottom, always visible */}
+      <div className="flex-shrink-0 border-t bg-muted/30 p-4">
         {isReplying ? (
           <div className="space-y-3">
             {/* Reply header */}
@@ -217,7 +216,7 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
               ref={replyEditorRef}
               contentEditable
               onInput={handleEditorInput}
-              className="min-h-[120px] max-h-[300px] overflow-auto p-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="min-h-[100px] max-h-[200px] overflow-auto p-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               data-placeholder="Write your reply..."
               style={{ whiteSpace: 'pre-wrap' }}
             />
@@ -253,21 +252,22 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
               </DropdownMenu>
 
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setIsReplying(false)}>
+                <Button variant="outline" size="sm" onClick={() => setIsReplying(false)}>
                   Cancel
                 </Button>
                 <Button
+                  size="sm"
                   onClick={handleSendReply}
                   disabled={!replyBody.trim() || sendEmail.isPending}
                 >
                   <Send className="h-4 w-4 mr-1" />
-                  {sendEmail.isPending ? "Sending..." : "Send Reply"}
+                  {sendEmail.isPending ? "Sending..." : "Send"}
                 </Button>
               </div>
             </div>
           </div>
         ) : (
-          <Button variant="outline" onClick={() => setIsReplying(true)} className="w-full">
+          <Button onClick={() => setIsReplying(true)} className="w-full">
             <Mail className="h-4 w-4 mr-2" />
             Reply
           </Button>
