@@ -35,3 +35,9 @@ verify_jwt = false
 
 [functions.fireflies-webhook]
 verify_jwt = false
+
+[functions.linkedin-sync-messages]
+verify_jwt = false
+
+[functions.linkedin-sync-connections]
+verify_jwt = false
