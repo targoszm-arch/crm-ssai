@@ -1,164 +1,180 @@
 
-# Signup Abandonment Recovery Campaign Implementation
+
+# Enhanced LMS Leads Table + Multi-Select Integration
 
 ## Overview
-Transform the Cart Abandonment page into a unified "Recovery" hub with a new "Signup Abandonment" tab that displays unverified LMS users. Enable users to select contacts from this list and enroll them in recovery email sequences directly, with real-time analytics on campaign performance.
+Add additional columns from the external LMS endpoint to the LMS Leads table (status, signup type, company size, use case, learning objectives, marketing status, created date, credits, plan) and enable multi-select functionality for LMS customers in both the Sequences enrollment modal and Abandonment campaigns.
 
 ---
 
-## Architecture
+## Files to Modify
 
-```text
-Recovery Page (CartAbandonment.tsx)
-     |
-     +-- Abandoned Carts Tab (existing)
-     |
-     +-- Signup Abandonment Tab (NEW)
-     |        |
-     |        +-- Summary Metrics Cards
-     |        +-- Unverified Users Table (filtered from External LMS)
-     |        +-- Bulk Selection + Actions
-     |
-     +-- Recovery Campaigns Tab (enhanced)
-              |
-              +-- Campaign Cards with Analytics
-              +-- Create Campaign Modal (links to Sequences)
-              +-- Enrollments from Abandonment List
+### 1. Update Interface: `src/hooks/useExternalLMSCustomers.ts`
+
+**Changes**:
+- Add `status` field to `ExternalLMSCustomer` interface
+- The interface already includes most fields, verify `status` is captured
+
+```typescript
+export interface ExternalLMSCustomer {
+  id: string;
+  email: string;
+  full_name: string;
+  role?: string;
+  company_size?: string;
+  use_case?: string;
+  learning_objectives?: string;
+  marketing_consent?: boolean;
+  verified?: boolean;
+  created_at?: string;
+  credits_used?: number;
+  credits_total?: number;
+  plan?: string;
+  signup_type?: string;
+  status?: string; // NEW - e.g. "active", "trial", "expired"
+}
 ```
 
 ---
 
-## Files to Create/Modify
-
-### 1. New Component: `src/components/recovery/SignupAbandonmentTab.tsx`
-
-**Purpose**: Display and manage unverified LMS signups
-
-**Features**:
-- Summary metric cards:
-  - Total unverified signups
-  - This week's abandonments
-  - Recoverable (marketing consent = true)
-  - Recovery rate percentage
-- Filterable table columns: Name, Email, Signup Type, Plan, Days Pending, Marketing Consent
-- Row selection with checkboxes for bulk enrollment
-- Individual actions: Enroll in Sequence, View Details
-- Bulk action bar: "Enroll Selected in Sequence" button
-
-### 2. New Component: `src/components/recovery/EnrollAbandonmentModal.tsx`
-
-**Purpose**: Modal to enroll selected unverified users into a recovery sequence
-
-**Features**:
-- Sequence selector dropdown (filters for recovery/signup trigger types)
-- Preview of selected contacts count
-- Option to create contacts in CRM if they don't exist
-- Confirmation and enrollment execution
-- Progress indicator during bulk enrollment
-
-### 3. New Component: `src/components/recovery/RecoveryCampaignsTab.tsx`
-
-**Purpose**: Display active recovery campaigns with analytics
-
-**Features**:
-- Campaign cards showing:
-  - Sequence name and status
-  - Enrolled count from abandonment list
-  - Open/click rates
-  - Recovery rate (verified after enrollment)
-- "Create Recovery Campaign" button linking to Sequence Builder with pre-filled trigger type
-- Quick stats: Total recovered, Active campaigns, Avg recovery rate
-
-### 4. Update: `src/pages/CartAbandonment.tsx`
+### 2. Update Edge Function: `supabase/functions/fetch-lms-customers/index.ts`
 
 **Changes**:
-- Rename page title to "Recovery Center"
-- Add third tab: "Signup Abandonment"
-- Integrate new components
-- Update tab layout to 3 columns
+- Add `status` to the interface
+- Ensure all fields are passed through from external API
 
-### 5. Update: `src/hooks/useExternalLMSCustomers.ts`
+---
+
+### 3. Enhanced Table: `src/components/customers/ExternalLMSLeadsTab.tsx`
+
+**Current columns**: Name, Email, Plan, Role, Credits, Status (verified), Registered
+
+**New columns to add**:
+- **Signup Type** - Badge showing how they signed up
+- **Company Size** - Text field
+- **Use Case** - Text field (potentially truncated with tooltip)
+- **Learning Objectives** - Text field (potentially in expandable row)
+- **Marketing Status** - Badge (Opted In / Not Opted)
+- **LMS Status** - Badge from the status field (active/trial/etc)
+- **Credits Available** - Progress bar (credits_total - credits_used)
+
+**Additional features**:
+- Row selection with checkboxes for multi-select
+- Bulk action bar when rows selected
+- "Enroll in Sequence" button to open EnrollContactModal with LMS customers
+
+---
+
+### 4. Update Sequences Enrollment: `src/components/sequences/EnrollContactModal.tsx`
 
 **Changes**:
-- Add `verified?: boolean` filter parameter
-- Add hook variant: `useUnverifiedLMSCustomers()` - pre-filtered for verified=false
-- Add derived stats calculation (counts by status)
+- Add tabs: "CRM Contacts" | "LMS Customers"
+- LMS tab shows external LMS customers with multi-select
+- When enrolling LMS customers:
+  - Check if CRM contact exists (by email match)
+  - Create contact if missing with label "LMS Lead"
+  - Enroll in selected sequence
+- Use the same enrollment logic as `EnrollAbandonmentModal`
 
-### 6. New Hook: `src/hooks/useRecoveryAnalytics.ts`
+---
 
-**Purpose**: Track recovery campaign performance
-
-**Features**:
-- Query sequence enrollments filtered by LMS-originated contacts
-- Calculate recovery rate: users who verified after enrollment
-- Track conversion funnel: Enrolled → Opened → Clicked → Recovered
-
-### 7. Update: `src/components/sequences/SequenceBuilderSheet.tsx`
+### 5. Update Recovery Tab: `src/components/recovery/SignupAbandonmentTab.tsx`
 
 **Changes**:
-- Add new trigger type: `signup_abandonment` with label "Signup Abandonment Recovery"
-- Pre-select this trigger when opened from Recovery page
+- Add additional columns to match the enhanced ExternalLMSLeadsTab:
+  - Company Size
+  - Use Case
+  - Learning Objectives
+  - LMS Status
+  - Credits Available
+- Keep existing functionality (unverified filter, bulk enrollment)
 
 ---
 
 ## Implementation Details
 
-### Signup Abandonment Detection Logic
+### Table Column Structure for LMS Leads
 
-The external LMS endpoint already provides `verified: false` for incomplete signups. We filter client-side:
+| Column | Data Source | Display Type |
+|--------|-------------|--------------|
+| Select | - | Checkbox |
+| Name | full_name, email | Text + Subtext |
+| Status | status | Badge (color-coded) |
+| Signup Type | signup_type | Badge |
+| Company Size | company_size | Text |
+| Use Case | use_case | Truncated text with tooltip |
+| Learning Objectives | learning_objectives | Expandable/tooltip |
+| Marketing | marketing_consent | Badge (Yes/No) |
+| Created | created_at | Formatted date |
+| Credits | credits_used, credits_total | Progress bar |
+| Plan | plan | Badge |
+| Actions | - | Enroll button |
 
-```typescript
-const unverifiedUsers = customers?.filter(c => c.verified === false);
+### Enrollment Modal Tabs
+
+```text
++-------------------+--------------------+
+| CRM Contacts (42) | LMS Customers (128)|
++-------------------+--------------------+
+|                                        |
+| [Search bar]                           |
+|                                        |
+| [ ] Contact/Customer Row               |
+| [ ] Contact/Customer Row               |
+| [ ] Contact/Customer Row               |
+|                                        |
++----------------------------------------+
 ```
 
-### Enrollment Flow
+### Multi-Select Flow
 
-1. User selects unverified LMS leads from the abandonment table
-2. Opens "Enroll in Recovery Sequence" modal
-3. Selects an existing sequence or creates new one
-4. For each selected user:
-   - Check if CRM contact exists (by email)
-   - Create contact if missing, with label "LMS Abandonment"
-   - Enroll contact in selected sequence
-5. Trigger immediate processing for Day 0 emails
-
-### Recovery Tracking
-
-Track users who verify after receiving recovery emails:
-- Add `source: 'recovery_campaign'` metadata to enrollment
-- Compare enrollment timestamp with LMS `verified_at` timestamp (if available)
-- Calculate recovery rate: (verified after enrollment / total enrolled) * 100
-
-### Analytics Integration
-
-Leverage existing sequence analytics but add:
-- Filter by enrollment source (recovery campaigns)
-- Add "Recovered" status to recipient filters
-- Show recovery funnel visualization
+1. User selects multiple LMS customers via checkboxes
+2. Clicks "Enroll in Sequence" button
+3. Modal opens with sequence selector
+4. On confirmation:
+   - For each LMS customer:
+     - Check if email exists in CRM contacts
+     - Create contact if not found (with "LMS Lead" label)
+     - Create sequence enrollment
+   - Display progress and results
 
 ---
 
-## UI/UX Considerations
+## Technical Details
 
-1. **Tab Navigation**: Keep existing cart abandonment for e-commerce, add parallel LMS signup tab
-2. **Bulk Actions**: Floating action bar appears when rows selected
-3. **Campaign Creation**: "Create Campaign" opens Sequence Builder in a modal/sheet with recovery trigger pre-selected
-4. **Real-time Updates**: Poll for verification status changes to update recovery metrics
+### Data Flow
+
+```text
+External LMS API (crm-customers)
+        |
+        v
+fetch-lms-customers Edge Function
+        |
+        v
+useExternalLMSCustomers Hook
+        |
+        +---> ExternalLMSLeadsTab (full table)
+        |
+        +---> EnrollContactModal (LMS tab)
+        |
+        +---> SignupAbandonmentTab (filtered for unverified)
+```
+
+### Existing Enrollment Logic Reuse
+
+The `EnrollAbandonmentModal` already handles:
+- Contact creation with labels
+- Sequence enrollment
+- Progress tracking
+- Activity logging
+
+This logic will be extracted/reused in the enhanced `EnrollContactModal`.
 
 ---
 
-## Database Considerations
+## Security Considerations
 
-No new tables required. Existing structures support this:
-- `sequence_enrollments.metadata` - Store `{ source: 'signup_abandonment', lms_email: '...' }`
-- `contacts.labels` - Add "LMS Abandonment" label for tracking
-- `activities` - Log enrollment activities with `activity_type: 'recovery_enrollment'`
+- All LMS data accessed through authenticated proxy (fetch-lms-customers)
+- Contact creation respects RLS (user_id assignment)
+- Sequence enrollments tied to authenticated user
 
----
-
-## Technical Notes
-
-1. **No backend changes needed** - All data comes from existing external LMS endpoint
-2. **Contact creation** uses existing CRM contacts table with RLS
-3. **Sequence enrollment** uses existing `useEnrollContact` hook
-4. **Analytics** extends existing sequence analytics infrastructure
