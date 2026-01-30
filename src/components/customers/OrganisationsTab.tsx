@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OrganisationDetail } from "./OrganisationDetail";
 import { AddContactModal } from "./AddContactModal";
+import { renderLabels } from "@/lib/labelColors";
 
 function getConnectionStrengthBadge(strength: string | null) {
   if (!strength) return null;
@@ -151,9 +152,13 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
             {company.company_name?.substring(0, 2).toUpperCase()}
           </div>
-          <div>
-            <div className="font-medium">{company.company_name}</div>
-          </div>
+          <button
+            type="button"
+            onClick={() => handleViewCompany(company)}
+            className="font-medium text-left hover:text-primary hover:underline transition-colors"
+          >
+            {company.company_name}
+          </button>
         </div>
       ),
     },
@@ -170,7 +175,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
           onFilterChange={(values) => setFilters((prev) => ({ ...prev, labels: values.length ? values : undefined }))}
         />
       ),
-      cell: (company: Company) => company.labels ? <Badge variant="secondary">{company.labels}</Badge> : "-",
+      cell: (company: Company) => renderLabels(company.labels),
     },
     {
       id: "address",

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ExternalLink, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { renderLabels } from "@/lib/labelColors";
 
 type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -257,7 +258,7 @@ export function CustomersTab() {
           onFilterChange={(values) => setFilters((prev) => ({ ...prev, labels: values.length ? values : undefined }))}
         />
       ),
-      cell: (contact: ContactWithCompany) => contact.labels ? <Badge variant="outline">{contact.labels}</Badge> : "-",
+      cell: (contact: ContactWithCompany) => renderLabels(contact.labels),
     },
     {
       id: "email_messages_count",
