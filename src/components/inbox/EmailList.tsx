@@ -35,12 +35,12 @@ export function EmailList({ accounts, selectedEmail, onSelectEmail }: EmailListP
     if (!accountId) return;
 
     syncEmails.mutate(
-      { accountId },
+      { accountId, maxResults: 2000, daysBack: 100 },
       {
         onSuccess: (data) => {
           toast({
             title: "Emails Synced",
-            description: `Synced ${data.syncedCount} new emails`,
+            description: `Synced ${data.syncedCount} new emails (${data.skippedCount || 0} already synced)`,
           });
         },
         onError: (error) => {

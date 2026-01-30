@@ -10,6 +10,7 @@ const corsHeaders = {
 interface SyncRequest {
   accountId: string;
   maxResults?: number;
+  daysBack?: number;
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -30,13 +31,13 @@ serve(async (req: Request): Promise<Response> => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { accountId, maxResults = 50 }: SyncRequest = await req.json();
+    const { accountId, maxResults = 2000, daysBack = 100 }: SyncRequest = await req.json();
 
     if (!accountId) {
       throw new Error("accountId is required");
     }
 
-    console.log(`Syncing emails for account: ${accountId}`);
+    console.log(`Syncing emails for account: ${accountId}, maxResults: ${maxResults}, daysBack: ${daysBack}`);
 
     // Get email account
     const { data: account, error: accountError } = await supabase
@@ -87,22 +88,63 @@ serve(async (req: Request): Promise<Response> => {
         .eq("id", accountId);
     }
 
-    // Fetch emails from Gmail API
-    const messagesResponse = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&labelIds=INBOX`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
+    // Calculate date filter (100 days back)
+    const afterDate = new Date();
+    afterDate.setDate(afterDate.getDate() - daysBack);
+    const afterTimestamp = Math.floor(afterDate.getTime() / 1000);
+    
+    // Gmail query: messages after date from INBOX or SENT
+    const query = `after:${afterTimestamp}`;
+    
+    console.log(`Fetching emails with query: ${query}`);
+
+    // Fetch messages with pagination (Gmail max 500 per request)
+    let allMessageIds: { id: string; threadId: string }[] = [];
+    let pageToken: string | undefined;
+    const pageSize = 500;
+    
+    do {
+      const params = new URLSearchParams({
+        maxResults: String(pageSize),
+        q: query,
+      });
+      
+      // Include both INBOX and SENT labels
+      params.append("labelIds", "INBOX");
+      params.append("labelIds", "SENT");
+      
+      if (pageToken) {
+        params.append("pageToken", pageToken);
       }
-    );
+      
+      const messagesResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
 
-    if (!messagesResponse.ok) {
-      throw new Error(`Failed to fetch messages: ${messagesResponse.status}`);
-    }
+      if (!messagesResponse.ok) {
+        const errorText = await messagesResponse.text();
+        console.error("Gmail API error:", errorText);
+        throw new Error(`Failed to fetch messages: ${messagesResponse.status}`);
+      }
 
-    const messagesData = await messagesResponse.json();
-    const messageIds = messagesData.messages || [];
+      const messagesData = await messagesResponse.json();
+      const messages = messagesData.messages || [];
+      allMessageIds = allMessageIds.concat(messages);
+      pageToken = messagesData.nextPageToken;
+      
+      console.log(`Fetched page with ${messages.length} messages, total so far: ${allMessageIds.length}`);
+      
+      // Stop if we've reached maxResults
+      if (allMessageIds.length >= maxResults) {
+        allMessageIds = allMessageIds.slice(0, maxResults);
+        break;
+      }
+    } while (pageToken);
 
-    console.log(`Found ${messageIds.length} messages to sync`);
+    console.log(`Found ${allMessageIds.length} messages to sync (last ${daysBack} days)`);
 
     // Get all contacts for matching
     const { data: contacts } = await supabase
@@ -118,7 +160,10 @@ serve(async (req: Request): Promise<Response> => {
 
     // Fetch and store each message
     const syncedEmails = [];
-    for (const msg of messageIds.slice(0, 20)) { // Limit to 20 for performance
+    let skippedCount = 0;
+    let errorCount = 0;
+    
+    for (const msg of allMessageIds) {
       try {
         // Check if already synced
         const { data: existing } = await supabase
@@ -129,6 +174,7 @@ serve(async (req: Request): Promise<Response> => {
           .single();
 
         if (existing) {
+          skippedCount++;
           continue;
         }
 
@@ -140,7 +186,10 @@ serve(async (req: Request): Promise<Response> => {
           }
         );
 
-        if (!msgResponse.ok) continue;
+        if (!msgResponse.ok) {
+          errorCount++;
+          continue;
+        }
 
         const msgData = await msgResponse.json();
 
@@ -197,19 +246,26 @@ serve(async (req: Request): Promise<Response> => {
 
         if (!insertError && inserted) {
           syncedEmails.push(inserted);
+        } else if (insertError) {
+          console.error(`Error inserting email ${msg.id}:`, insertError);
+          errorCount++;
         }
       } catch (err) {
         console.error(`Error syncing message ${msg.id}:`, err);
+        errorCount++;
       }
     }
 
-    console.log(`Synced ${syncedEmails.length} new emails`);
+    console.log(`Sync complete: ${syncedEmails.length} new, ${skippedCount} skipped (already synced), ${errorCount} errors`);
 
     return new Response(
       JSON.stringify({
         success: true,
         syncedCount: syncedEmails.length,
-        emails: syncedEmails,
+        skippedCount,
+        errorCount,
+        totalFound: allMessageIds.length,
+        emails: syncedEmails.slice(0, 50), // Only return first 50 in response to reduce payload
       }),
       {
         status: 200,

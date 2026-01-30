@@ -100,9 +100,17 @@ export function useSyncEmails() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ accountId, maxResults = 50 }: { accountId: string; maxResults?: number }) => {
+    mutationFn: async ({ 
+      accountId, 
+      maxResults = 2000,
+      daysBack = 100 
+    }: { 
+      accountId: string; 
+      maxResults?: number;
+      daysBack?: number;
+    }) => {
       const { data, error } = await supabase.functions.invoke("sync-emails", {
-        body: { accountId, maxResults },
+        body: { accountId, maxResults, daysBack },
       });
 
       if (error) throw error;
