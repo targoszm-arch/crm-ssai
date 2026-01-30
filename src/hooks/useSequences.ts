@@ -169,7 +169,7 @@ export function useEnrollContact() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ sequenceId, contactId }: { sequenceId: string; contactId: string }) => {
+    mutationFn: async ({ sequenceId, contactId, metadata }: { sequenceId: string; contactId: string; metadata?: Record<string, any> }) => {
       // Get sequence to find first step timing
       const { data: sequence } = await supabase
         .from("sequences")
@@ -196,6 +196,7 @@ export function useEnrollContact() {
           current_step: 0,
           status: "active",
           next_email_at: nextEmailAt.toISOString(),
+          metadata: metadata || null,
         })
         .select()
         .single();

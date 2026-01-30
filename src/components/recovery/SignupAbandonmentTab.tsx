@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DataTable } from "@/components/ui/data-table";
+import { Progress } from "@/components/ui/progress";
 import { MetricCard } from "@/components/ui/metric-card";
 import {
   Select,
@@ -14,6 +14,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Search,
   X,
   Filter,
@@ -22,15 +36,18 @@ import {
   Mail,
   CheckCircle,
   Users,
+  Building2,
+  XCircle,
 } from "lucide-react";
 import { useExternalLMSCustomers, ExternalLMSCustomer } from "@/hooks/useExternalLMSCustomers";
-import { formatDistanceToNow, parseISO, isAfter, subDays } from "date-fns";
+import { formatDistanceToNow, parseISO, isAfter, subDays, format } from "date-fns";
 import { EnrollAbandonmentModal } from "./EnrollAbandonmentModal";
 
 export function SignupAbandonmentTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [signupTypeFilter, setSignupTypeFilter] = useState<string | null>(null);
   const [marketingFilter, setMarketingFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
 
@@ -47,7 +64,9 @@ export function SignupAbandonmentTab() {
     return unverifiedUsers.filter(user => {
       const matchesSearch = !searchQuery ||
         user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchQuery.toLowerCase());
+        user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.company_size?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.use_case?.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesType = !signupTypeFilter || signupTypeFilter === "all" ||
         user.signup_type === signupTypeFilter;
@@ -56,9 +75,12 @@ export function SignupAbandonmentTab() {
         (marketingFilter === "yes" && user.marketing_consent) ||
         (marketingFilter === "no" && !user.marketing_consent);
 
-      return matchesSearch && matchesType && matchesMarketing;
+      const matchesStatus = !statusFilter || statusFilter === "all" ||
+        user.status === statusFilter;
+
+      return matchesSearch && matchesType && matchesMarketing && matchesStatus;
     });
-  }, [unverifiedUsers, searchQuery, signupTypeFilter, marketingFilter]);
+  }, [unverifiedUsers, searchQuery, signupTypeFilter, marketingFilter, statusFilter]);
 
   // Calculate metrics
   const metrics = useMemo(() => {
@@ -105,89 +127,14 @@ export function SignupAbandonmentTab() {
     }
   };
 
-  const columns = [
-    {
-      accessorKey: "select",
-      header: (
-        <Checkbox
-          checked={selectedIds.size === filteredUsers.length && filteredUsers.length > 0}
-          onCheckedChange={handleSelectAll}
-        />
-      ),
-      cell: (user: ExternalLMSCustomer) => (
-        <Checkbox
-          checked={selectedIds.has(user.id)}
-          onCheckedChange={(checked) => handleSelectOne(user.id, checked as boolean)}
-        />
-      ),
-    },
-    {
-      accessorKey: "full_name",
-      header: "Name",
-      cell: (user: ExternalLMSCustomer) => (
-        <div>
-          <div className="font-medium">{user.full_name}</div>
-          <div className="text-sm text-muted-foreground">{user.email}</div>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "signup_type",
-      header: "Signup Type",
-      cell: (user: ExternalLMSCustomer) => (
-        <Badge variant="outline" className="capitalize">
-          {user.signup_type || "standard"}
-        </Badge>
-      ),
-    },
-    {
-      accessorKey: "plan",
-      header: "Plan",
-      cell: (user: ExternalLMSCustomer) => (
-        <span className="capitalize">{user.plan || "Free"}</span>
-      ),
-    },
-    {
-      accessorKey: "created_at",
-      header: "Days Pending",
-      cell: (user: ExternalLMSCustomer) => (
-        <span className="text-muted-foreground">
-          {getDaysPending(user.created_at)}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "marketing_consent",
-      header: "Marketing",
-      cell: (user: ExternalLMSCustomer) => (
-        user.marketing_consent ? (
-          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Yes
-          </Badge>
-        ) : (
-          <Badge variant="secondary">No</Badge>
-        )
-      ),
-    },
-    {
-      accessorKey: "actions",
-      header: "Actions",
-      cell: (user: ExternalLMSCustomer) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setSelectedIds(new Set([user.id]));
-            setEnrollModalOpen(true);
-          }}
-        >
-          <Mail className="h-4 w-4 mr-1" />
-          Enroll
-        </Button>
-      ),
-    },
-  ];
+  const getStatusVariant = (status?: string) => {
+    switch (status) {
+      case "active": return "default";
+      case "trial": return "secondary";
+      case "expired": return "destructive";
+      default: return "outline";
+    }
+  };
 
   if (error) {
     return (
@@ -233,7 +180,7 @@ export function SignupAbandonmentTab() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search by name or email..."
+                placeholder="Search by name, email, company..."
                 className="pl-8 w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -251,7 +198,7 @@ export function SignupAbandonmentTab() {
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <Select onValueChange={(value) => setSignupTypeFilter(value || null)}>
-                <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectTrigger className="w-full sm:w-[140px]">
                   <div className="flex items-center">
                     <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
                     <SelectValue placeholder="Signup Type" />
@@ -264,8 +211,19 @@ export function SignupAbandonmentTab() {
                   <SelectItem value="linkedin">LinkedIn</SelectItem>
                 </SelectContent>
               </Select>
+              <Select onValueChange={(value) => setStatusFilter(value || null)}>
+                <SelectTrigger className="w-full sm:w-[130px]">
+                  <SelectValue placeholder="LMS Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="trial">Trial</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
+                </SelectContent>
+              </Select>
               <Select onValueChange={(value) => setMarketingFilter(value || null)}>
-                <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectTrigger className="w-full sm:w-[140px]">
                   <SelectValue placeholder="Marketing" />
                 </SelectTrigger>
                 <SelectContent>
@@ -300,11 +258,172 @@ export function SignupAbandonmentTab() {
       )}
 
       {/* Data Table */}
-      <DataTable
-        columns={columns}
-        data={filteredUsers}
-        emptyMessage={isLoading ? "Loading..." : "No unverified signups found"}
-      />
+      <TooltipProvider>
+        <div className="border rounded-lg overflow-x-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              Loading...
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              No unverified signups found
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[40px]">
+                    <Checkbox
+                      checked={selectedIds.size === filteredUsers.length && filteredUsers.length > 0}
+                      onCheckedChange={handleSelectAll}
+                    />
+                  </TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>LMS Status</TableHead>
+                  <TableHead>Signup Type</TableHead>
+                  <TableHead>Company Size</TableHead>
+                  <TableHead>Use Case</TableHead>
+                  <TableHead>Learning Objectives</TableHead>
+                  <TableHead>Marketing</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Days Pending</TableHead>
+                  <TableHead>Credits</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredUsers.map((user) => {
+                  const creditsAvailable = (user.credits_total || 0) - (user.credits_used || 0);
+                  const creditsPercentage = user.credits_total && user.credits_total > 0 
+                    ? Math.round((creditsAvailable / user.credits_total) * 100)
+                    : 0;
+
+                  return (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(user.id)}
+                          onCheckedChange={(checked) => handleSelectOne(user.id, checked as boolean)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{user.full_name}</div>
+                          <div className="text-sm text-muted-foreground">{user.email}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusVariant(user.status)} className="capitalize">
+                          {user.status || "unknown"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {user.signup_type || "standard"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {user.company_size ? (
+                          <div className="flex items-center gap-1">
+                            <Building2 className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-sm">{user.company_size}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {user.use_case ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-sm truncate max-w-[100px] block cursor-help">
+                                {user.use_case}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[300px]">
+                              <p>{user.use_case}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {user.learning_objectives ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-sm truncate max-w-[100px] block cursor-help">
+                                {user.learning_objectives}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[300px]">
+                              <p>{user.learning_objectives}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {user.marketing_consent ? (
+                          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Yes
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            No
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {user.created_at ? (
+                          <span className="text-sm text-muted-foreground whitespace-nowrap">
+                            {format(parseISO(user.created_at), "MMM d, yyyy")}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-muted-foreground text-sm">
+                          {getDaysPending(user.created_at)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 min-w-[80px]">
+                          <Progress value={creditsPercentage} className="h-2 flex-1" />
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {creditsAvailable}/{user.credits_total || 0}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="capitalize text-sm">{user.plan || "Free"}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedIds(new Set([user.id]));
+                            setEnrollModalOpen(true);
+                          }}
+                        >
+                          <Mail className="h-4 w-4 mr-1" />
+                          Enroll
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      </TooltipProvider>
 
       {/* Enrollment Modal */}
       <EnrollAbandonmentModal
