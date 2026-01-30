@@ -107,11 +107,13 @@ Deno.serve(async (req) => {
       if (sequence?.steps) {
         const steps = sequence.steps as any[];
         const nextStepIndex = step_number + 1;
+        const currentStep = steps[step_number];
         
-        if (nextStepIndex < steps.length) {
+        if (nextStepIndex < steps.length && currentStep) {
           const nextStep = steps[nextStepIndex];
+          const dayDiff = (nextStep?.day || 0) - (currentStep?.day || 0);
           const nextEmailDate = new Date();
-          nextEmailDate.setDate(nextEmailDate.getDate() + (nextStep.day - steps[step_number].day));
+          nextEmailDate.setDate(nextEmailDate.getDate() + Math.max(1, dayDiff));
           
           await supabase
             .from("sequence_enrollments")
