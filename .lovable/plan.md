@@ -1,107 +1,157 @@
 
-# Fix Visual Editor Not Displaying HTML Content
 
-## Problem
-When HTML is loaded into the editor (template selected, pasted, or initial value), the Visual mode shows empty content. Only HTML mode and Preview work. This is a regression from the cursor-jumping fix.
+# Fix Visual Editor Showing Empty When Full HTML Is Pasted
 
-## Root Cause
-The recent fix removed `dangerouslySetInnerHTML` to prevent cursor jumping, but this broke initial content rendering:
+## Problem Identified
 
-```tsx
-// Current useEffect - has a bug
-const lastValueRef = useRef(value);  // Initialized to current value
+When pasting **full HTML documents** (containing `<!DOCTYPE>`, `<html>`, `<head>`, `<body>` tags) into the HTML tab, switching to the Visual tab shows empty content.
 
+**Why this happens**: The Visual mode uses a `contentEditable` `<div>`. When you set its `innerHTML` to a full HTML document with `<html>`, `<head>`, `<body>` tags, **browsers sanitize/strip those invalid nested elements**. A `<div>` cannot contain document-level elements, so the browser removes them - often leaving the content empty or garbled.
+
+```text
+Full HTML pasted:
+<!DOCTYPE html>
+<html>
+  <head><style>...</style></head>
+  <body>
+    <p>Hello World</p>
+  </body>
+</html>
+
+After browser sanitizes for contentEditable <div>:
+<p>Hello World</p>   ← Only body content survives (sometimes even this is lost)
+```
+
+---
+
+## Solution
+
+**Sanitize the HTML before rendering in Visual mode** by extracting only the `<body>` content when full HTML documents are detected.
+
+### Implementation Approach
+
+Add a helper function that:
+1. Detects if the HTML contains `<html>` or `<body>` tags
+2. If yes, extracts only the content inside `<body>...</body>`
+3. If no, uses the HTML as-is
+
+```typescript
+// Extract body content from full HTML documents for safe rendering
+const extractBodyContent = (html: string): string => {
+  // Check if this looks like a full HTML document
+  if (/<html[\s>]/i.test(html) || /<!DOCTYPE/i.test(html)) {
+    // Extract body content using regex
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (bodyMatch && bodyMatch[1]) {
+      return bodyMatch[1].trim();
+    }
+  }
+  return html;
+};
+```
+
+### Where to Apply
+
+In the `useEffect` that syncs content to the Visual editor:
+
+```typescript
 useEffect(() => {
-  const isExternalChange = value !== lastValueRef.current;  // FALSE on mount!
-  if (isExternalChange && !isFocusedRef.current) {
-    editorRef.current.innerHTML = value;  // Never runs on initial mount
+  if (editorRef.current && mode === "visual" && !isFocusedRef.current) {
+    // Extract body content if full HTML document was pasted
+    const safeHtml = extractBodyContent(value);
+    if (editorRef.current.innerHTML !== safeHtml) {
+      editorRef.current.innerHTML = safeHtml;
+    }
   }
   lastValueRef.current = value;
 }, [value, mode]);
 ```
 
-On initial mount:
-- `lastValueRef.current` = `value` (both are the same)
-- `isExternalChange` = `false`
-- The `innerHTML = value` line never executes
-- Editor stays empty
-
-## Solution
-Add a separate initialization effect that runs once on mount and whenever we switch to visual mode:
-
-```tsx
-const lastValueRef = useRef(value);
-const hasInitializedRef = useRef(false);
-
-// Initial content sync - runs on mount and mode switch to visual
-useEffect(() => {
-  if (editorRef.current && mode === "visual") {
-    // Always set content on initial mount or when switching to visual mode
-    if (!hasInitializedRef.current || editorRef.current.innerHTML !== value) {
-      if (!isFocusedRef.current) {
-        editorRef.current.innerHTML = value;
-        hasInitializedRef.current = true;
-      }
-    }
-  }
-}, [mode]); // Only depends on mode for tab switching
-
-// External value changes while editing
-useEffect(() => {
-  if (editorRef.current && mode === "visual" && hasInitializedRef.current) {
-    const isExternalChange = value !== lastValueRef.current;
-    if (isExternalChange && !isFocusedRef.current) {
-      editorRef.current.innerHTML = value;
-    }
-    lastValueRef.current = value;
-  }
-}, [value, mode]);
-```
+---
 
 ## Files to Modify
 
-| File | Change |
-|------|--------|
-| `src/components/shared/RichTextComposer.tsx` | Add initialization effect with `hasInitializedRef` |
-| `src/components/templates/EmailTemplateEditor.tsx` | Same fix |
+| File | Changes |
+|------|---------|
+| `src/components/templates/EmailTemplateEditor.tsx` | Add `extractBodyContent` helper, use it in visual mode sync |
+| `src/components/shared/RichTextComposer.tsx` | Same fix for consistency |
+
+---
 
 ## Technical Details
 
-### Fix for Both Editors
+### Helper Function
 
-The key changes:
-1. Add `hasInitializedRef` to track if initial content has been set
-2. Split the useEffect into two:
-   - **Initialization effect**: Sets content on mount and when switching to visual mode
-   - **External update effect**: Only handles value changes after initialization
-3. Ensure content is set even if user hasn't focused yet
+```typescript
+// Extract body content from full HTML documents for safe rendering in contentEditable
+const extractBodyContent = (html: string): string => {
+  // Check if this looks like a full HTML document
+  if (/<html[\s>]/i.test(html) || /<!DOCTYPE/i.test(html)) {
+    // Try to extract body content
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (bodyMatch && bodyMatch[1]) {
+      return bodyMatch[1].trim();
+    }
+    // If no body tag but has html tag, try to extract content after head
+    const htmlMatch = html.match(/<html[^>]*>([\s\S]*)<\/html>/i);
+    if (htmlMatch) {
+      // Remove head section and return the rest
+      const content = htmlMatch[1].replace(/<head[\s\S]*?<\/head>/gi, '').trim();
+      return content;
+    }
+  }
+  return html;
+};
+```
 
-### Simplified Single useEffect Approach
+### Updated useEffect
 
-Actually, the simplest fix is to always set content when NOT focused, regardless of whether it's "external":
-
-```tsx
+```typescript
 useEffect(() => {
   if (editorRef.current && mode === "visual" && !isFocusedRef.current) {
-    // Always sync when not focused - covers initial mount + external changes
-    if (editorRef.current.innerHTML !== value) {
-      editorRef.current.innerHTML = value;
+    // Extract body content if full HTML document was pasted
+    const safeHtml = extractBodyContent(value);
+    if (editorRef.current.innerHTML !== safeHtml) {
+      editorRef.current.innerHTML = safeHtml;
     }
   }
   lastValueRef.current = value;
 }, [value, mode]);
 ```
 
-This approach:
-- Works on initial mount (not focused, innerHTML is empty, value has content)
-- Works when selecting template (not focused after dialog closes)
-- Works when switching from HTML mode to Visual mode
-- Still protects cursor position while focused
+---
+
+## Important Notes
+
+1. **The full HTML is preserved** in the `value` state (what gets saved to the database)
+2. **Only the Visual rendering** is sanitized - the HTML tab still shows the full document
+3. **Preview panel** also needs the same sanitization since it uses `dangerouslySetInnerHTML`
+
+### Preview Panel Fix
+
+```tsx
+{/* Preview Panel */}
+<div className="mt-4 border-t pt-4">
+  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+    <Eye className="h-4 w-4" />
+    Preview
+  </div>
+  <div
+    className="p-4 border rounded-md bg-white ..."
+    dangerouslySetInnerHTML={{ __html: extractBodyContent(value) }}
+  />
+</div>
+```
+
+---
 
 ## Verification
 
 After fix:
-1. Select a template with HTML - should appear in Visual mode immediately
-2. Switch to HTML mode, paste content, switch back to Visual - should render
-3. Type in Visual mode - cursor should not jump
-4. Insert image/CTA - should work correctly
+1. Open template editor
+2. Switch to HTML tab
+3. Paste full HTML document with `<!DOCTYPE>`, `<html>`, `<body>` tags
+4. Switch to Visual tab → **should now show the body content correctly**
+5. Preview should also render the content
+6. Regular HTML fragments (without document tags) should continue working normally
+
