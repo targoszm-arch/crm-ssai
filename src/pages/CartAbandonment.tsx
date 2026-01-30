@@ -12,7 +12,8 @@ import {
   ShoppingCart,
   MessageSquare,
   SendHorizonal,
-  MegaphoneIcon
+  MegaphoneIcon,
+  UserX,
 } from "lucide-react";
 import {
   Select,
@@ -24,6 +25,8 @@ import {
 import { abandonedCartData, AbandonedCart } from "@/data/mockData";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SignupAbandonmentTab } from "@/components/recovery/SignupAbandonmentTab";
+import { RecoveryCampaignsTab } from "@/components/recovery/RecoveryCampaignsTab";
 
 export default function CartAbandonment() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -35,7 +38,7 @@ export default function CartAbandonment() {
       cart.customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       cart.customer.email.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesStatus = !statusFilter || cart.recoveryStatus === statusFilter;
+    const matchesStatus = !statusFilter || statusFilter === "all" || cart.recoveryStatus === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
@@ -116,14 +119,18 @@ export default function CartAbandonment() {
   return (
     <div className="container mx-auto py-6 space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Cart Abandonment</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Recovery Center</h1>
         <p className="text-muted-foreground">
-          Track and recover abandoned shopping carts.
+          Track and recover abandoned carts and incomplete signups.
         </p>
       </div>
 
-      <Tabs defaultValue="carts" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+      <Tabs defaultValue="signups" className="w-full">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+          <TabsTrigger value="signups">
+            <UserX className="mr-2 h-4 w-4" />
+            Signup Abandonment
+          </TabsTrigger>
           <TabsTrigger value="carts">
             <ShoppingCart className="mr-2 h-4 w-4" />
             Abandoned Carts
@@ -133,6 +140,11 @@ export default function CartAbandonment() {
             Recovery Campaigns
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="signups" className="space-y-6 mt-6">
+          <SignupAbandonmentTab />
+        </TabsContent>
+
         <TabsContent value="carts" className="space-y-6 mt-6">
           <Card>
             <CardContent className="p-6">
@@ -197,19 +209,8 @@ export default function CartAbandonment() {
           />
         </TabsContent>
         
-        <TabsContent value="campaigns" className="space-y-4 mt-6">
-          <Card>
-            <CardContent className="p-6 flex flex-col items-center justify-center text-center min-h-[300px]">
-              <MegaphoneIcon className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">Recovery Campaigns</h3>
-              <p className="text-muted-foreground mb-4 max-w-md">
-                Create automated email, SMS, and WhatsApp campaigns to recover abandoned carts and boost sales.
-              </p>
-              <Button>
-                Create Campaign
-              </Button>
-            </CardContent>
-          </Card>
+        <TabsContent value="campaigns" className="space-y-6 mt-6">
+          <RecoveryCampaignsTab />
         </TabsContent>
       </Tabs>
     </div>

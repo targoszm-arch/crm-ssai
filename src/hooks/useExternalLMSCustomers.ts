@@ -22,6 +22,7 @@ interface FetchParams {
   since?: string;
   signupType?: string;
   marketing?: boolean;
+  verified?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -34,6 +35,7 @@ export function useExternalLMSCustomers(params: FetchParams = {}) {
       if (params.since) queryParams.set('since', params.since);
       if (params.signupType) queryParams.set('signup_type', params.signupType);
       if (params.marketing !== undefined) queryParams.set('marketing', String(params.marketing));
+      if (params.verified !== undefined) queryParams.set('verified', String(params.verified));
       if (params.limit) queryParams.set('limit', String(params.limit));
       if (params.offset) queryParams.set('offset', String(params.offset));
 
