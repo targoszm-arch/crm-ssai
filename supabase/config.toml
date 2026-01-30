@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.linkedin-sync-connections]
 verify_jwt = false
+
+[functions.meetalfred-sync]
+verify_jwt = false
