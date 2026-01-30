@@ -74,16 +74,16 @@ export default function Analytics() {
   ] : [];
 
   return (
-    <div className="container mx-auto py-6 space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto px-4 md:px-6 py-6 space-y-6 animate-fade-in">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Sequence Analytics</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight">Sequence Analytics</h1>
+          <p className="text-sm text-muted-foreground">
             Track engagement and delivery metrics for your email sequences.
           </p>
         </div>
         <Select value={selectedSequenceId} onValueChange={setSelectedSequenceId}>
-          <SelectTrigger className="w-[280px]">
+          <SelectTrigger className="w-full sm:w-[280px]">
             <SelectValue placeholder="Select a sequence" />
           </SelectTrigger>
           <SelectContent>
@@ -98,7 +98,7 @@ export default function Analytics() {
 
       {/* Overview Stats Cards */}
       {!selectedSequenceId && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
@@ -188,7 +188,7 @@ export default function Analytics() {
                 </Card>
 
                 {/* Engagement Section */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid gap-4 md:grid-cols-3 md:gap-6">
                   <Card>
                     <CardContent className="pt-6">
                       <p className="text-4xl font-bold text-primary">{analytics.uniqueOpens}</p>
@@ -227,7 +227,7 @@ export default function Analytics() {
                     <CardTitle className="text-base">Delivery</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
                       <div className="text-center p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
                         <p className="text-3xl font-bold text-blue-600">{analytics.totalDelivered}</p>
                         <p className="text-sm text-blue-600">Successfully delivered</p>

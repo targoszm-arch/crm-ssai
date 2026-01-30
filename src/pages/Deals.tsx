@@ -63,27 +63,27 @@ export default function Deals() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="border-b bg-background px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="border-b bg-background px-4 md:px-6 py-4">
+        <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">Deals</h1>
+            <h1 className="text-xl md:text-2xl font-semibold">Deals</h1>
             <p className="text-sm text-muted-foreground">
               {totalDeals} deals · {formatValue(totalValue)} total value
             </p>
           </div>
-          <Button onClick={() => handleAddDeal()} className="gap-2">
+          <Button onClick={() => handleAddDeal()} className="gap-2 w-full sm:w-auto">
             <Plus className="h-4 w-4" />
             Deal
           </Button>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
           {/* Pipeline Selector */}
           <Select
             value={activePipelineId}
             onValueChange={setSelectedPipelineId}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Select pipeline" />
             </SelectTrigger>
             <SelectContent>
@@ -96,7 +96,7 @@ export default function Deals() {
           </Select>
 
           {/* Search */}
-          <div className="relative flex-1 max-w-xs">
+          <div className="relative flex-1 min-w-0 sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search deals..."

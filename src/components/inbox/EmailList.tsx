@@ -267,7 +267,7 @@ export function EmailList({
                       <Mail className="h-4 w-4 text-muted-foreground" />
                     )}
                   </div>
-                  <div className="flex-1 min-w-0 pr-8">
+                  <div className="flex-1 min-w-0 overflow-hidden pr-8">
                     <div className="flex items-center justify-between gap-2">
                       <span className={cn("text-sm truncate", !email.is_read && "font-semibold")}>
                         {email.direction === "inbound"

@@ -3,6 +3,13 @@ import { Plus, Settings, Mail, Linkedin, RefreshCw, Loader2, FileSignature, Layo
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEmailAccounts, useDisconnectEmailAccount } from "@/hooks/useEmailAccounts";
 import { Email, useSyncEmails, useBulkMarkEmailsRead, useArchiveEmails, EmailFilters } from "@/hooks/useEmails";
 import { LinkedInMessage } from "@/hooks/useLinkedInMessages";
@@ -27,12 +34,21 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type InboxTab = "email" | "linkedin";
 type SelectedItem = { type: "email"; item: Email } | { type: "linkedin"; item: LinkedInMessage } | null;
 type ViewMode = "split" | "full";
 
+const folderOptions: { value: EmailFolder; label: string }[] = [
+  { value: "inbox", label: "Inbox" },
+  { value: "sent", label: "Sent" },
+  { value: "drafts", label: "Drafts" },
+  { value: "archive", label: "Archive" },
+];
+
 export default function Inbox() {
+  const isMobile = useIsMobile();
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [signatureOpen, setSignatureOpen] = useState(false);
@@ -58,6 +74,9 @@ export default function Inbox() {
   const hasConnectedAccount = accounts && accounts.length > 0;
   const currentAccount = accounts?.[0] || null;
   const isSyncing = isAutoSyncing || syncEmails.isPending;
+
+  // Force full mode on mobile
+  const effectiveViewMode = isMobile ? "full" : viewMode;
 
   useEffect(() => {
     localStorage.setItem("inbox-view-mode", viewMode);
@@ -137,39 +156,47 @@ export default function Inbox() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Mail className="h-5 w-5" />
-            <h1 className="text-lg font-semibold">Inbox</h1>
-            {isSyncing && (
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground ml-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Syncing...</span>
-              </div>
-            )}
-          </div>
+      {/* Header - responsive stacking */}
+      <div className="flex flex-col gap-3 p-4 border-b md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Mail className="h-5 w-5" />
+          <h1 className="text-lg font-semibold">Inbox</h1>
+          {isSyncing && (
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>Syncing...</span>
+            </div>
+          )}
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as InboxTab); setSelectedItem(null); setSelectedEmails([]); }}>
             <TabsList>
-              <TabsTrigger value="email" className="flex items-center gap-1.5"><Mail className="h-4 w-4" />Email</TabsTrigger>
-              <TabsTrigger value="linkedin" className="flex items-center gap-1.5"><Linkedin className="h-4 w-4" />LinkedIn</TabsTrigger>
+              <TabsTrigger value="email" className="flex items-center gap-1.5">
+                <Mail className="h-4 w-4" />
+                <span className="hidden sm:inline">Email</span>
+              </TabsTrigger>
+              <TabsTrigger value="linkedin" className="flex items-center gap-1.5">
+                <Linkedin className="h-4 w-4" />
+                <span className="hidden sm:inline">LinkedIn</span>
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {activeTab === "email" && hasConnectedAccount && !isMobile && (
+            <div className="hidden md:flex items-center border rounded-md">
+              <Button variant={viewMode === "split" ? "secondary" : "ghost"} size="icon" className="h-8 w-8 rounded-r-none" onClick={() => setViewMode("split")}><LayoutGrid className="h-4 w-4" /></Button>
+              <Button variant={viewMode === "full" ? "secondary" : "ghost"} size="icon" className="h-8 w-8 rounded-l-none" onClick={() => setViewMode("full")}><List className="h-4 w-4" /></Button>
+            </div>
+          )}
           {activeTab === "email" && hasConnectedAccount && (
-            <>
-              <div className="flex items-center border rounded-md">
-                <Button variant={viewMode === "split" ? "secondary" : "ghost"} size="icon" className="h-8 w-8 rounded-r-none" onClick={() => setViewMode("split")}><LayoutGrid className="h-4 w-4" /></Button>
-                <Button variant={viewMode === "full" ? "secondary" : "ghost"} size="icon" className="h-8 w-8 rounded-l-none" onClick={() => setViewMode("full")}><List className="h-4 w-4" /></Button>
-              </div>
-              <Button onClick={() => setComposeOpen(true)}><Plus className="h-4 w-4 mr-1" />Compose</Button>
-            </>
+            <Button onClick={() => setComposeOpen(true)} size={isMobile ? "sm" : "default"}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Compose</span>
+            </Button>
           )}
           {activeTab === "linkedin" && (
-            <Button variant="outline" onClick={handleSyncMeetAlfred} disabled={isSyncingMeetAlfred}>
-              {isSyncingMeetAlfred ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}Sync Meet Alfred
+            <Button variant="outline" onClick={handleSyncMeetAlfred} disabled={isSyncingMeetAlfred} size={isMobile ? "sm" : "default"}>
+              {isSyncingMeetAlfred ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="hidden sm:inline ml-1.5">Sync Meet Alfred</span>
             </Button>
           )}
           {activeTab === "email" && hasConnectedAccount && (
@@ -184,9 +211,27 @@ export default function Inbox() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {currentAccount && activeTab === "email" && <span className="text-sm text-muted-foreground">{currentAccount.email_address}</span>}
+          {currentAccount && activeTab === "email" && !isMobile && <span className="text-sm text-muted-foreground">{currentAccount.email_address}</span>}
         </div>
       </div>
+
+      {/* Mobile folder dropdown */}
+      {isMobile && activeTab === "email" && hasConnectedAccount && (
+        <div className="px-4 py-2 border-b">
+          <Select value={currentFolder} onValueChange={(v) => { setCurrentFolder(v as EmailFolder); setSelectedItem(null); }}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select folder" />
+            </SelectTrigger>
+            <SelectContent>
+              {folderOptions.map((folder) => (
+                <SelectItem key={folder.value} value={folder.value}>
+                  {folder.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Filters Bar */}
       {activeTab === "email" && hasConnectedAccount && (
@@ -214,10 +259,16 @@ export default function Inbox() {
         <div className="flex items-center justify-center flex-1 p-8"><ConnectGmail /></div>
       ) : (
         <div className="flex-1 flex overflow-hidden">
-          {activeTab === "email" && (
+          {/* Desktop InboxSidebar */}
+          {!isMobile && activeTab === "email" && (
             <InboxSidebar currentFolder={currentFolder} onFolderChange={(f) => { setCurrentFolder(f); setSelectedItem(null); }} />
           )}
-          <div className={cn("border-r flex-shrink-0 overflow-hidden flex flex-col", viewMode === "split" ? "w-96" : "flex-1")}>
+          
+          {/* Email/LinkedIn list - constrained width */}
+          <div className={cn(
+            "border-r flex-shrink-0 overflow-hidden flex flex-col min-w-0",
+            effectiveViewMode === "split" ? "w-96" : "flex-1 max-w-2xl"
+          )}>
             {activeTab === "email" ? (
               <EmailList 
                 accounts={accounts || []} 
@@ -235,7 +286,9 @@ export default function Inbox() {
               </div>
             )}
           </div>
-          {viewMode === "split" && (
+          
+          {/* Split view detail panel */}
+          {effectiveViewMode === "split" && (
             <div className="flex-1 overflow-hidden">
               {selectedItem?.type === "email" ? (
                 <EmailThread email={selectedItem.item} account={currentAccount} onClose={handleCloseDetail} />
@@ -251,7 +304,8 @@ export default function Inbox() {
         </div>
       )}
 
-      {viewMode === "full" && selectedItem?.type === "email" && (
+      {/* Full mode sheet overlay */}
+      {effectiveViewMode === "full" && selectedItem?.type === "email" && (
         <Sheet open={true} onOpenChange={() => setSelectedItem(null)}>
           <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0">
             <EmailThread email={selectedItem.item} account={currentAccount} onClose={handleCloseDetail} />
