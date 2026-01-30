@@ -86,64 +86,71 @@ Deno.serve(async (req) => {
         results.replies.found = replies.length;
         
         console.log(`Found ${replies.length} replies`);
+        
+        // Log first reply structure for debugging
+        if (replies.length > 0) {
+          console.log("Sample reply structure:", JSON.stringify(replies[0], null, 2));
+        }
 
         for (const reply of replies) {
           try {
+            // Extract LinkedIn ID if available, otherwise use fallback
             const linkedinId = extractLinkedInId(reply.person?.linkedin_profile_url);
-            if (!linkedinId) {
-              console.log("Skipping reply - no LinkedIn ID found");
-              continue;
-            }
-
-            // Find or create linkedin connection using upsert
-            const connectionName = `${reply.person?.first_name || ""} ${reply.person?.last_name || ""}`.trim() || "Unknown";
+            const personName = `${reply.person?.first_name || ""} ${reply.person?.last_name || ""}`.trim() || "Unknown";
             
-            const { data: connection, error: connError } = await supabase
-              .from("linkedin_connections")
-              .upsert(
-                {
-                  linkedin_id: linkedinId,
-                  name: connectionName,
-                  headline: reply.person?.headline,
-                  company: reply.person?.company,
-                  profile_url: reply.person?.linkedin_profile_url,
-                  connection_status: "Connected",
-                  synced_at: new Date().toISOString(),
-                },
-                { onConflict: "linkedin_id" }
-              )
-              .select("id")
-              .single();
+            // Generate a unique sender ID - use LinkedIn ID if available, otherwise use reply ID
+            const senderId = linkedinId || `meetalfred_reply_${reply.id}`;
+            const messageTimestamp = reply.reply_detected_on || new Date().toISOString();
+            
+            console.log(`Processing reply ${reply.id} from ${personName}, senderId: ${senderId}`);
 
-            if (connError) {
-              console.error("Connection upsert error:", connError);
-              results.replies.errors.push(`Connection upsert: ${connError.message}`);
-              continue;
+            let connectionId: string | null = null;
+
+            // Only try to create/find connection if we have a LinkedIn ID
+            if (linkedinId) {
+              const { data: connection, error: connError } = await supabase
+                .from("linkedin_connections")
+                .upsert(
+                  {
+                    linkedin_id: linkedinId,
+                    name: personName,
+                    headline: reply.person?.headline,
+                    company: reply.person?.company,
+                    profile_url: reply.person?.linkedin_profile_url,
+                    connection_status: "Connected",
+                    synced_at: new Date().toISOString(),
+                  },
+                  { onConflict: "linkedin_id" }
+                )
+                .select("id")
+                .single();
+
+              if (connError) {
+                console.error("Connection upsert error:", connError);
+              } else if (connection) {
+                connectionId = connection.id;
+              }
             }
 
-            // Insert reply as linkedin message
-            if (connection) {
-              const messageTimestamp = reply.reply_detected_on || new Date().toISOString();
-              
-              const { error: msgError } = await supabase.from("linkedin_messages").upsert(
-                {
-                  sender_linkedin_id: linkedinId,
-                  recipient_linkedin_id: "me",
-                  message_text: reply.message || `Reply from ${reply.campaign?.name || "campaign"}`,
-                  message_timestamp: messageTimestamp,
-                  connection_id: connection.id,
-                  is_read: false,
-                },
-                { onConflict: "sender_linkedin_id,message_timestamp" }
-              );
-              
-              if (msgError) {
-                console.error("Message upsert error:", msgError);
-                results.replies.errors.push(`Message upsert: ${msgError.message}`);
-              } else {
-                results.replies.synced++;
-                console.log(`Synced reply from ${connectionName}`);
-              }
+            // Always insert the reply message, even without LinkedIn ID
+            const { error: msgError } = await supabase.from("linkedin_messages").upsert(
+              {
+                sender_linkedin_id: senderId,
+                recipient_linkedin_id: "me",
+                message_text: reply.message || `Reply from ${reply.campaign?.name || "campaign"} - ${personName}`,
+                message_timestamp: messageTimestamp,
+                connection_id: connectionId,
+                is_read: false,
+              },
+              { onConflict: "sender_linkedin_id,message_timestamp" }
+            );
+            
+            if (msgError) {
+              console.error("Message upsert error:", msgError);
+              results.replies.errors.push(`Message upsert: ${msgError.message}`);
+            } else {
+              results.replies.synced++;
+              console.log(`Synced reply from ${personName}`);
             }
           } catch (e) {
             console.error("Error processing reply:", e);
@@ -334,5 +341,5 @@ Deno.serve(async (req) => {
 function extractLinkedInId(url?: string): string | null {
   if (!url) return null;
   const match = url.match(/linkedin\.com\/in\/([^\/\?]+)/);
-  return match ? match[1] : url;
+  return match ? match[1] : null;
 }
