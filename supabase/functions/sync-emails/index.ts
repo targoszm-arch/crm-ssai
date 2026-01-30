@@ -166,14 +166,14 @@ serve(async (req: Request): Promise<Response> => {
     const pageSize = 500;
     
     do {
+      // Use Gmail query to get messages from all folders (INBOX OR SENT OR DRAFTS)
+      // Don't use labelIds - it behaves as AND which breaks multi-folder sync
+      const gmailQuery = `after:${afterTimestamp} (in:inbox OR in:sent OR in:drafts)`;
+      
       const params = new URLSearchParams({
         maxResults: String(pageSize),
-        q: query,
+        q: gmailQuery,
       });
-      
-      // Include both INBOX and SENT labels
-      params.append("labelIds", "INBOX");
-      params.append("labelIds", "SENT");
       
       if (pageToken) {
         params.append("pageToken", pageToken);
@@ -281,15 +281,20 @@ serve(async (req: Request): Promise<Response> => {
           ? "outbound"
           : "inbound";
 
-        // Determine folder based on direction and Gmail labels
-        let folder = "inbox";
+        // Determine folder based on Gmail labels (order matters: draft > sent > inbox)
         const labelIds: string[] = msgData.labelIds || [];
-        if (direction === "outbound") {
-          folder = "sent";
-        } else if (labelIds.includes("DRAFT")) {
+        let folder = "inbox";
+        
+        // Check drafts first
+        if (labelIds.includes("DRAFT")) {
           folder = "drafts";
+        } else if (direction === "outbound" || labelIds.includes("SENT")) {
+          folder = "sent";
         } else if (labelIds.includes("TRASH")) {
           folder = "trash";
+        } else if (!labelIds.includes("INBOX") && !labelIds.includes("SENT") && !labelIds.includes("DRAFT")) {
+          // No inbox/sent/draft label = archived
+          folder = "archive";
         }
 
         // Match to contact

@@ -49,6 +49,8 @@ export function EmailList({
     accountId,
     linkedOnly: filter === "linked",
     search: search || undefined,
+    folder: folder,
+    ...filters,
   });
 
   const syncEmails = useSyncEmails();
