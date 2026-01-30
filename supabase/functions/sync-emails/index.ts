@@ -281,6 +281,17 @@ serve(async (req: Request): Promise<Response> => {
           ? "outbound"
           : "inbound";
 
+        // Determine folder based on direction and Gmail labels
+        let folder = "inbox";
+        const labelIds: string[] = msgData.labelIds || [];
+        if (direction === "outbound") {
+          folder = "sent";
+        } else if (labelIds.includes("DRAFT")) {
+          folder = "drafts";
+        } else if (labelIds.includes("TRASH")) {
+          folder = "trash";
+        }
+
         // Match to contact
         const matchEmail = direction === "inbound" ? fromEmail : toEmails[0];
         const contactId = emailToContactId[matchEmail?.toLowerCase() || ""] || null;
@@ -303,9 +314,10 @@ serve(async (req: Request): Promise<Response> => {
             from_name: fromName,
             to_emails: toEmails,
             received_at: date ? new Date(date).toISOString() : new Date().toISOString(),
-            is_read: !msgData.labelIds?.includes("UNREAD"),
+            is_read: !labelIds.includes("UNREAD"),
             direction,
-            labels: msgData.labelIds || [],
+            labels: labelIds,
+            folder,
           })
           .select()
           .single();

@@ -9,17 +9,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { LabelBadge } from "@/components/shared/LabelBadge";
-import { LABEL_COLORS } from "@/lib/labelColors";
-
-export interface EmailFilters {
-  followUpDays?: "0-3" | "4-7" | "8-30";
-  labels?: string[];
-  isUnread?: boolean;
-  linkedWithDeal?: boolean | null;
-  isTracked?: boolean;
-  hasAttachments?: boolean;
-  fromContact?: boolean;
-}
+import { EmailFilters } from "@/hooks/useEmails";
 
 interface InboxFiltersProps {
   filters: EmailFilters;

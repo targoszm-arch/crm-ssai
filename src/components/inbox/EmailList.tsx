@@ -13,20 +13,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Email, useEmails, useSyncEmails, useMarkEmailRead } from "@/hooks/useEmails";
+import { Email, useEmails, useSyncEmails, useMarkEmailRead, EmailFilters } from "@/hooks/useEmails";
 import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { LabelBadge } from "@/components/shared/LabelBadge";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-
-export interface EmailFilters {
-  isUnread?: boolean;
-  hasTracking?: boolean;
-  linkedWithDeal?: boolean | null;
-  hasAttachments?: boolean;
-  followUpDays?: string;
-  labels: string[];
-}
 
 interface EmailListProps {
   accounts: EmailAccount[];
@@ -142,7 +133,7 @@ export function EmailList({
     if (filters.isUnread) {
       filteredEmails = filteredEmails.filter(e => !e.is_read);
     }
-    if (filters.hasTracking) {
+    if (filters.isTracked) {
       filteredEmails = filteredEmails.filter(e => e.is_tracked);
     }
     if (filters.linkedWithDeal === true) {
@@ -162,12 +153,15 @@ export function EmailList({
         return daysSince >= minDays && daysSince <= maxDays;
       });
     }
-    if (filters.labels.length > 0) {
+    if (filters.labels && filters.labels.length > 0) {
       filteredEmails = filteredEmails.filter(email => {
         if (!email.email_labels) return false;
         const emailLabels = email.email_labels.split(",").map(l => l.split(":")[0].trim());
-        return filters.labels.some(fl => emailLabels.includes(fl));
+        return filters.labels!.some(fl => emailLabels.includes(fl));
       });
+    }
+    if (filters.fromContact) {
+      filteredEmails = filteredEmails.filter(e => e.contact_id);
     }
   }
 

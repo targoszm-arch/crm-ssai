@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useEmailAccounts, useDisconnectEmailAccount } from "@/hooks/useEmailAccounts";
-import { Email, useSyncEmails, useBulkMarkEmailsRead, useArchiveEmails } from "@/hooks/useEmails";
+import { Email, useSyncEmails, useBulkMarkEmailsRead, useArchiveEmails, EmailFilters } from "@/hooks/useEmails";
 import { LinkedInMessage } from "@/hooks/useLinkedInMessages";
 import { ConnectGmail } from "@/components/inbox/ConnectGmail";
 import { EmailList } from "@/components/inbox/EmailList";
@@ -14,7 +14,7 @@ import { LinkedInMessageList } from "@/components/inbox/LinkedInMessageList";
 import { LinkedInMessageView } from "@/components/inbox/LinkedInMessageView";
 import { SignatureSettings } from "@/components/inbox/SignatureSettings";
 import { InboxSidebar, type EmailFolder } from "@/components/inbox/InboxSidebar";
-import { InboxFilters, type EmailFilters } from "@/components/inbox/InboxFilters";
+import { InboxFilters } from "@/components/inbox/InboxFilters";
 import { BulkActionBar } from "@/components/inbox/BulkActionBar";
 import {
   DropdownMenu,
@@ -219,7 +219,16 @@ export default function Inbox() {
           )}
           <div className={cn("border-r flex-shrink-0 overflow-hidden flex flex-col", viewMode === "split" ? "w-96" : "flex-1")}>
             {activeTab === "email" ? (
-              <EmailList accounts={accounts || []} selectedEmail={selectedItem?.type === "email" ? selectedItem.item : null} onSelectEmail={handleSelectEmail} />
+              <EmailList 
+                accounts={accounts || []} 
+                selectedEmail={selectedItem?.type === "email" ? selectedItem.item : null} 
+                onSelectEmail={handleSelectEmail}
+                folder={currentFolder}
+                filters={filters}
+                selectedIds={selectedEmails}
+                onSelectionChange={setSelectedEmails}
+                showCheckboxes={true}
+              />
             ) : (
               <div className="flex-1 overflow-auto">
                 <LinkedInMessageList search="" linkedOnly={false} selectedMessage={selectedItem?.type === "linkedin" ? selectedItem.item : null} onSelectMessage={handleSelectLinkedInMessage} />
