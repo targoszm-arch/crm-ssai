@@ -70,7 +70,7 @@ export function LinkedInMessageList({
                 <Linkedin className="h-4 w-4 text-[#0A66C2]" />
               )}
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 overflow-hidden">
               <div className="flex items-center justify-between gap-2">
                 <span className={cn("text-sm truncate", !message.is_read && "font-semibold")}>
                   {message.sender_name || message.connection?.name || message.sender_linkedin_id}
