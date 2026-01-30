@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      activities: {
+        Row: {
+          activity_type: string
+          company_id: string | null
+          contact_id: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          metadata: Json | null
+          occurred_at: string | null
+          source: string | null
+          source_id: string | null
+        }
+        Insert: {
+          activity_type: string
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          occurred_at?: string | null
+          source?: string | null
+          source_id?: string | null
+        }
+        Update: {
+          activity_type?: string
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          occurred_at?: string | null
+          source?: string | null
+          source_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activities_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar_events: {
         Row: {
           account_id: string | null
@@ -92,6 +146,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      campaigns: {
+        Row: {
+          audience: string | null
+          conversion_rate: number | null
+          created_at: string | null
+          id: string
+          last_synced_at: string | null
+          meetalfred_id: number | null
+          name: string
+          open_rate: number | null
+          sent_count: number | null
+          sequence_type: string | null
+          status: string | null
+          total_leads: number | null
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          audience?: string | null
+          conversion_rate?: number | null
+          created_at?: string | null
+          id?: string
+          last_synced_at?: string | null
+          meetalfred_id?: number | null
+          name: string
+          open_rate?: number | null
+          sent_count?: number | null
+          sequence_type?: string | null
+          status?: string | null
+          total_leads?: number | null
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          audience?: string | null
+          conversion_rate?: number | null
+          created_at?: string | null
+          id?: string
+          last_synced_at?: string | null
+          meetalfred_id?: number | null
+          name?: string
+          open_rate?: number | null
+          sent_count?: number | null
+          sequence_type?: string | null
+          status?: string | null
+          total_leads?: number | null
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       companies: {
         Row: {
@@ -858,10 +963,12 @@ export type Database = {
       linkedin_messages: {
         Row: {
           campaign_name: string | null
+          company_name: string | null
           connection_id: string | null
           created_at: string
           id: string
           is_read: boolean | null
+          linkedin_conversation_url: string | null
           message_text: string
           message_timestamp: string
           profile_url: string | null
@@ -873,10 +980,12 @@ export type Database = {
         }
         Insert: {
           campaign_name?: string | null
+          company_name?: string | null
           connection_id?: string | null
           created_at?: string
           id?: string
           is_read?: boolean | null
+          linkedin_conversation_url?: string | null
           message_text: string
           message_timestamp?: string
           profile_url?: string | null
@@ -888,10 +997,12 @@ export type Database = {
         }
         Update: {
           campaign_name?: string | null
+          company_name?: string | null
           connection_id?: string | null
           created_at?: string
           id?: string
           is_read?: boolean | null
+          linkedin_conversation_url?: string | null
           message_text?: string
           message_timestamp?: string
           profile_url?: string | null
@@ -1287,6 +1398,149 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sequence_emails: {
+        Row: {
+          body_html: string | null
+          bounced_at: string | null
+          clicked_at: string | null
+          created_at: string | null
+          enrollment_id: string | null
+          id: string
+          opened_at: string | null
+          resend_message_id: string | null
+          sent_at: string | null
+          status: string | null
+          step_number: number | null
+          subject: string | null
+        }
+        Insert: {
+          body_html?: string | null
+          bounced_at?: string | null
+          clicked_at?: string | null
+          created_at?: string | null
+          enrollment_id?: string | null
+          id?: string
+          opened_at?: string | null
+          resend_message_id?: string | null
+          sent_at?: string | null
+          status?: string | null
+          step_number?: number | null
+          subject?: string | null
+        }
+        Update: {
+          body_html?: string | null
+          bounced_at?: string | null
+          clicked_at?: string | null
+          created_at?: string | null
+          enrollment_id?: string | null
+          id?: string
+          opened_at?: string | null
+          resend_message_id?: string | null
+          sent_at?: string | null
+          status?: string | null
+          step_number?: number | null
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sequence_emails_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "sequence_enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sequence_enrollments: {
+        Row: {
+          completed_at: string | null
+          contact_id: string | null
+          current_step: number | null
+          enrolled_at: string | null
+          id: string
+          metadata: Json | null
+          next_email_at: string | null
+          sequence_id: string | null
+          status: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          contact_id?: string | null
+          current_step?: number | null
+          enrolled_at?: string | null
+          id?: string
+          metadata?: Json | null
+          next_email_at?: string | null
+          sequence_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          contact_id?: string | null
+          current_step?: number | null
+          enrolled_at?: string | null
+          id?: string
+          metadata?: Json | null
+          next_email_at?: string | null
+          sequence_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sequence_enrollments_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sequence_enrollments_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sequences: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          from_email: string | null
+          from_name: string | null
+          id: string
+          name: string
+          status: string | null
+          steps: Json
+          trigger_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          name: string
+          status?: string | null
+          steps?: Json
+          trigger_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          name?: string
+          status?: string | null
+          steps?: Json
+          trigger_type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       tasks: {
         Row: {
