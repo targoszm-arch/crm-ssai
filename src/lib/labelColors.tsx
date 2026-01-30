@@ -1,3 +1,4 @@
+// Label color utilities for CRM
 import React from "react";
 import { cn } from "@/lib/utils";
 
