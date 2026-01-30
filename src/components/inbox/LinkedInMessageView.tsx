@@ -3,7 +3,6 @@ import { format } from "date-fns";
 import { Linkedin, ExternalLink, X, User, Link2, Sparkles, Loader2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -17,17 +16,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { LinkedInMessage } from "@/hooks/useLinkedInMessages";
 import { useContacts, Contact } from "@/hooks/useContacts";
 import { useGenerateLinkedInDraft, DraftTone } from "@/hooks/useGenerateLinkedInDraft";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { RichTextComposer } from "@/components/shared/RichTextComposer";
+import { Tables } from "@/integrations/supabase/types";
+
+type EmailTemplate = Tables<"email_templates">;
 
 interface LinkedInMessageViewProps {
   message: LinkedInMessage;
@@ -105,7 +103,8 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
       },
       {
         onSuccess: (draft) => {
-          setDraftText(draft);
+          // Convert plain text to HTML for the rich editor
+          setDraftText(draft.replace(/\n/g, '<br>'));
           setShowDraft(true);
           toast({
             title: "Draft Generated",
@@ -124,13 +123,24 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
   };
 
   const handleCopyDraft = async () => {
-    await navigator.clipboard.writeText(draftText);
+    // Strip HTML for copying
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = draftText;
+    const plainText = tempDiv.textContent || tempDiv.innerText || "";
+    
+    await navigator.clipboard.writeText(plainText);
     setCopied(true);
     toast({
       title: "Copied!",
       description: "Draft copied to clipboard. Paste it in LinkedIn.",
     });
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleTemplateSelect = (template: EmailTemplate) => {
+    const content = template.body_html || template.body_text || "";
+    setDraftText(content);
+    setShowDraft(true);
   };
 
   return (
@@ -240,8 +250,8 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
           </DropdownMenu>
         </div>
 
-        {/* Draft section */}
-        {showDraft && draftText && (
+        {/* Draft section with RichTextComposer */}
+        {showDraft && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Suggested Reply Draft:</span>
@@ -254,17 +264,33 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
                 {copied ? "Copied!" : "Copy"}
               </Button>
             </div>
-            <Textarea
+            <RichTextComposer
               value={draftText}
-              onChange={(e) => setDraftText(e.target.value)}
-              rows={4}
-              className="text-sm"
+              onChange={setDraftText}
               placeholder="AI-generated draft will appear here..."
+              minHeight={80}
+              maxHeight={150}
+              compact
+              showTemplates
+              showMergeTags={false}
+              onTemplateSelect={handleTemplateSelect}
             />
             <p className="text-xs text-muted-foreground">
               Edit as needed, then copy and paste into LinkedIn.
             </p>
           </div>
+        )}
+
+        {/* Show template button when draft is not visible */}
+        {!showDraft && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full"
+            onClick={() => setShowDraft(true)}
+          >
+            Or use a template to compose a draft...
+          </Button>
         )}
       </div>
 
