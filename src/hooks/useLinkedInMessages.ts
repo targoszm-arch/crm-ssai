@@ -10,10 +10,11 @@ export interface LinkedInMessage {
   is_read: boolean;
   connection_id: string | null;
   created_at: string;
-  // New columns from Meet Alfred sync
+  // Columns from Meet Alfred sync
   sender_name?: string | null;
   campaign_name?: string | null;
   profile_url?: string | null;
+  raw_payload?: Record<string, unknown> | null;
   connection?: {
     id: string;
     name: string;

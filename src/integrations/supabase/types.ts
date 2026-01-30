@@ -865,6 +865,7 @@ export type Database = {
           message_text: string
           message_timestamp: string
           profile_url: string | null
+          raw_payload: Json | null
           recipient_linkedin_id: string
           sender_linkedin_id: string
           sender_name: string | null
@@ -879,6 +880,7 @@ export type Database = {
           message_text: string
           message_timestamp?: string
           profile_url?: string | null
+          raw_payload?: Json | null
           recipient_linkedin_id: string
           sender_linkedin_id: string
           sender_name?: string | null
@@ -893,6 +895,7 @@ export type Database = {
           message_text?: string
           message_timestamp?: string
           profile_url?: string | null
+          raw_payload?: Json | null
           recipient_linkedin_id?: string
           sender_linkedin_id?: string
           sender_name?: string | null
