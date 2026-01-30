@@ -116,14 +116,13 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
 
   // Sync external value changes to editor - but NOT while user is editing
   useEffect(() => {
-    if (editorRef.current && mode === "visual") {
-      // Only update if: not focused AND value actually changed externally
-      const isExternalChange = value !== lastValueRef.current;
-      if (isExternalChange && !isFocusedRef.current) {
+    if (editorRef.current && mode === "visual" && !isFocusedRef.current) {
+      // Always sync when not focused - covers initial mount + external changes
+      if (editorRef.current.innerHTML !== value) {
         editorRef.current.innerHTML = value;
       }
-      lastValueRef.current = value;
     }
+    lastValueRef.current = value;
   }, [value, mode]);
 
   // Save cursor position before opening dialogs
