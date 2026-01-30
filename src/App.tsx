@@ -11,6 +11,7 @@ import Customers from "./pages/Customers";
 import Orders from "./pages/Orders";
 import CartAbandonment from "./pages/CartAbandonment";
 import Campaigns from "./pages/Campaigns";
+import Sequences from "./pages/Sequences";
 import Finances from "./pages/Finances";
 import AIRecommendations from "./pages/AIRecommendations";
 import Payments from "./pages/Payments";
@@ -78,6 +79,16 @@ const App = () => (
               <AuthGuard>
                 <AppShell>
                   <Campaigns />
+                </AppShell>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/sequences"
+            element={
+              <AuthGuard>
+                <AppShell>
+                  <Sequences />
                 </AppShell>
               </AuthGuard>
             }

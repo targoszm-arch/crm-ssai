@@ -20,6 +20,9 @@ interface MeetAlfredCampaign {
   id: number;
   name: string;
   type?: string;
+  status?: string;
+  sequence_type?: string;
+  total_leads?: number;
 }
 
 interface MeetAlfredReply {
@@ -28,41 +31,35 @@ interface MeetAlfredReply {
   created_at?: string;
   timestamp?: string;
   date?: string;
-  // Try all possible message field names
-  message?: string;
-  text?: string;
-  content?: string;
-  body?: string;
+  // Root-level fields (Meet Alfred returns these at root!)
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  linkedin_profile_url?: string;
+  linkedin_conversation_url?: string;
+  companyName?: string;
+  campaign_name?: string;
   reply_message?: string;
-  reply_text?: string;
-  reply_content?: string;
-  // Person/lead info - could be nested differently
+  // Nested person/lead info (fallback)
   person?: MeetAlfredPerson;
   lead?: MeetAlfredPerson;
   contact?: MeetAlfredPerson;
   // Campaign info
   campaign?: MeetAlfredCampaign;
   sequence?: MeetAlfredCampaign;
-  // Action details
+  // Legacy field names
+  message?: string;
+  text?: string;
+  content?: string;
+  body?: string;
+  reply_text?: string;
+  reply_content?: string;
   action?: {
     type?: string;
     message?: string;
     text?: string;
   };
-}
-
-interface MeetAlfredConnection {
-  id: number;
-  connected_on?: string;
-  person: MeetAlfredPerson;
-  campaign?: MeetAlfredCampaign;
-}
-
-interface MeetAlfredLead {
-  id: number;
-  added_on?: string;
-  person: MeetAlfredPerson;
-  campaign: MeetAlfredCampaign;
 }
 
 Deno.serve(async (req) => {
@@ -89,10 +86,67 @@ Deno.serve(async (req) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const results = {
+      campaigns: { found: 0, synced: 0, errors: [] as string[] },
       replies: { found: 0, synced: 0, errors: [] as string[], pages_fetched: 0 },
       connections: { found: 0, synced: 0, errors: [] as string[] },
       leads: { found: 0, synced: 0, errors: [] as string[] },
+      activities: { created: 0, errors: [] as string[] },
     };
+
+    // Sync Campaigns FIRST - use the documented Get Campaigns API
+    if (syncType === "all" || syncType === "campaigns") {
+      try {
+        console.log("=== SYNCING MEET ALFRED CAMPAIGNS ===");
+        const campaignsUrl = `https://meetalfred.com/api/integrations/webhook/campaigns?webhook_key=${webhookKey}&type=all`;
+        
+        const campaignsRes = await fetch(campaignsUrl);
+        if (!campaignsRes.ok) {
+          throw new Error(`Meet Alfred Campaigns API error: ${campaignsRes.status}`);
+        }
+        
+        const campaignsData = await campaignsRes.json();
+        console.log("=== CAMPAIGNS API RAW RESPONSE ===");
+        console.log(JSON.stringify(campaignsData, null, 2));
+        
+        // Campaigns could be in different array locations
+        const campaigns = campaignsData.campaigns || campaignsData.data || campaignsData || [];
+        const campaignsArray = Array.isArray(campaigns) ? campaigns : [];
+        results.campaigns.found = campaignsArray.length;
+        
+        console.log(`Found ${campaignsArray.length} campaigns`);
+
+        for (const campaign of campaignsArray) {
+          try {
+            const { error: campError } = await supabase.from("campaigns").upsert(
+              {
+                meetalfred_id: campaign.id,
+                name: campaign.name || `Campaign ${campaign.id}`,
+                type: campaign.type || campaign.sequence_type || "linkedin",
+                status: campaign.status || "active",
+                sequence_type: campaign.sequence_type,
+                total_leads: campaign.total_leads || campaign.leads_count || 0,
+                last_synced_at: new Date().toISOString(),
+              },
+              { onConflict: "meetalfred_id" }
+            );
+            
+            if (campError) {
+              console.error("Campaign upsert error:", campError);
+              results.campaigns.errors.push(`Campaign ${campaign.id}: ${campError.message}`);
+            } else {
+              results.campaigns.synced++;
+              console.log(`✓ Synced campaign: ${campaign.name}`);
+            }
+          } catch (e) {
+            console.error("Error processing campaign:", e);
+            results.campaigns.errors.push(String(e));
+          }
+        }
+      } catch (e) {
+        console.error("Error syncing campaigns:", e);
+        results.campaigns.errors.push(String(e));
+      }
+    }
 
     // Sync Replies with pagination for 30-day backfill
     if (syncType === "all" || syncType === "replies") {
@@ -101,11 +155,10 @@ Deno.serve(async (req) => {
         let hasMoreData = true;
         let oldestReplyInBatch: Date | null = null;
 
-        console.log("=== STARTING MEET ALFRED REPLIES SYNC ===");
+        console.log("\n=== STARTING MEET ALFRED REPLIES SYNC ===");
         console.log(`Backfill target: Last 30 days (since ${thirtyDaysAgo.toISOString()})`);
 
-        // Try the GET REPLIES endpoint (correct endpoint for fetching reply data)
-        // Based on Meet Alfred API documentation patterns
+        // Use Get Replies endpoint
         const baseUrl = "https://meetalfred.com/api/integrations/webhook/get-replies";
         
         while (hasMoreData) {
@@ -118,7 +171,7 @@ Deno.serve(async (req) => {
             const errorText = await repliesRes.text();
             console.error(`API Error (${repliesRes.status}): ${errorText}`);
             
-            // If get-replies doesn't work, fall back to other endpoints
+            // Try alternative endpoints
             if (currentPage === 0) {
               console.log("Trying alternative endpoint: /replies...");
               const altUrl = `https://meetalfred.com/api/integrations/webhook/replies?webhook_key=${webhookKey}&page=${currentPage}&per_page=${perPage}`;
@@ -134,21 +187,12 @@ Deno.serve(async (req) => {
                 }
                 
                 const fallbackData = await fallbackRes.json();
-                console.log("=== FALLBACK ENDPOINT RAW RESPONSE ===");
-                console.log(JSON.stringify(fallbackData, null, 2));
-                console.log("=== END RAW RESPONSE ===");
-                
-                // Process fallback data
                 await processReplies(fallbackData, supabase, results, thirtyDaysAgo);
                 hasMoreData = false;
                 continue;
               }
               
               const altData = await altRes.json();
-              console.log("=== ALTERNATIVE ENDPOINT RAW RESPONSE ===");
-              console.log(JSON.stringify(altData, null, 2));
-              console.log("=== END RAW RESPONSE ===");
-              
               await processReplies(altData, supabase, results, thirtyDaysAgo);
               hasMoreData = false;
               continue;
@@ -205,37 +249,34 @@ Deno.serve(async (req) => {
         }
         
         const connectionsData = await connectionsRes.json();
-        const connections: MeetAlfredConnection[] = connectionsData.actions || [];
+        const connections = connectionsData.actions || [];
         results.connections.found = connections.length;
         
         console.log(`Found ${connections.length} connections`);
 
         for (const conn of connections) {
           try {
-            const linkedinId = extractLinkedInId(conn.person?.linkedin_profile_url);
+            const linkedinId = extractLinkedInId(conn.person?.linkedin_profile_url || conn.linkedin_profile_url);
             if (!linkedinId) {
               console.log("Skipping connection - no LinkedIn ID found");
               continue;
             }
 
-            const { data: existingContact } = await supabase
-              .from("contacts")
-              .select("id")
-              .eq("linkedin_url", conn.person?.linkedin_profile_url)
-              .single();
+            // Try to find or create contact
+            const contactId = await findOrCreateContact(supabase, conn.person || conn, results);
 
-            const connectionName = `${conn.person?.first_name || ""} ${conn.person?.last_name || ""}`.trim() || "Unknown";
+            const connectionName = conn.name || `${conn.person?.first_name || conn.first_name || ""} ${conn.person?.last_name || conn.last_name || ""}`.trim() || "Unknown";
             
             const { error: connError } = await supabase.from("linkedin_connections").upsert(
               {
                 linkedin_id: linkedinId,
                 name: connectionName,
-                headline: conn.person?.headline,
-                company: conn.person?.company,
-                profile_url: conn.person?.linkedin_profile_url,
+                headline: conn.person?.headline || conn.headline,
+                company: conn.person?.company || conn.companyName || conn.company,
+                profile_url: conn.person?.linkedin_profile_url || conn.linkedin_profile_url,
                 connection_status: "Connected",
                 synced_at: new Date().toISOString(),
-                contact_id: existingContact?.id || null,
+                contact_id: contactId,
               },
               { onConflict: "linkedin_id" }
             );
@@ -245,6 +286,18 @@ Deno.serve(async (req) => {
               results.connections.errors.push(`Connection upsert: ${connError.message}`);
             } else {
               results.connections.synced++;
+              
+              // Log activity
+              if (contactId) {
+                await logActivity(supabase, {
+                  contact_id: contactId,
+                  activity_type: "linkedin_connection",
+                  description: `Connected on LinkedIn`,
+                  source: "meetalfred",
+                  source_id: String(conn.id),
+                  metadata: { campaign: conn.campaign?.name },
+                }, results);
+              }
             }
           } catch (e) {
             console.error("Error processing connection:", e);
@@ -269,44 +322,29 @@ Deno.serve(async (req) => {
         }
         
         const leadsData = await leadsRes.json();
-        const leads: MeetAlfredLead[] = leadsData.actions || [];
+        const leads = leadsData.actions || [];
         results.leads.found = leads.length;
         
         console.log(`Found ${leads.length} leads`);
 
         for (const lead of leads) {
           try {
-            let contactId: string | null = null;
+            // Try to find or create contact from lead data
+            const personData = lead.person || lead;
+            const contactId = await findOrCreateContact(supabase, personData, results);
             
-            if (lead.person?.email) {
-              const { data: emailContact } = await supabase
-                .from("contacts")
-                .select("id")
-                .eq("email", lead.person.email)
-                .single();
-              contactId = emailContact?.id || null;
-            }
+            const leadName = lead.name || `${personData.first_name || ""} ${personData.last_name || ""}`.trim() || null;
+            const email = personData.email || lead.email || null;
             
-            if (!contactId && lead.person?.linkedin_profile_url) {
-              const { data: linkedinContact } = await supabase
-                .from("contacts")
-                .select("id")
-                .eq("linkedin_url", lead.person.linkedin_profile_url)
-                .single();
-              contactId = linkedinContact?.id || null;
-            }
-
-            const leadName = `${lead.person?.first_name || ""} ${lead.person?.last_name || ""}`.trim() || null;
-            
-            if (!lead.person?.email) {
+            if (!email) {
               const { error: leadError } = await supabase.from("leads").insert({
                 contact_id: contactId,
                 contact_name: leadName,
-                company_name: lead.person?.company || null,
+                company_name: personData.company || lead.companyName || null,
                 email: null,
-                source: `Meet Alfred - ${lead.campaign?.name || "Campaign"}`,
+                source: `Meet Alfred - ${lead.campaign?.name || lead.campaign_name || "Campaign"}`,
                 status: "New",
-                notes: lead.person?.headline ? `Headline: ${lead.person.headline}` : null,
+                notes: personData.headline ? `Headline: ${personData.headline}` : null,
               });
               
               if (leadError) {
@@ -319,11 +357,11 @@ Deno.serve(async (req) => {
                 {
                   contact_id: contactId,
                   contact_name: leadName,
-                  company_name: lead.person?.company || null,
-                  email: lead.person.email,
-                  source: `Meet Alfred - ${lead.campaign?.name || "Campaign"}`,
+                  company_name: personData.company || lead.companyName || null,
+                  email: email,
+                  source: `Meet Alfred - ${lead.campaign?.name || lead.campaign_name || "Campaign"}`,
                   status: "New",
-                  notes: lead.person?.headline ? `Headline: ${lead.person.headline}` : null,
+                  notes: personData.headline ? `Headline: ${personData.headline}` : null,
                 },
                 { onConflict: "email", ignoreDuplicates: true }
               );
@@ -333,6 +371,18 @@ Deno.serve(async (req) => {
               } else {
                 results.leads.synced++;
               }
+            }
+            
+            // Log activity
+            if (contactId) {
+              await logActivity(supabase, {
+                contact_id: contactId,
+                activity_type: "linkedin_lead",
+                description: `Added as lead from campaign: ${lead.campaign?.name || lead.campaign_name || "Unknown"}`,
+                source: "meetalfred",
+                source_id: String(lead.id),
+                metadata: { campaign: lead.campaign?.name || lead.campaign_name },
+              }, results);
             }
           } catch (e) {
             results.leads.errors.push(String(e));
@@ -365,7 +415,6 @@ async function processReplies(
   results: any, 
   thirtyDaysAgo: Date
 ): Promise<{ oldestDate: Date | null }> {
-  // Try multiple possible array locations
   const replies = repliesData.actions || repliesData.replies || repliesData.data || [];
   
   if (!Array.isArray(replies)) {
@@ -380,20 +429,44 @@ async function processReplies(
 
   for (const reply of replies) {
     try {
-      // Log EVERY reply structure for debugging
       console.log(`\n=== REPLY ${reply.id} RAW DATA ===`);
       console.log(JSON.stringify(reply, null, 2));
       
-      // Extract person data - try multiple possible locations
-      const person = reply.person || reply.lead || reply.contact || {};
+      // CRITICAL FIX: Check ROOT level fields FIRST (Meet Alfred returns data here!)
+      const firstName = reply.first_name || reply.person?.first_name || reply.lead?.first_name || "";
+      const lastName = reply.last_name || reply.person?.last_name || reply.lead?.last_name || "";
+      const personName = reply.name || `${firstName} ${lastName}`.trim() || "Unknown";
       
-      // Extract message text - try ALL possible field names
+      // Profile URL - ROOT level first
+      const profileUrl = 
+        reply.linkedin_profile_url || 
+        reply.person?.linkedin_profile_url || 
+        reply.lead?.linkedin_profile_url || 
+        null;
+      
+      // Conversation URL (direct link to message thread!)
+      const conversationUrl = reply.linkedin_conversation_url || null;
+      
+      // Campaign name - ROOT level
+      const campaignName = 
+        reply.campaign_name || 
+        reply.campaign?.name || 
+        reply.sequence?.name || 
+        null;
+      
+      // Company name
+      const companyName = reply.companyName || reply.company || reply.person?.company || null;
+      
+      // Email for contact matching
+      const email = reply.email || reply.person?.email || null;
+      
+      // Message text - try ALL possible field names
       const messageText = 
+        reply.reply_message ||
         reply.message || 
         reply.text || 
         reply.content || 
         reply.body ||
-        reply.reply_message ||
         reply.reply_text ||
         reply.reply_content ||
         reply.action?.message ||
@@ -401,7 +474,7 @@ async function processReplies(
         (typeof reply.action === 'string' ? reply.action : null) ||
         "No message content available";
       
-      // Extract timestamp
+      // Timestamp
       const timestamp = 
         reply.reply_detected_on || 
         reply.created_at || 
@@ -414,28 +487,29 @@ async function processReplies(
         oldestDate = replyDate;
       }
 
-      // Extract names
-      const firstName = person.first_name || "";
-      const lastName = person.last_name || "";
-      const personName = `${firstName} ${lastName}`.trim() || "Unknown";
-      
-      // Extract profile URL
-      const profileUrl = person.linkedin_profile_url || person.profile_url || null;
-      
       // Extract LinkedIn ID
       const linkedinId = extractLinkedInId(profileUrl);
-      
-      // Extract campaign info
-      const campaign = reply.campaign || reply.sequence || {};
-      const campaignName = campaign.name || null;
 
       console.log(`Extracted data for reply ${reply.id}:`);
       console.log(`  - Name: ${personName}`);
+      console.log(`  - Email: ${email || "N/A"}`);
       console.log(`  - Profile URL: ${profileUrl || "N/A"}`);
+      console.log(`  - Conversation URL: ${conversationUrl || "N/A"}`);
       console.log(`  - LinkedIn ID: ${linkedinId || "N/A"}`);
       console.log(`  - Campaign: ${campaignName || "N/A"}`);
+      console.log(`  - Company: ${companyName || "N/A"}`);
       console.log(`  - Message: ${messageText.substring(0, 100)}...`);
-      console.log(`  - Timestamp: ${timestamp}`);
+
+      // Try to find or create contact
+      const personData = {
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        linkedin_profile_url: profileUrl,
+        company: companyName,
+        headline: reply.headline || reply.person?.headline,
+      };
+      const contactId = await findOrCreateContact(supabase, personData, results);
 
       // Generate sender ID
       const senderId = linkedinId || `meetalfred_reply_${reply.id}`;
@@ -449,11 +523,12 @@ async function processReplies(
             {
               linkedin_id: linkedinId,
               name: personName,
-              headline: person.headline,
-              company: person.company,
+              headline: reply.headline || reply.person?.headline,
+              company: companyName,
               profile_url: profileUrl,
               connection_status: "Connected",
               synced_at: new Date().toISOString(),
+              contact_id: contactId,
             },
             { onConflict: "linkedin_id" }
           )
@@ -467,7 +542,7 @@ async function processReplies(
         }
       }
 
-      // Insert/update the reply message with raw payload
+      // Insert/update the reply message with ALL extracted data
       const { error: msgError } = await supabase.from("linkedin_messages").upsert(
         {
           sender_linkedin_id: senderId,
@@ -479,7 +554,9 @@ async function processReplies(
           sender_name: personName !== "Unknown" ? personName : null,
           campaign_name: campaignName,
           profile_url: profileUrl,
-          raw_payload: reply, // Store complete raw payload for debugging
+          linkedin_conversation_url: conversationUrl,
+          company_name: companyName,
+          raw_payload: reply,
         },
         { onConflict: "sender_linkedin_id,message_timestamp" }
       );
@@ -490,6 +567,18 @@ async function processReplies(
       } else {
         results.replies.synced++;
         console.log(`✓ Synced reply from ${personName}`);
+        
+        // Log activity
+        if (contactId) {
+          await logActivity(supabase, {
+            contact_id: contactId,
+            activity_type: "linkedin_reply",
+            description: `Replied to LinkedIn message: "${messageText.substring(0, 50)}..."`,
+            source: "meetalfred",
+            source_id: String(reply.id),
+            metadata: { campaign: campaignName, message_preview: messageText.substring(0, 200) },
+          }, results);
+        }
       }
     } catch (e) {
       console.error("Error processing reply:", e);
@@ -500,8 +589,123 @@ async function processReplies(
   return { oldestDate };
 }
 
+async function findOrCreateContact(
+  supabase: any,
+  personData: any,
+  results: any
+): Promise<string | null> {
+  const email = personData.email;
+  const linkedinUrl = personData.linkedin_profile_url;
+  const firstName = personData.first_name || "";
+  const lastName = personData.last_name || "";
+  
+  if (!email && !linkedinUrl && !firstName) {
+    return null;
+  }
+
+  try {
+    // Try to find existing contact by email first
+    if (email) {
+      const { data: emailContact } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("email", email)
+        .single();
+      
+      if (emailContact?.id) {
+        console.log(`Found existing contact by email: ${email}`);
+        return emailContact.id;
+      }
+    }
+
+    // Try to find by LinkedIn URL
+    if (linkedinUrl) {
+      const { data: linkedinContact } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("linkedin_url", linkedinUrl)
+        .single();
+      
+      if (linkedinContact?.id) {
+        console.log(`Found existing contact by LinkedIn: ${linkedinUrl}`);
+        return linkedinContact.id;
+      }
+    }
+
+    // Create new contact if we have enough data
+    if (firstName || email) {
+      const { data: newContact, error: createError } = await supabase
+        .from("contacts")
+        .insert({
+          first_name: firstName || "Unknown",
+          last_name: lastName || null,
+          email: email || null,
+          linkedin_url: linkedinUrl || null,
+          title: personData.headline || null,
+          notes: `Imported from Meet Alfred`,
+        })
+        .select("id")
+        .single();
+      
+      if (createError) {
+        console.error("Error creating contact:", createError);
+        return null;
+      }
+      
+      console.log(`✓ Created new contact: ${firstName} ${lastName}`);
+      return newContact?.id || null;
+    }
+  } catch (e) {
+    console.error("Error in findOrCreateContact:", e);
+  }
+  
+  return null;
+}
+
+async function logActivity(
+  supabase: any,
+  activity: {
+    contact_id?: string | null;
+    company_id?: string | null;
+    activity_type: string;
+    description: string;
+    source: string;
+    source_id?: string;
+    metadata?: any;
+  },
+  results: any
+): Promise<void> {
+  if (!activity.contact_id && !activity.company_id) {
+    return;
+  }
+  
+  try {
+    const { error } = await supabase.from("activities").insert({
+      contact_id: activity.contact_id,
+      company_id: activity.company_id,
+      activity_type: activity.activity_type,
+      description: activity.description,
+      source: activity.source,
+      source_id: activity.source_id,
+      metadata: activity.metadata,
+      occurred_at: new Date().toISOString(),
+    });
+    
+    if (error) {
+      console.error("Activity log error:", error);
+      results.activities.errors.push(error.message);
+    } else {
+      results.activities.created++;
+    }
+  } catch (e) {
+    console.error("Error logging activity:", e);
+    results.activities.errors.push(String(e));
+  }
+}
+
 function extractLinkedInId(url?: string | null): string | null {
   if (!url) return null;
+  // Handle both /in/username and /in/ACoXXX format
   const match = url.match(/linkedin\.com\/in\/([^\/\?]+)/);
   return match ? match[1] : null;
 }

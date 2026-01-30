@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { 
   Users, ShoppingCart, LineChart, Calendar, 
   CreditCard, Settings, Home, MessageSquare,
-  GanttChartSquare, Wallet, Mail
+  GanttChartSquare, Wallet, Mail, Workflow
 } from "lucide-react";
 
 interface SidebarItemProps {
@@ -60,6 +60,11 @@ export default function Sidebar() {
       icon: <MessageSquare size={18} />,
       label: "Campaigns",
       path: "/campaigns"
+    },
+    {
+      icon: <Workflow size={18} />,
+      label: "Sequences",
+      path: "/sequences"
     },
     {
       icon: <GanttChartSquare size={18} />,

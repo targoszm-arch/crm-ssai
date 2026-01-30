@@ -42,11 +42,17 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
   const [showDraft, setShowDraft] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Get sender name from connection or message
-  const senderName = message.connection?.name || (message as any).sender_name || "LinkedIn User";
+  // Get sender name from message or connection
+  const senderName = message.sender_name || message.connection?.name || "LinkedIn User";
   
-  // Get profile URL from connection or message
-  const profileUrl = message.connection?.profile_url || (message as any).profile_url;
+  // Get profile URL from message or connection
+  const profileUrl = message.profile_url || message.connection?.profile_url;
+  
+  // Get conversation URL (direct link to message thread) - preferred for replies
+  const conversationUrl = message.linkedin_conversation_url;
+  
+  // Get company name if available
+  const companyName = message.company_name;
 
   const handleLinkContact = async (contactId: string) => {
     if (!message.connection_id) {
@@ -79,7 +85,10 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
   };
 
   const openInLinkedIn = () => {
-    if (profileUrl) {
+    // Prefer conversation URL (direct link to message thread)
+    if (conversationUrl) {
+      window.open(conversationUrl, "_blank");
+    } else if (profileUrl) {
       window.open(profileUrl, "_blank");
     } else {
       // Fallback to search
@@ -140,10 +149,15 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
                   {message.connection.headline}
                 </p>
               )}
+              {companyName && (
+                <p className="text-sm text-muted-foreground">
+                  {companyName}
+                </p>
+              )}
               {/* Show campaign name if available */}
-              {(message as any).campaign_name && (
+              {message.campaign_name && (
                 <Badge variant="outline" className="mt-1 text-xs">
-                  Campaign: {(message as any).campaign_name}
+                  Campaign: {message.campaign_name}
                 </Badge>
               )}
             </div>
