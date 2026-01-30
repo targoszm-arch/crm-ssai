@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.fetch-lms-customers]
 verify_jwt = false
+
+[functions.linkedin-guard-webhook]
+verify_jwt = false
