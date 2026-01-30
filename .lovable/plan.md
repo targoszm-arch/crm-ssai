@@ -1,113 +1,206 @@
 
-# Plan: Fix AI Contact Enrichment
 
-## Problem Summary
+# Plan: Fireflies Meeting Notes Integration
 
-The AI enrichment feature doesn't add any data because:
+## Overview
 
-1. **GPT-4o-mini cannot search the web** - It relies solely on training data
-2. **Contacts have minimal data** - Often just a name with no email, company, or LinkedIn
-3. **Only empty fields get updated** - When AI returns nulls (which it does without context), nothing gets saved
-4. **Toast shows "Updated 0 fields"** - Technically works, but user sees no changes
-
-## Solution
-
-Improve the enrichment logic to:
-1. Use available data more intelligently (extract company from email domain)
-2. Make the AI more creative with inferences
-3. Allow overwriting existing fields when user explicitly requests enrichment
-4. Add better feedback about what happened
+Integrate Fireflies.ai to automatically receive meeting summaries and display them in the Contact profile. Add new collapsible, editable sections to the contact detail drawer: **All, Activities, Notes, Emails, Engagement, Deals, Leads**.
 
 ---
 
-## Implementation Details
+## Architecture
 
-### 1. Improve the Edge Function Prompt
-
-| Current Issue | Fix |
-|--------------|-----|
-| AI asked to only provide facts | Allow reasonable inferences based on role patterns |
-| No email domain parsing | Extract company name from email domain (e.g., `@bayer.com` -> Bayer) |
-| Returns null if uncertain | Provide best-effort guesses with confidence indicators |
-
-### 2. Update Enrichment Logic
-
-| Current Behavior | New Behavior |
-|-----------------|--------------|
-| Only updates empty fields | Option to update all fields OR force enrichment |
-| Silent failure when all nulls | Return helpful message about why no data found |
-| No validation of inputs | Warn if contact has insufficient data for enrichment |
-
-### 3. Better User Feedback
-
-| Scenario | Current Feedback | New Feedback |
-|----------|-----------------|--------------|
-| No email, no LinkedIn | "Updated 0 fields" | "Add email or LinkedIn for better results" |
-| Email found, fields enriched | "Updated 3 fields" | "Updated: seniority_level, function, pain_point" |
-| All fields already filled | "Updated 0 fields" | "All fields already populated" |
+```text
++-------------------+       Webhook POST        +------------------------+
+|  Fireflies.ai     | ------------------------> | fireflies-webhook      |
+|  (after meeting)  |                          | Edge Function          |
++-------------------+                          +------------------------+
+                                                         |
+                                               1. Receive meetingId
+                                               2. Fetch full transcript via GraphQL API
+                                               3. Match participants to contacts
+                                               4. Store in meeting_notes table
+                                                         |
+                                                         v
+                                               +------------------------+
+                                               | Supabase Database      |
+                                               | meeting_notes table    |
+                                               +------------------------+
+                                                         |
+                                                         v
+                                               +------------------------+
+                                               | Contact Detail Drawer  |
+                                               | Notes Section          |
+                                               +------------------------+
+```
 
 ---
 
-## Files to Modify
+## Implementation Components
+
+### 1. Database Migration
+
+Create a new `meeting_notes` table to store Fireflies meeting summaries:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| contact_id | uuid | FK to contacts |
+| company_id | uuid | FK to companies (optional) |
+| fireflies_meeting_id | text | Fireflies transcript ID |
+| title | text | Meeting title |
+| meeting_date | timestamptz | When the meeting occurred |
+| duration_minutes | integer | Meeting duration |
+| participants | text[] | Array of participant emails |
+| overview | text | AI-generated overview |
+| action_items | jsonb | Structured action items |
+| summary | text | Short summary/gist |
+| bullet_gist | text | Bullet point summary |
+| transcript_url | text | Link to full transcript |
+| audio_url | text | Link to audio |
+| meeting_type | text | Type of meeting |
+| raw_data | jsonb | Full Fireflies payload |
+| created_at | timestamptz | Record creation |
+| updated_at | timestamptz | Last update |
+
+### 2. Edge Function: `fireflies-webhook`
+
+Receives webhook from Fireflies when a meeting transcript is ready:
+
+| Step | Action |
+|------|--------|
+| 1 | Verify webhook signature (x-hub-signature) |
+| 2 | Extract meetingId from payload |
+| 3 | Call Fireflies GraphQL API to fetch full transcript |
+| 4 | Extract participant emails from response |
+| 5 | Match emails to contacts in database |
+| 6 | Insert meeting note linked to matched contact(s) |
+
+**Fireflies GraphQL Query:**
+```graphql
+query Transcript($transcriptId: String!) {
+  transcript(id: $transcriptId) {
+    title
+    date
+    duration
+    participants
+    summary {
+      overview
+      shorthand_bullet
+      action_items
+      gist
+      meeting_type
+    }
+    transcript_url
+    audio_url
+  }
+}
+```
+
+### 3. Required Secret
+
+| Secret Name | Purpose |
+|-------------|---------|
+| FIREFLIES_API_KEY | Authenticate with Fireflies GraphQL API |
+| FIREFLIES_WEBHOOK_SECRET | Verify incoming webhooks (optional but recommended) |
+
+### 4. UI: ContactDetail Drawer Redesign
+
+Transform the current drawer into a tabbed/collapsible section layout similar to the screenshot:
+
+**New Tab Structure:**
+
+| Tab | Content |
+|-----|---------|
+| All | Combined timeline of all activities |
+| Activities | Tasks, calendar events linked to contact |
+| Notes | Meeting notes from Fireflies + manual notes |
+| Emails | Emails linked to this contact |
+| Engagement | Interaction metrics and history |
+| Deals | Deals linked to this contact |
+| Leads | Leads associated with contact |
+
+**Notes Tab Display:**
+Each meeting note card shows:
+- Date and time
+- Meeting host and participants
+- Title with link to transcript
+- Overview (collapsible)
+- Meeting Type
+- Action Items (collapsible list)
+- Summary
+
+### 5. New Files
+
+| File | Purpose |
+|------|---------|
+| `supabase/functions/fireflies-webhook/index.ts` | Webhook handler for Fireflies |
+| `src/hooks/useMeetingNotes.ts` | Hook to fetch meeting notes by contact |
+| `src/components/customers/ContactHistoryTabs.tsx` | Tabbed history section component |
+| `src/components/customers/MeetingNoteCard.tsx` | Individual meeting note display |
+| `src/components/customers/ActivitiesTab.tsx` | Activities list component |
+| `src/components/customers/NotesTab.tsx` | Notes with Fireflies + manual |
+| `src/components/customers/EmailsTab.tsx` | Contact emails list |
+| `src/components/customers/DealsTab.tsx` | Linked deals |
+| `src/components/customers/LeadsTab.tsx` | Linked leads |
+
+### 6. Modified Files
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/enrich-contact/index.ts` | Improved prompt, email domain parsing, better response handling |
+| `src/components/customers/ContactDetail.tsx` | Add History section with tabs below existing info |
 
 ---
 
-## Updated Edge Function Logic
+## Technical Details
+
+### Fireflies Webhook Flow
 
 ```text
-1. Extract company from email domain if company not linked
-   - "john@microsoft.com" -> infer "Microsoft"
-   
-2. Build richer context for OpenAI
-   - Include inferred company
-   - Use more directive prompting
-   
-3. Change AI instructions
-   - "Make reasonable professional inferences"
-   - "For a Sales Director at a tech company, typical function is Sales"
-   
-4. Update response handling
-   - If contact has no email AND no LinkedIn AND no company:
-     Return { success: true, message: "Need more data", enrichedFields: [] }
-   - If AI returns data:
-     Always update (don't check if field is empty)
+1. Fireflies sends POST to https://<project>.supabase.co/functions/v1/fireflies-webhook
+   Body: { meetingId: "xxx", eventType: "Transcription completed" }
+
+2. Edge function fetches full transcript from Fireflies GraphQL API:
+   POST https://api.fireflies.ai/graphql
+   Authorization: Bearer FIREFLIES_API_KEY
+
+3. Parse participants array, match to contacts by email
+
+4. Insert into meeting_notes with matched contact_id
 ```
+
+### Contact Matching Logic
+
+```text
+For each participant email in meeting:
+  1. Query contacts WHERE email ILIKE participant_email
+  2. If found, create meeting_note linked to that contact
+  3. If multiple contacts share meeting, create note for each
+```
+
+### Manual Notes
+
+The Notes section will also support adding manual notes (text) that are not from Fireflies. These can be stored in a separate `contact_notes` table or use an existing mechanism.
 
 ---
 
-## Example Improved Prompt
+## Setup Instructions for User
 
-```text
-Given this contact:
-- Name: John Smith  
-- Email: john.smith@salesforce.com (Company: Salesforce)
-- Title: VP of Sales
+After implementation, you'll need to:
 
-Infer professional details. Make reasonable assumptions based on:
-- Email domain suggests company type
-- Job title indicates seniority and function
-- Industry patterns for similar roles
-
-{
-  "seniority_level": "VP",  // Inferred from "VP of Sales" title
-  "function": "Sales",       // Inferred from "VP of Sales"
-  "buying_signals": "As a VP of Sales at an enterprise SaaS company...",
-  "interest_level": "High",  // VPs have budget authority
-  ...
-}
-```
+1. Get your Fireflies API key from app.fireflies.ai/integrations
+2. Add the webhook URL in Fireflies Developer Settings:
+   `https://getqcxnjsohtlagscmfc.supabase.co/functions/v1/fireflies-webhook`
+3. Optionally set a webhook secret for signature verification
 
 ---
 
 ## Summary
 
-| Change | Impact |
-|--------|--------|
-| Parse email domains | Extract company context from `@company.com` |
-| Better prompting | AI makes reasonable inferences instead of returning nulls |
-| Force update mode | Allow refreshing existing data when explicitly requested |
-| User feedback | Clear messages about what was/wasn't enriched and why |
+| Component | What It Does |
+|-----------|--------------|
+| Database table | Store Fireflies meeting summaries |
+| Edge function | Receive webhooks, fetch transcripts, match to contacts |
+| New UI tabs | Display Activities, Notes, Emails, Engagement, Deals, Leads |
+| Meeting note cards | Rich display of meeting data with collapsible sections |
+
