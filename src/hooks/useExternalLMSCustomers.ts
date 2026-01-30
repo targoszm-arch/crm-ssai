@@ -16,6 +16,7 @@ export interface ExternalLMSCustomer {
   credits_total?: number;
   plan?: string;
   signup_type?: string;
+  status?: string; // e.g. "active", "trial", "expired"
 }
 
 interface FetchParams {
