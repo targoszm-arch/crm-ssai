@@ -1,142 +1,27 @@
 
-
-# LMS Webhook Integration for Leads
+# LMS Webhook Implementation
 
 ## Overview
-
-Create a new webhook endpoint to receive user registration data from your LMS (SkillStudio) and store it in an enhanced `lms_leads` table. Each lead will be linked to both a Contact (Customer) and Company (Organisation) in the CRM.
-
----
-
-## Data Mapping
-
-Based on the LMS data structure you provided:
-
-| LMS Field | Database Column | Type |
-|-----------|-----------------|------|
-| User (name) | `full_name` | text |
-| Email | `email` | text |
-| Role | `role` | text |
-| Company Size | `company_size` | text |
-| Use Case | `use_case` | text |
-| Learning Objectives | `learning_objectives` | text |
-| Marketing | `marketing_consent` | boolean |
-| Verified | `verified` | boolean |
-| Created | `lms_created_at` | timestamp |
-| Credits | `credits_used`, `credits_total` | integer |
-| Plan | `plan` | text |
-| contact_id | Foreign key to contacts | uuid |
-| company_id | Foreign key to companies | uuid |
+Implementing the `lms-webhook` edge function to receive LMS registration data from SkillStudio and the corresponding frontend components to display LMS leads in the CRM.
 
 ---
 
-## Part 1: Create `lms_leads` Table
+## Files to Create/Modify
 
-A new dedicated table for LMS leads (separate from the generic `leads` table) with proper relationships:
+### 1. Edge Function: `supabase/functions/lms-webhook/index.ts`
 
-```sql
-CREATE TABLE public.lms_leads (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL,  -- CRM owner (multi-tenant)
-    
-    -- LMS user info
-    lms_user_id text UNIQUE,  -- External ID from LMS
-    full_name text NOT NULL,
-    email text NOT NULL,
-    role text,
-    
-    -- Company details from LMS
-    company_size text,
-    use_case text,
-    learning_objectives text,
-    
-    -- Status fields
-    marketing_consent boolean DEFAULT false,
-    verified boolean DEFAULT false,
-    
-    -- Plan & credits
-    plan text,
-    credits_used integer DEFAULT 0,
-    credits_total integer DEFAULT 0,
-    
-    -- Timestamps
-    lms_created_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now(),
-    
-    -- Relationships to CRM entities
-    contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL,
-    company_id uuid REFERENCES companies(id) ON DELETE SET NULL,
-    
-    -- Additional metadata
-    raw_payload jsonb,
-    source text DEFAULT 'skillstudio'
-);
+**Purpose**: Webhook endpoint authenticated via `x-api-key` header
 
--- Indexes for performance
-CREATE INDEX idx_lms_leads_user_id ON lms_leads(user_id);
-CREATE INDEX idx_lms_leads_email ON lms_leads(email);
-CREATE INDEX idx_lms_leads_contact_id ON lms_leads(contact_id);
-CREATE INDEX idx_lms_leads_company_id ON lms_leads(company_id);
+**Features**:
+- Validates `CRM_WEBHOOK_API_KEY` secret
+- Accepts POST requests with LMS user data
+- Upserts leads to `lms_leads` table (by email + user_id)
+- Auto-links to existing contacts by email match
+- Auto-links to companies by email domain
+- Creates new contact if none exists
+- Returns success/error JSON response
 
--- RLS policies (user-scoped)
-ALTER TABLE lms_leads ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can read own lms_leads"
-ON lms_leads FOR SELECT TO authenticated
-USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own lms_leads"
-ON lms_leads FOR INSERT TO authenticated
-WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own lms_leads"
-ON lms_leads FOR UPDATE TO authenticated
-USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete own lms_leads"
-ON lms_leads FOR DELETE TO authenticated
-USING (auth.uid() = user_id);
-```
-
----
-
-## Part 2: Create Webhook Endpoint
-
-Create `supabase/functions/lms-webhook/index.ts`:
-
-```text
-+---------------------+
-|  LMS (SkillStudio)  |
-+---------------------+
-          |
-          | POST /lms-webhook
-          | Header: x-lms-api-key
-          |
-          v
-+---------------------+
-| lms-webhook Edge Fn |
-|   - Verify API key  |
-|   - Parse payload   |
-|   - Match contact   |
-|   - Match company   |
-|   - Upsert lead     |
-+---------------------+
-          |
-          v
-+---------------------+
-|    lms_leads table  |
-+---------------------+
-```
-
-### Webhook Features:
-1. **API Key Authentication** - Verify `x-lms-api-key` header against stored secret
-2. **Upsert Logic** - Update if lead exists (by email), insert if new
-3. **Auto-linking** - Match existing contacts by email, companies by name/domain
-4. **Auto-create** - Optionally create new Contact if not found
-
-### Expected Payload Format:
-
+**Expected Payload**:
 ```json
 {
   "user_id": "lms_12345",
@@ -158,68 +43,46 @@ Create `supabase/functions/lms-webhook/index.ts`:
 
 ---
 
-## Part 3: Add Secret for Webhook Authentication
+### 2. Config: `supabase/config.toml`
 
-A new secret `LMS_WEBHOOK_KEY` will be required to authenticate incoming webhook requests. This prevents unauthorized access to the endpoint.
-
----
-
-## Part 4: Update Frontend
-
-### Add LMS Leads Tab to Contact Detail
-
-Modify `src/components/customers/ContactDetail.tsx` to show linked LMS leads:
-
-```tsx
-// Add new tab for LMS Leads
-<TabsTrigger value="lms-leads">LMS Leads</TabsTrigger>
-
-// Tab content
-<TabsContent value="lms-leads">
-  <LMSLeadsTab contactId={contact.id} />
-</TabsContent>
-```
-
-### Create LMS Leads Tab Component
-
-Create `src/components/customers/LMSLeadsTab.tsx`:
-
-Displays:
-- Plan badge
-- Credits (used/total)
-- Role & company size
-- Use case
-- Verification status
-- Marketing consent
-- LMS registration date
-
----
-
-## Part 5: Create Leads Hook
-
-Create `src/hooks/useLMSLeads.ts`:
-
-```typescript
-// Query leads by contact or company
-export function useLMSLeadsByContact(contactId: string) { ... }
-export function useLMSLeadsByCompany(companyId: string) { ... }
-export function useAllLMSLeads() { ... }
+Add new function configuration:
+```toml
+[functions.lms-webhook]
+verify_jwt = false
 ```
 
 ---
 
-## File Summary
+### 3. React Hook: `src/hooks/useLMSLeads.ts`
 
-| File | Action | Purpose |
-|------|--------|---------|
-| Database migration | Create | `lms_leads` table with RLS |
-| `supabase/functions/lms-webhook/index.ts` | Create | Webhook endpoint |
-| `supabase/config.toml` | Modify | Add `lms-webhook` function config |
-| Secret: `LMS_WEBHOOK_KEY` | Add | API key for webhook auth |
-| `src/hooks/useLMSLeads.ts` | Create | React Query hooks |
-| `src/components/customers/LMSLeadsTab.tsx` | Create | Display component |
-| `src/components/customers/ContactDetail.tsx` | Modify | Add LMS Leads tab |
-| `src/integrations/supabase/types.ts` | Auto-update | TypeScript types |
+**Exports**:
+- `useLMSLeads()` - Fetch all LMS leads with related contacts/companies
+- `useLMSLeadsByContact(contactId)` - Fetch leads linked to a specific contact
+- `useLMSLeadsByCompany(companyId)` - Fetch leads linked to a specific company
+- `useLMSLeadByEmail(email)` - Fetch lead by email (fallback lookup)
+
+---
+
+### 4. Component: `src/components/customers/LMSLeadsTab.tsx`
+
+**Displays**:
+- Plan badge (e.g., "Instructor Trial")
+- Credits progress bar (used/total)
+- Role and company size
+- Use case and learning objectives
+- Verification status icon
+- Marketing consent status
+- LMS registration date and sync date
+
+---
+
+### 5. Update: `src/components/customers/ContactHistoryTabs.tsx`
+
+**Changes**:
+- Import `LMSLeadsTab` component
+- Add 8th tab trigger: "LMS"
+- Add tab content with `LMSLeadsTab` component
+- Update grid from `grid-cols-7` to `grid-cols-8`
 
 ---
 
@@ -231,19 +94,41 @@ Once deployed, configure your LMS to POST to:
 https://getqcxnjsohtlagscmfc.supabase.co/functions/v1/lms-webhook
 ```
 
-Headers:
+**Headers**:
 ```
-x-lms-api-key: <your-secret-key>
+x-api-key: <your-CRM_WEBHOOK_API_KEY-value>
 Content-Type: application/json
 ```
 
 ---
 
-## Security Considerations
+## Technical Details
 
-1. **API Key Validation** - Webhook validates `x-lms-api-key` header
-2. **RLS Policies** - User-scoped access to lms_leads table
-3. **Service Role** - Webhook uses service role to bypass RLS for upserts
-4. **Input Validation** - Email format validation before processing
-5. **Idempotent** - Upsert by email prevents duplicate entries
+### Authentication Flow
+```text
+LMS System
+    |
+    | POST with x-api-key header
+    v
+lms-webhook Edge Function
+    |
+    ├── Validate API key against CRM_WEBHOOK_API_KEY secret
+    ├── Parse and validate payload
+    ├── Match existing contact by email
+    ├── Match company by email domain
+    ├── Upsert into lms_leads table
+    └── Optionally create new contact
+```
 
+### Auto-linking Logic
+1. **Contact matching**: Query contacts table by email + user_id
+2. **Company matching**: Extract email domain, skip common providers (gmail, yahoo, etc.), match against companies.domains or companies.website
+3. **Contact creation**: If no existing contact, create one with first_name, last_name, email, and "LMS Lead" label
+
+---
+
+## Security
+- API key validation required for all requests
+- Service role used for database operations (bypasses RLS)
+- Input validation for email format
+- Required field validation (email, crm_user_id)
