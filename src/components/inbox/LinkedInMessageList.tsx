@@ -54,10 +54,15 @@ export function LinkedInMessageList({
           className={cn(
             "w-full text-left p-4 hover:bg-accent transition-colors",
             selectedMessage?.id === message.id && "bg-accent",
-            !message.is_read && "bg-primary/5"
+            !message.is_read && "bg-primary/5 border-l-2 border-l-[#0A66C2]"
           )}
         >
           <div className="flex items-start gap-3">
+            {/* Unread Indicator */}
+            {!message.is_read && (
+              <div className="w-2 h-2 rounded-full bg-[#0A66C2] mt-2 flex-shrink-0" />
+            )}
+            
             <div className="w-8 h-8 rounded-full bg-[#0A66C2]/10 flex items-center justify-center flex-shrink-0">
               {message.connection?.contact_id ? (
                 <User className="h-4 w-4 text-[#0A66C2]" />

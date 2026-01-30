@@ -9,6 +9,7 @@ export interface Email {
   thread_id: string | null;
   contact_id: string | null;
   company_id: string | null;
+  deal_id?: string | null;
   subject: string | null;
   snippet: string | null;
   body_html: string | null;
@@ -19,6 +20,14 @@ export interface Email {
   is_read: boolean;
   direction: string;
   labels: string[] | null;
+  folder: string | null;
+  email_labels: string | null;
+  is_tracked: boolean | null;
+  open_count: number | null;
+  click_count: number | null;
+  first_opened_at: string | null;
+  last_opened_at: string | null;
+  has_attachments: boolean | null;
   created_at: string;
   updated_at: string;
   contacts?: {
@@ -33,6 +42,7 @@ export interface EmailFilters {
   companyId?: string;
   linkedOnly?: boolean;
   search?: string;
+  folder?: string;
 }
 
 export function useEmails(filters: EmailFilters = {}) {
@@ -45,13 +55,12 @@ export function useEmails(filters: EmailFilters = {}) {
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to INSERT, UPDATE, DELETE
+          event: '*',
           schema: 'public',
           table: 'emails',
         },
         (payload) => {
           console.log('Realtime email update:', payload.eventType);
-          // Invalidate queries to refresh the list
           queryClient.invalidateQueries({ queryKey: ["emails"] });
         }
       )
@@ -95,6 +104,10 @@ export function useEmails(filters: EmailFilters = {}) {
 
       if (filters.search) {
         query = query.or(`subject.ilike.%${filters.search}%,snippet.ilike.%${filters.search}%,from_email.ilike.%${filters.search}%`);
+      }
+
+      if (filters.folder) {
+        query = query.eq("folder", filters.folder);
       }
 
       const { data, error } = await query;
@@ -161,15 +174,17 @@ export function useSendEmail() {
       subject,
       body,
       contactId,
+      isTracked = false,
     }: {
       accountId: string;
       to: string[];
       subject: string;
       body: string;
       contactId?: string;
+      isTracked?: boolean;
     }) => {
       const { data, error } = await supabase.functions.invoke("send-email", {
-        body: { accountId, to, subject, body, contactId },
+        body: { accountId, to, subject, body, contactId, isTracked },
       });
 
       if (error) throw error;
@@ -219,6 +234,61 @@ export function useMarkEmailRead() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["emails"] });
       queryClient.invalidateQueries({ queryKey: ["contact-emails"] });
+    },
+  });
+}
+
+export function useBulkMarkEmailsRead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ emailIds, isRead }: { emailIds: string[]; isRead: boolean }) => {
+      const { error } = await supabase
+        .from("emails")
+        .update({ is_read: isRead })
+        .in("id", emailIds);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-emails"] });
+    },
+  });
+}
+
+export function useUpdateEmailLabels() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ emailId, labels }: { emailId: string; labels: string }) => {
+      const { error } = await supabase
+        .from("emails")
+        .update({ email_labels: labels })
+        .eq("id", emailId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+    },
+  });
+}
+
+export function useArchiveEmails() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ emailIds }: { emailIds: string[] }) => {
+      const { error } = await supabase
+        .from("emails")
+        .update({ folder: "archive" })
+        .in("id", emailIds);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
     },
   });
 }
