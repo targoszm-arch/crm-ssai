@@ -2,7 +2,6 @@ import { format } from "date-fns";
 import { Linkedin, ExternalLink, X, User, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -64,9 +63,9 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-4 border-b flex items-start justify-between">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header - fixed */}
+      <div className="flex-shrink-0 p-4 border-b flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-full bg-[#0A66C2]/10 flex items-center justify-center">
@@ -98,8 +97,8 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
         </div>
       </div>
 
-      {/* Link to Contact */}
-      <div className="px-4 py-3 border-b bg-muted/50">
+      {/* Link to Contact - fixed */}
+      <div className="flex-shrink-0 px-4 py-3 border-b bg-muted/50">
         <div className="flex items-center gap-3">
           <Link2 className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">Link to contact:</span>
@@ -129,23 +128,19 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
         </div>
       </div>
 
-      {/* Message Body */}
-      <div className="flex-1 overflow-auto p-4">
+      {/* Message Body - scrollable */}
+      <div className="flex-1 min-h-0 overflow-auto p-4">
         <div className="bg-muted/30 rounded-lg p-4">
           <p className="whitespace-pre-wrap">{message.message_text}</p>
         </div>
       </div>
 
-      {/* Footer */}
-      <Separator />
-      <div className="p-4 bg-muted/30">
-        <div className="text-center text-sm text-muted-foreground">
-          <p>To reply, open this conversation in LinkedIn</p>
-          <Button variant="outline" className="mt-2" onClick={openInLinkedIn}>
-            <Linkedin className="h-4 w-4 mr-2" />
-            Reply in LinkedIn
-          </Button>
-        </div>
+      {/* Footer - fixed at bottom */}
+      <div className="flex-shrink-0 border-t bg-muted/30 p-4">
+        <Button className="w-full" variant="outline" onClick={openInLinkedIn}>
+          <Linkedin className="h-4 w-4 mr-2" />
+          Reply in LinkedIn
+        </Button>
       </div>
     </div>
   );
