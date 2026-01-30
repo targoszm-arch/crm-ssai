@@ -1,275 +1,390 @@
 
+# Collapsible Navigation + Mobile Responsive Screens
 
-# Complete Fix: Sequence Email Content + Full Analytics Dashboard
+## Overview
 
-## Critical Issues to Fix
-
-### Issue 1: Wrong Email Content Being Sent
-The `steps` field in sequences is double-encoded (JSON string inside JSONB), causing emails to use fallback content instead of your templates.
-
-### Issue 2: Missing Analytics Dashboard
-No `/analytics` route exists - needs full implementation matching your reference screenshots.
+This implementation will replace the custom sidebar with the shadcn/ui collapsible sidebar and make all screens mobile responsive using Tailwind's mobile-first breakpoints.
 
 ---
 
-## Part 1: Fix Double-Encoded Steps (Edge Functions)
+## Tailwind Breakpoints Reference
 
-### Files to Modify
+| Breakpoint | Width | Usage |
+|------------|-------|-------|
+| (base) | < 640px | Mobile phones |
+| sm | >= 640px | Small phones landscape |
+| md | >= 768px | Tablets |
+| lg | >= 1024px | Small laptops |
+| xl | >= 1280px | Desktop |
 
-| File | Change |
-|------|--------|
-| `supabase/functions/process-sequences/index.ts` | Parse steps if string before accessing |
-| `supabase/functions/send-sequence-email/index.ts` | Same fix + add tracking pixel/link wrapping |
+---
 
-### process-sequences/index.ts Changes (Line 74)
+## Part 1: Create New Collapsible Sidebar
 
-```typescript
-// BEFORE
-const steps = sequence?.steps as any[];
+### Create: `src/components/layout/AppSidebar.tsx`
 
-// AFTER
-let steps = sequence?.steps;
-if (typeof steps === "string") {
-  try {
-    steps = JSON.parse(steps);
-    console.log(`Parsed steps from string: ${steps.length} steps`);
-  } catch (e) {
-    console.error("Failed to parse steps string:", e);
-    steps = [];
-  }
+A new sidebar component using shadcn/ui primitives with:
+- Collapsible mode (`collapsible="icon"`) for desktop
+- Sheet overlay for mobile (built into Sidebar component)
+- Tooltips on icons when collapsed
+- Active route highlighting using `useLocation`
+- Persisted state via cookie (built into SidebarProvider)
+
+```tsx
+// Key structure
+import { Link, useLocation } from "react-router-dom";
+import {
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
+  SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton,
+  SidebarMenuItem, SidebarFooter, SidebarRail
+} from "@/components/ui/sidebar";
+
+// Navigation items from existing Sidebar.tsx
+const mainNavItems = [
+  { icon: Home, label: "Dashboard", path: "/" },
+  { icon: Mail, label: "Inbox", path: "/inbox" },
+  { icon: Users, label: "Customers", path: "/customers" },
+  // ... remaining items
+];
+
+export function AppSidebar() {
+  const location = useLocation();
+  
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        {/* Logo - shows CC when collapsed, full name when expanded */}
+        <Link to="/" className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded-md bg-primary flex items-center justify-center">
+            <span className="text-white text-sm font-bold">CC</span>
+          </div>
+          <span className="group-data-[collapsible=icon]:hidden">Clari CRM</span>
+        </Link>
+      </SidebarHeader>
+      
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {mainNavItems.map((item) => (
+                <SidebarMenuItem key={item.path}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.pathname === item.path}
+                    tooltip={item.label}
+                  >
+                    <Link to={item.path}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        
+        <SidebarGroup>
+          <SidebarGroupLabel>Settings</SidebarGroupLabel>
+          <SidebarGroupContent>
+            {/* Settings items */}
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      
+      <SidebarRail />
+    </Sidebar>
+  );
 }
 ```
 
-### send-sequence-email/index.ts Changes (Line 107)
+---
 
-Same parsing fix plus add tracking functions:
+## Part 2: Update AppShell Layout
 
-```typescript
-// Add tracking pixel injection
-function injectTrackingPixel(html, sequenceEmailId, supabaseUrl) {
-  const pixel = `<img src="${supabaseUrl}/functions/v1/track-sequence-open?seid=${sequenceEmailId}" width="1" height="1" />`;
-  return html.includes('</body>') ? html.replace('</body>', `${pixel}</body>`) : html + pixel;
+### Modify: `src/components/layout/AppShell.tsx`
+
+Replace existing layout with SidebarProvider wrapper:
+
+```tsx
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "./AppSidebar";
+import Header from "./Header";
+
+export default function AppShell({ children }: AppShellProps) {
+  return (
+    <SidebarProvider defaultOpen={true}>
+      <AppSidebar />
+      <SidebarInset>
+        <Header />
+        <main className="flex-1 overflow-auto">
+          {children}
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
+  );
 }
+```
 
-// Add link wrapping for click tracking
-function wrapLinksForTracking(html, sequenceEmailId, supabaseUrl) {
-  return html.replace(/href="(https?:\/\/[^"]+)"/gi, (match, url) => {
-    if (url.includes('track-') || url.includes('unsubscribe')) return match;
-    return `href="${supabaseUrl}/functions/v1/track-sequence-click?seid=${sequenceEmailId}&url=${encodeURIComponent(url)}"`;
+Key changes:
+- Remove manual `isMobile` checks and custom sidebar rendering
+- Remove MobileNavigation import (shadcn handles mobile via Sheet)
+- Use SidebarInset for main content area
+- The shadcn Sidebar automatically handles mobile (shows as sheet) vs desktop (collapsible)
+
+---
+
+## Part 3: Update Header
+
+### Modify: `src/components/layout/Header.tsx`
+
+Add SidebarTrigger to header (works on both mobile and desktop):
+
+```tsx
+import { SidebarTrigger } from "@/components/ui/sidebar";
+
+export default function Header() {
+  return (
+    <header className="flex h-14 items-center gap-4 border-b bg-background px-4">
+      {/* SidebarTrigger - always visible, handles both mobile and desktop */}
+      <SidebarTrigger />
+      
+      {/* Rest of header content */}
+      <div className="ml-auto flex items-center gap-2 md:gap-4">
+        {/* Search, notifications, user menu */}
+      </div>
+    </header>
+  );
+}
+```
+
+Remove:
+- `onMenuToggle` prop (no longer needed)
+- Manual hamburger menu button (SidebarTrigger replaces it)
+
+---
+
+## Part 4: Make Inbox Mobile Responsive
+
+### Modify: `src/pages/Inbox.tsx`
+
+| Change | Mobile (< md) | Desktop (>= md) |
+|--------|---------------|-----------------|
+| View mode | Force "full" mode | Split/full toggle |
+| InboxSidebar | Hidden, show dropdown | Fixed 192px sidebar |
+| Header controls | Stack vertically | Horizontal row |
+| List width | Full width, constrained | Fixed 384px (split) or flex |
+
+```tsx
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+export default function Inbox() {
+  const isMobile = useIsMobile();
+  
+  // Auto-switch to full mode on mobile
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem("inbox-view-mode") as ViewMode;
+    return saved || "split";
   });
+  
+  // Force full mode on mobile
+  const effectiveViewMode = isMobile ? "full" : viewMode;
+  
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header - responsive stacking */}
+      <div className="flex flex-col gap-3 p-4 border-b md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Mail className="h-5 w-5" />
+          <h1 className="text-lg font-semibold">Inbox</h1>
+          <Tabs value={activeTab} onValueChange={...}>
+            <TabsList>...</TabsList>
+          </Tabs>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* View mode toggle - hidden on mobile */}
+          {!isMobile && hasConnectedAccount && (
+            <div className="hidden md:flex items-center border rounded-md">...</div>
+          )}
+          <Button onClick={() => setComposeOpen(true)}>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline ml-1">Compose</span>
+          </Button>
+        </div>
+      </div>
+      
+      {/* Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* InboxSidebar - desktop only */}
+        {!isMobile && activeTab === "email" && (
+          <InboxSidebar currentFolder={currentFolder} onFolderChange={...} />
+        )}
+        
+        {/* Mobile folder dropdown */}
+        {isMobile && activeTab === "email" && hasConnectedAccount && (
+          <div className="px-4 py-2 border-b">
+            <Select value={currentFolder} onValueChange={setCurrentFolder}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select folder" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="inbox">Inbox</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="drafts">Drafts</SelectItem>
+                <SelectItem value="archive">Archive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        
+        {/* Email list - constrained width */}
+        <div className={cn(
+          "border-r flex-shrink-0 overflow-hidden flex flex-col min-w-0",
+          effectiveViewMode === "split" ? "w-96" : "flex-1 max-w-2xl"
+        )}>
+          ...
+        </div>
+      </div>
+    </div>
+  );
 }
 ```
 
 ---
 
-## Part 2: Create Tracking Edge Functions
+## Part 5: Fix Email/LinkedIn List Width Overflow
 
-### New Files
+### Modify: `src/components/inbox/EmailList.tsx`
 
-| File | Purpose |
-|------|---------|
-| `supabase/functions/track-sequence-open/index.ts` | Handle sequence email opens |
-| `supabase/functions/track-sequence-click/index.ts` | Handle sequence link clicks |
-
-Both functions will:
-- Update `sequence_emails` table with `opened_at`/`clicked_at`
-- Record events in `email_tracking_events` table
-- Update contact `total_opens`/`total_clicks`
-
----
-
-## Part 3: Database Schema Updates
-
-### Add Columns to sequence_emails
-
-```sql
-ALTER TABLE sequence_emails 
-ADD COLUMN IF NOT EXISTS delivery_status TEXT DEFAULT 'pending',
-ADD COLUMN IF NOT EXISTS bounce_type TEXT,
-ADD COLUMN IF NOT EXISTS unsubscribed_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS spam_reported_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS unique_opens INTEGER DEFAULT 0,
-ADD COLUMN IF NOT EXISTS total_opens INTEGER DEFAULT 0,
-ADD COLUMN IF NOT EXISTS unique_clicks INTEGER DEFAULT 0,
-ADD COLUMN IF NOT EXISTS total_clicks INTEGER DEFAULT 0;
-```
-
-### Fix Double-Encoded Steps Data
-
-```sql
-UPDATE sequences 
-SET steps = (steps #>> '{}')::jsonb
-WHERE jsonb_typeof(steps) = 'string';
-```
-
----
-
-## Part 4: Analytics Dashboard
-
-### New Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/pages/Analytics.tsx` | Main analytics page |
-| `src/components/sequences/SequenceAnalyticsSheet.tsx` | Detailed analytics sheet |
-| `src/hooks/useSequenceAnalytics.ts` | Analytics data hooks |
-
-### Route Addition (App.tsx)
+Add overflow constraints to prevent horizontal scroll:
 
 ```tsx
-import Analytics from "./pages/Analytics";
-
-<Route
-  path="/analytics"
-  element={
-    <AuthGuard>
-      <AppShell>
-        <Analytics />
-      </AppShell>
-    </AuthGuard>
-  }
-/>
+// Line 270 - Content container
+<div className="flex-1 min-w-0 overflow-hidden pr-8">
+  <div className="flex items-center justify-between gap-2">
+    <span className={cn("text-sm truncate max-w-full", !email.is_read && "font-semibold")}>
+      {email.direction === "inbound" ? email.from_name || email.from_email : ...}
+    </span>
+    ...
+  </div>
+  <p className={cn("text-sm truncate max-w-full", !email.is_read && "font-medium")}>
+    {email.subject || "(No subject)"}
+  </p>
+  <p className="text-xs text-muted-foreground truncate max-w-full mt-0.5">
+    {email.snippet}
+  </p>
+  {/* Badges - wrap instead of overflow */}
+  <div className="flex items-center gap-2 mt-1.5 flex-wrap overflow-hidden">
+    ...
+  </div>
+</div>
 ```
 
-### Analytics Page Layout (Matching Your Screenshots)
+### Modify: `src/components/inbox/LinkedInMessageList.tsx`
 
-```text
-+----------------------------------------------------------+
-| Sequence Analytics                 [Select Sequence v]   |
-+----------------------------------------------------------+
-| [Overview]  [Recipients]                                 |
-+----------------------------------------------------------+
-|                                                          |
-| OVERVIEW TAB:                                            |
-|                                                          |
-| Campaign Card:                                           |
-| +------------------------------------------------------+ |
-| | [Email Preview]  Subject: Welcome to Skill Studio... | |
-| | Delivered: Jan 30, 2026                              | |
-| +------------------------------------------------------+ |
-|                                                          |
-| Engagement:                                              |
-| +------------------+------------------+------------------+|
-| |   108           |     70           | [Bar Chart]     ||
-| | Unique opens    | Unique clicks    | Open rate: 58%  ||
-| | Total: 134      | Total: 87        | Click rate: 38% ||
-| +------------------+------------------+------------------+|
-|                                                          |
-| Delivery:                                                |
-| +----------+----------+----------+----------+            |
-| |   186    |    6     |    1     |    0     |            |
-| |Delivered | Bounced  |Unsub     | Spam     |            |
-| +----------+----------+----------+----------+            |
-|                                                          |
-| Performance Over Time:                                   |
-| [Hourly v]                                               |
-| +------------------------------------------------------+ |
-| |     Line Chart: Opens vs Clicks over time            | |
-| +------------------------------------------------------+ |
-|                                                          |
-| Links Performance:                                       |
-| +------------------------------------------------------+ |
-| | Link URL              | Unique Clicks | % of clicks  | |
-| | skillstudio.ai/start  |      45       |    64%       | |
-| | skillstudio.ai/demo   |      25       |    36%       | |
-| +------------------------------------------------------+ |
-|                                                          |
-+----------------------------------------------------------+
-|                                                          |
-| RECIPIENTS TAB:                                          |
-|                                                          |
-| [Delivered(186)] [Opened(108)] [Clicked(70)] [Bounced(6)]|
-|                                                          |
-| +------------------------------------------------------+ |
-| | Name           | Email              | Opens | Last   | |
-| | John Smith     | john@example.com   |   3   | 2h ago | |
-| | Jane Doe       | jane@example.com   |   1   | 5h ago | |
-| +------------------------------------------------------+ |
-|                                                          |
-| Bounced View shows:                                      |
-| +----------+----------+----------+----------+            |
-| |    2     |    2     |    1     |    1     |            |
-| |  Hard    |  Soft    |Temporary | Blocked  |            |
-| +----------+----------+----------+----------+            |
-|                                                          |
-+----------------------------------------------------------+
-```
-
-### Analytics Hook (useSequenceAnalytics.ts)
-
-```typescript
-interface SequenceAnalytics {
-  // Delivery
-  totalDelivered: number;
-  totalBounced: number;
-  hardBounces: number;
-  softBounces: number;
-  temporaryBounces: number;
-  blockedBounces: number;
-  totalUnsubscribed: number;
-  totalSpamReports: number;
-  
-  // Engagement
-  uniqueOpens: number;
-  totalOpens: number;
-  uniqueClicks: number;
-  totalClicks: number;
-  openRate: number;
-  clickRate: number;
-  clickThroughRate: number;
-  
-  // Recipients data
-  recipients: RecipientData[];
-  
-  // Time series for chart
-  performanceOverTime: { time: string; opens: number; clicks: number }[];
-  
-  // Link performance
-  linkStats: { url: string; uniqueClicks: number; percentage: number }[];
-}
-```
-
----
-
-## Part 5: Update Sequences Page
-
-Add "View Analytics" option to sequence dropdown menu:
+Same overflow fix:
 
 ```tsx
-<DropdownMenuItem onClick={() => handleViewAnalytics(sequence)}>
-  <BarChart3 className="mr-2 h-4 w-4" />
-  View Analytics
-</DropdownMenuItem>
+// Line 73 - Content container
+<div className="flex-1 min-w-0 overflow-hidden">
+  ...
+</div>
 ```
 
 ---
 
-## Files Summary
+## Part 6: Make Other Pages Responsive
 
-| Category | File | Action |
-|----------|------|--------|
-| Edge Function | `process-sequences/index.ts` | Modify - parse steps |
-| Edge Function | `send-sequence-email/index.ts` | Modify - parse steps + tracking |
-| Edge Function | `track-sequence-open/index.ts` | Create |
-| Edge Function | `track-sequence-click/index.ts` | Create |
-| Database | SQL Migration | Add columns + fix data |
-| Page | `src/pages/Analytics.tsx` | Create |
-| Component | `src/components/sequences/SequenceAnalyticsSheet.tsx` | Create |
-| Hook | `src/hooks/useSequenceAnalytics.ts` | Create |
-| Route | `src/App.tsx` | Add /analytics route |
-| Page | `src/pages/Sequences.tsx` | Add analytics menu item |
+### Already Responsive
+These pages already use proper responsive classes:
+- `Customers.tsx`: Uses `flex-col sm:flex-row` for header
+- `Dashboard.tsx`: Uses `md:grid-cols-2 lg:grid-cols-3` for grids
+- `Sequences.tsx`: Uses `md:grid-cols-2 lg:grid-cols-3` for cards
+
+### Needs Updates
+
+#### `src/pages/Deals.tsx`
+```tsx
+// Header - add responsive stacking
+<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
+  ...
+</div>
+
+// Controls bar - wrap on mobile
+<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+  {/* Pipeline selector - full width on mobile */}
+  <Select value={...}>
+    <SelectTrigger className="w-full sm:w-[200px]">...</SelectTrigger>
+  </Select>
+  
+  {/* Search - grows to fill */}
+  <div className="relative flex-1 min-w-0 sm:max-w-xs">...</div>
+  
+  {/* View mode toggles */}
+  <div className="flex items-center gap-1 border rounded-md">...</div>
+</div>
+```
+
+#### `src/pages/Analytics.tsx`
+```tsx
+// Responsive grid for metrics
+<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+  ...
+</div>
+
+// Chart section - stack on mobile
+<div className="grid gap-6 lg:grid-cols-2">
+  <Card>Performance Chart</Card>
+  <Card>Links Performance</Card>
+</div>
+```
 
 ---
 
-## Expected Results
+## Part 7: Files to Delete
 
-After implementation:
+| File | Reason |
+|------|--------|
+| `src/components/layout/Sidebar.tsx` | Replaced by AppSidebar |
+| `src/components/layout/MobileNavigation.tsx` | Replaced by shadcn Sidebar mobile sheet |
 
-1. **Correct email content**: Templates fetch correctly, no more "Message from us"
-2. **Email tracking**: Opens and clicks tracked for sequence emails
-3. **Analytics page at /analytics**: Full dashboard with engagement/delivery metrics
-4. **Per-sequence analytics**: View detailed stats for any sequence
-5. **Recipients view**: See who opened, clicked, bounced with filters
-6. **Performance charts**: Line graphs showing opens/clicks over time
-7. **Link tracking**: See which links get the most clicks
+---
+
+## Summary of File Changes
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/components/layout/AppSidebar.tsx` | Create | New collapsible sidebar |
+| `src/components/layout/AppShell.tsx` | Modify | Use SidebarProvider |
+| `src/components/layout/Header.tsx` | Modify | Add SidebarTrigger, remove hamburger |
+| `src/pages/Inbox.tsx` | Modify | Mobile folder dropdown, constrain list width |
+| `src/components/inbox/EmailList.tsx` | Modify | Add overflow-hidden |
+| `src/components/inbox/LinkedInMessageList.tsx` | Modify | Add overflow-hidden |
+| `src/pages/Deals.tsx` | Modify | Responsive header/controls |
+| `src/pages/Analytics.tsx` | Modify | Responsive grids |
+| `src/components/layout/Sidebar.tsx` | Delete | Replaced |
+| `src/components/layout/MobileNavigation.tsx` | Delete | Replaced |
+
+---
+
+## Expected Behavior
+
+### Desktop (>= 768px)
+- Sidebar expanded by default (256px)
+- Click toggle or press Ctrl+B to collapse to icon mode (48px)
+- Tooltips appear on hover when collapsed
+- State persisted in cookie
+
+### Mobile (< 768px)
+- Sidebar hidden by default
+- SidebarTrigger shows hamburger icon
+- Click opens sidebar as sheet overlay from left
+- Sheet closes on outside click or navigation
+- Inbox uses dropdown for folder selection instead of sidebar
+
+### Tablet (768px - 1024px)
+- Sidebar can be collapsed to save space
+- Split view available in Inbox
+- Grids adapt (2 columns instead of 3-4)
 
