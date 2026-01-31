@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { format } from "date-fns";
-import { Mail, User, Send, Link2, X, Sparkles, Loader2 } from "lucide-react";
+import { Mail, User, Send, Link2, X, Sparkles, Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,6 +22,7 @@ import { useContacts, Contact } from "@/hooks/useContacts";
 import { useGenerateEmailReply, ReplyTone } from "@/hooks/useEmailReply";
 import { useEmailSignature } from "@/hooks/useEmailSignature";
 import { RichTextComposer } from "@/components/shared/RichTextComposer";
+import { AddContactModal } from "@/components/customers/AddContactModal";
 import { toast } from "@/hooks/use-toast";
 import { Tables } from "@/integrations/supabase/types";
 
@@ -36,14 +37,45 @@ interface EmailThreadProps {
 export function EmailThread({ email, account, onClose }: EmailThreadProps) {
   const [replyBody, setReplyBody] = useState("");
   const [isReplying, setIsReplying] = useState(false);
+  const [addContactOpen, setAddContactOpen] = useState(false);
   const markedAsReadRef = useRef(false);
 
   const sendEmail = useSendEmail();
   const linkEmail = useLinkEmailToContact();
   const markEmailRead = useMarkEmailRead();
   const generateReply = useGenerateEmailReply();
-  const { data: contacts } = useContacts({});
+  const { data: contacts, refetch: refetchContacts } = useContacts({});
   const { data: signature } = useEmailSignature();
+
+  // Parse sender info for contact creation
+  const senderEmail = email.from_email;
+  const senderName = email.from_name || senderEmail.split("@")[0];
+  const nameParts = senderName.split(" ");
+  const firstName = nameParts[0] || "";
+  const lastName = nameParts.slice(1).join(" ") || "";
+
+  // Prefill data for AddContactModal
+  const contactPrefillData = {
+    first_name: firstName,
+    last_name: lastName,
+    email: senderEmail,
+  };
+
+  const handleContactCreated = async (newContactId: string) => {
+    // Link the email to the newly created contact
+    linkEmail.mutate(
+      { emailId: email.id, contactId: newContactId },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Contact Created & Linked",
+            description: `${firstName} ${lastName} has been added to CRM and linked to this email.`,
+          });
+          refetchContacts();
+        },
+      }
+    );
+  };
 
   // Auto-mark as read when viewing email (with 1 second delay)
   useEffect(() => {
@@ -184,18 +216,30 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
 
       {/* Link to Contact - fixed */}
       <div className="flex-shrink-0 px-4 py-3 border-b bg-muted/50">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Link2 className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">Link to contact:</span>
           <Select
             value={email.contact_id || "unlinked"}
-            onValueChange={(value) => handleLinkContact(value === "unlinked" ? "" : value)}
+            onValueChange={(value) => {
+              if (value === "create-new") {
+                setAddContactOpen(true);
+              } else {
+                handleLinkContact(value === "unlinked" ? "" : value);
+              }
+            }}
           >
             <SelectTrigger className="w-[200px] h-8">
               <SelectValue placeholder="Select contact" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="unlinked">No contact</SelectItem>
+              <SelectItem value="create-new">
+                <span className="flex items-center gap-2">
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Create new contact
+                </span>
+              </SelectItem>
               {contacts?.map((contact: Contact) => (
                 <SelectItem key={contact.id} value={contact.id}>
                   {contact.first_name} {contact.last_name}
@@ -211,6 +255,14 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
           )}
         </div>
       </div>
+
+      {/* Add Contact Modal */}
+      <AddContactModal
+        open={addContactOpen}
+        onOpenChange={setAddContactOpen}
+        prefillData={contactPrefillData}
+        onSuccess={handleContactCreated}
+      />
 
       {/* Reply Section - FIXED AT TOP, directly under Link to Contact */}
       <div className="flex-shrink-0 border-b bg-muted/30 p-4">

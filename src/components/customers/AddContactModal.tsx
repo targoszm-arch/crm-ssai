@@ -19,6 +19,7 @@ interface AddContactModalProps {
   prefillData?: {
     first_name?: string;
     last_name?: string;
+    email?: string;
     title?: string;
     linkedin_url?: string;
     company_name?: string;
@@ -59,6 +60,7 @@ export function AddContactModal({
         ...prev,
         first_name: prefillData.first_name || "",
         last_name: prefillData.last_name || "",
+        email: prefillData.email || "",
         title: prefillData.title || "",
         linkedin_url: prefillData.linkedin_url || "",
         company_id: preselectedCompanyId || "",
