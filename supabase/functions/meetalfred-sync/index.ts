@@ -108,61 +108,139 @@ Deno.serve(async (req) => {
         console.log("=== CAMPAIGNS API RAW RESPONSE ===");
         console.log(JSON.stringify(campaignsData, null, 2));
         
-        // Campaigns could be in different array locations
-        const campaigns = campaignsData.campaigns || campaignsData.data || campaignsData || [];
-        const campaignsArray = Array.isArray(campaigns) ? campaigns : [];
-        results.campaigns.found = campaignsArray.length;
+        // Campaigns could be in different structures:
+        // 1. Array directly
+        // 2. { campaigns: [...] }
+        // 3. { data: [...] }
+        // 4. Object keyed by ID: { "123": {...}, "456": {...} }
+        let campaignsArray: any[] = [];
         
+        if (Array.isArray(campaignsData)) {
+          campaignsArray = campaignsData;
+        } else if (Array.isArray(campaignsData.campaigns)) {
+          campaignsArray = campaignsData.campaigns;
+        } else if (Array.isArray(campaignsData.data)) {
+          campaignsArray = campaignsData.data;
+        } else if (campaignsData && typeof campaignsData === 'object') {
+          // Check if it's an object keyed by campaign ID
+          const keys = Object.keys(campaignsData);
+          if (keys.length > 0 && keys.every(k => !isNaN(Number(k)) || k.match(/^[0-9a-f-]+$/i))) {
+            console.log("Detected object-keyed campaigns structure");
+            campaignsArray = keys.map(k => ({ id: k, ...campaignsData[k] }));
+          }
+        }
+        
+        results.campaigns.found = campaignsArray.length;
         console.log(`Found ${campaignsArray.length} campaigns`);
 
         for (const campaign of campaignsArray) {
           try {
             console.log(`Processing campaign ${campaign.id}:`, JSON.stringify(campaign, null, 2));
             
-            // Try multiple field names - Meet Alfred API may use different names
-            const campaignName = 
-              campaign.name || 
-              campaign.sequence_name || 
-              campaign.title || 
-              campaign.campaign_name ||
-              `Campaign ${campaign.id}`;
+            // Helper function to extract nested field value
+            const extractField = (obj: any, ...paths: string[]): any => {
+              for (const path of paths) {
+                const parts = path.split('.');
+                let value = obj;
+                for (const part of parts) {
+                  value = value?.[part];
+                  if (value === undefined) break;
+                }
+                if (value !== undefined && value !== null && value !== '') {
+                  return value;
+                }
+              }
+              return null;
+            };
             
-            const totalLeads = 
-              campaign.total_leads || 
-              campaign.leads_count || 
-              campaign.people_count ||
-              campaign.contacts_count ||
-              campaign.count ||
-              0;
+            // Try multiple field names and nested paths - Meet Alfred API structure varies
+            const campaignName = extractField(campaign,
+              'name',
+              'campaign_name',
+              'sequence_name',
+              'title',
+              'sequence.name',
+              'details.name',
+              'campaign.name',
+              'info.name'
+            ) || `Campaign ${campaign.id}`;
             
-            const sentCount = 
-              campaign.sent_count ||
-              campaign.messages_sent ||
-              campaign.sent ||
-              0;
+            // Extract total leads from various possible locations
+            const totalLeads = extractField(campaign,
+              'total_leads',
+              'leads_count',
+              'people_count',
+              'contacts_count',
+              'count',
+              'stats.total_leads',
+              'statistics.leads',
+              'metrics.leads',
+              'sequence.total_leads'
+            ) || 0;
             
-            const sequenceType = 
-              campaign.sequence_type || 
-              campaign.type || 
-              campaign.campaign_type ||
-              null;
+            // Extract sent count
+            const sentCount = extractField(campaign,
+              'sent_count',
+              'messages_sent',
+              'sent',
+              'stats.sent',
+              'statistics.sent',
+              'metrics.sent',
+              'total_sent'
+            ) || 0;
             
-            const status = 
-              campaign.status || 
-              (campaign.is_active === true ? "active" : 
-               campaign.is_active === false ? "paused" : "active");
+            // Extract sequence type
+            const sequenceType = extractField(campaign,
+              'sequence_type',
+              'type',
+              'campaign_type',
+              'sequence.type',
+              'details.type'
+            );
             
-            console.log(`Extracted: name="${campaignName}", leads=${totalLeads}, sent=${sentCount}, status=${status}`);
+            // Extract status - handle various formats
+            let status = extractField(campaign,
+              'status',
+              'state',
+              'campaign_status',
+              'sequence.status'
+            );
+            
+            // Handle boolean status flags
+            if (!status) {
+              if (campaign.is_active === true || campaign.active === true || campaign.running === true) {
+                status = 'active';
+              } else if (campaign.is_paused === true || campaign.paused === true) {
+                status = 'paused';
+              } else if (campaign.is_draft === true || campaign.draft === true) {
+                status = 'draft';
+              } else if (campaign.is_archived === true || campaign.archived === true) {
+                status = 'archived';
+              } else if (campaign.is_active === false) {
+                status = 'paused';
+              } else {
+                status = 'active'; // Default assumption
+              }
+            }
+            
+            // Normalize status string
+            if (typeof status === 'string') {
+              status = status.toLowerCase();
+              if (status === 'running' || status === 'enabled') status = 'active';
+              if (status === 'stopped' || status === 'disabled') status = 'paused';
+            }
+            
+            console.log(`Extracted: name="${campaignName}", leads=${totalLeads}, sent=${sentCount}, status=${status}, type=${sequenceType}`);
             
             const { error: campError } = await supabase.from("campaigns").upsert(
               {
                 meetalfred_id: campaign.id,
                 name: campaignName,
-                type: campaign.type || sequenceType || "linkedin",
+                type: sequenceType || "linkedin",
                 status: status,
                 sequence_type: sequenceType,
-                total_leads: totalLeads,
-                sent_count: sentCount,
+                total_leads: Number(totalLeads) || 0,
+                sent_count: Number(sentCount) || 0,
                 last_synced_at: new Date().toISOString(),
               },
               { onConflict: "meetalfred_id" }

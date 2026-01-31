@@ -3,16 +3,19 @@ import { DataTable } from "@/components/ui/data-table";
 import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
 import { FilterableTableHeader } from "./FilterableTableHeader";
-import { useCompanies, useCompanyFilterOptions, Company, CompanyFilters, CompanySorting } from "@/hooks/useCompanies";
+import { useCompanies, useCompanyFilterOptions, useDeleteCompanies, Company, CompanyFilters, CompanySorting } from "@/hooks/useCompanies";
 import { useColumnPreferences, ColumnDefinition } from "@/hooks/useColumnPreferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ExternalLink, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OrganisationDetail } from "./OrganisationDetail";
 import { AddContactModal } from "./AddContactModal";
+import { OrganisationsBulkActionBar } from "./OrganisationsBulkActionBar";
 import { renderLabels } from "@/lib/labelColors";
+import { toast } from "sonner";
 
 function getConnectionStrengthBadge(strength: string | null) {
   if (!strength) return null;
@@ -69,9 +72,11 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [preselectedCompanyId, setPreselectedCompanyId] = useState<string | undefined>();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data: companies, isLoading } = useCompanies(filters, sorting);
   const { data: filterOptions } = useCompanyFilterOptions();
+  const deleteCompanies = useDeleteCompanies();
   
   const {
     columns: columnPrefs,
@@ -134,7 +139,85 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
     setAddContactOpen(true);
   };
 
+  // Bulk selection handlers
+  const handleSelectAll = (checked: boolean) => {
+    if (checked && companies) {
+      setSelectedIds(new Set(companies.map(c => c.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    const newSelected = new Set(selectedIds);
+    if (checked) {
+      newSelected.add(id);
+    } else {
+      newSelected.delete(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleBulkDelete = async () => {
+    try {
+      await deleteCompanies.mutateAsync(Array.from(selectedIds));
+      toast.success(`Deleted ${selectedIds.size} organisation${selectedIds.size !== 1 ? 's' : ''}`);
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast.error("Failed to delete organisations");
+    }
+  };
+
+  const handleExportCSV = () => {
+    const selectedCompanies = companies?.filter(c => selectedIds.has(c.id)) || [];
+    if (selectedCompanies.length === 0) return;
+
+    const headers = ["Name", "Country", "Industry", "Employees", "Website", "LinkedIn", "Connection Strength"];
+    const rows = selectedCompanies.map(c => [
+      c.company_name || "",
+      c.country || "",
+      c.industry || "",
+      c.employee_range || "",
+      c.website || "",
+      c.linkedin_url || "",
+      c.connection_strength || "",
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `organisations-export-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${selectedCompanies.length} organisations`);
+  };
+
   const allColumns = [
+    {
+      id: "select",
+      accessorKey: "select",
+      header: (
+        <Checkbox
+          checked={companies?.length ? selectedIds.size === companies.length : false}
+          onCheckedChange={(checked) => handleSelectAll(checked === true)}
+          aria-label="Select all"
+        />
+      ),
+      cell: (company: Company) => (
+        <Checkbox
+          checked={selectedIds.has(company.id)}
+          onCheckedChange={(checked) => handleSelectOne(company.id, checked === true)}
+          aria-label={`Select ${company.company_name}`}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+    },
     {
       id: "company_name",
       accessorKey: "company_name",
@@ -419,7 +502,9 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
     },
   ];
 
-  const columns = allColumns.filter((col) => isVisible(col.id));
+  // Include select column always, then filter others by visibility
+  const selectColumn = allColumns.find(col => col.id === "select")!;
+  const visibleColumns = [selectColumn, ...allColumns.filter((col) => col.id !== "select" && isVisible(col.id))];
 
   if (isLoading) {
     return (
@@ -449,12 +534,20 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
         />
       </CRMDataFilters>
 
+      <OrganisationsBulkActionBar
+        selectedCount={selectedIds.size}
+        onDelete={handleBulkDelete}
+        onClearSelection={() => setSelectedIds(new Set())}
+        onExport={handleExportCSV}
+        isDeleting={deleteCompanies.isPending}
+      />
+
       <div className="text-sm text-muted-foreground">
         Showing {companies?.length || 0} organisations
       </div>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={companies || []}
         emptyMessage="No organisations found"
       />

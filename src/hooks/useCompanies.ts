@@ -153,3 +153,23 @@ export function useCreateCompany() {
     },
   });
 }
+
+export function useDeleteCompanies() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from("companies")
+        .delete()
+        .in("id", ids);
+
+      if (error) throw error;
+      return ids;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["companies"] });
+      queryClient.invalidateQueries({ queryKey: ["company-filter-options"] });
+    },
+  });
+}

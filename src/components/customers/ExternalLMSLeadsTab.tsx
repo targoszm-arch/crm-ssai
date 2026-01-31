@@ -212,7 +212,7 @@ export function ExternalLMSLeadsTab() {
                 <TableHead className="w-[40px]">
                   <Checkbox
                     checked={selectedIds.size === filteredCustomers.length && filteredCustomers.length > 0}
-                    onCheckedChange={handleSelectAll}
+                    onCheckedChange={(checked) => handleSelectAll(checked === true)}
                   />
                 </TableHead>
                 <TableHead>Name</TableHead>
@@ -295,7 +295,7 @@ function LMSCustomerRow({ customer, selected, onSelect, onEnroll }: LMSCustomerR
         <TableCell>
           <Checkbox
             checked={selected}
-            onCheckedChange={onSelect}
+            onCheckedChange={(checked) => onSelect(checked === true)}
           />
         </TableCell>
         <TableCell className="font-medium">
