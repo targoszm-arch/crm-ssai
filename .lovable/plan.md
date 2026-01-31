@@ -1,182 +1,214 @@
 
-# Plan: Fix Customer Navigation, Email Tracking Visibility, and LinkedIn Add to CRM
+
+# Plan: Fix Meet Alfred Campaign Sync and Add Bulk Actions
 
 ## Summary
 
 This plan addresses three issues:
-1. **Customer Click in Organisation View**: Contact cards don't open the contact detail drawer
-2. **Email Tracking Visibility**: Open/click stats exist but aren't visible in contact detail view
-3. **Add LinkedIn Contact to CRM**: No way to create a contact from unlinked LinkedIn messages
+1. **Campaign Sync Bug**: Campaigns showing as "Campaign 1222351" instead of real names like "Punk rock HR newsletter", with 0 leads/stats
+2. **LMS Leads Bulk Selection Bug**: Selecting one lead selects all leads
+3. **Missing Bulk Actions**: Companies/Organisations tables lack bulk action functionality
 
 ---
 
-## Issue 1: Customer Click Navigation in Organisation Detail
+## Issue 1: Meet Alfred Campaign Sync Not Pulling Correct Data
 
-### Current Problem
-In `OrganisationDetail.tsx`, contact cards (lines 223-249) are rendered as static divs with no click handler. When you click on a customer within an organisation, nothing happens.
+### Root Cause Analysis
+
+Looking at the database query results and edge function code, the issue is clear:
+
+**Database shows:**
+```
+name: "Campaign 1222351"
+total_leads: 0
+sent_count: 0
+```
+
+**But Meet Alfred has:**
+```
+name: "Punk rock HR newsletter"  
+total_leads: 57
+```
+
+The sync function at line 123-128 tries multiple field names but falls back to `Campaign ${campaign.id}`:
+```typescript
+const campaignName = 
+  campaign.name || 
+  campaign.sequence_name || 
+  campaign.title || 
+  campaign.campaign_name ||
+  `Campaign ${campaign.id}`;  // <-- This fallback is being hit!
+```
+
+### Likely Cause
+
+The Meet Alfred "Get Campaigns" API returns data in a different structure than expected. Based on the pattern, the API likely returns campaigns with the ID as the key or uses a nested structure.
 
 ### Solution
-Add state management and click handlers to open the `ContactDetail` drawer when clicking on a contact card.
 
-### Changes Required
+1. **Add detailed logging** to capture the exact API response structure
+2. **Update field extraction** to check additional nested paths like:
+   - `campaign.sequence?.name`
+   - `campaign.campaign?.name`
+   - `campaign.details?.name`
+   - Check if it's a keyed object `{ [id]: { name, status, ... } }`
+3. **Fix status mapping** - the API may return booleans (is_active/is_paused) or different status strings
 
-**File: `src/components/customers/OrganisationDetail.tsx`**
-
-1. Import the `ContactDetail` component
-2. Add state: `selectedContact` and `contactDetailOpen`
-3. Make contact cards clickable with `cursor-pointer` and hover effect
-4. Add `onClick` handler to set selected contact and open the detail drawer
-5. Render `ContactDetail` component after the Organisation Sheet
+### File: `supabase/functions/meetalfred-sync/index.ts`
 
 ```text
-Before:
-+----------------------+
-| John Smith           |  <-- Static, no cursor change
-| Sales Director       |
-+----------------------+
+Changes to campaign sync section (~lines 96-187):
 
-After:
-+----------------------+
-| John Smith       >   |  <-- Clickable, cursor-pointer, hover effect
-| Sales Director       |
-+----------------------+
-       |
-       v (onClick)
-Opens ContactDetail Sheet
+1. Log the raw API response structure more clearly
+2. Check if campaigns are returned as an object keyed by ID
+3. Add extraction for nested structures like campaign.sequence or campaign.details
+4. Improve status detection with more field variations
+5. Add extraction for leads/stats from alternative field names
 ```
 
 ---
 
-## Issue 2: Email Tracking Visibility in Contact Detail
+## Issue 2: LMS Leads Bulk Selection Bug
 
-### Current Implementation Status
+### Root Cause
 
-Email tracking IS fully implemented in the backend:
+In `ExternalLMSLeadsTab.tsx`, the checkbox `onCheckedChange` handler at line 296-298 is receiving the wrong type:
 
-| Component | Status | Location |
-|-----------|--------|----------|
-| Tracking pixel injection | Working | `send-email/index.ts` |
-| Link click wrapping | Working | `send-email/index.ts` |
-| Open tracking endpoint | Working | `track-email-open/index.ts` |
-| Click tracking endpoint | Working | `track-email-click/index.ts` |
-| Database columns | Exist | `emails.open_count`, `emails.click_count`, `emails.first_opened_at` |
-| Inbox list badges | Visible | `EmailList.tsx` lines 297-313 |
+```tsx
+<Checkbox
+  checked={selected}
+  onCheckedChange={onSelect}  // onSelect expects (checked: boolean)
+/>
+```
 
-### Problem
-The `EmailsTab.tsx` in the Contact Detail view shows emails but doesn't display tracking statistics. The same badge pattern used in `EmailList.tsx` should be added here.
+The issue is that `onCheckedChange` from Radix Checkbox can return `boolean | "indeterminate"`, and the row's `onSelect` prop is: 
+```typescript
+onSelect: (checked: boolean) => void
+```
+
+But the actual problem is in how the handlers are wired:
+
+```tsx
+// Line 237-239
+onSelect={(checked) => handleSelectOne(customer.id, checked)}
+```
+
+The `checked` parameter is typed correctly but the Checkbox component may be passing events or incorrect values.
 
 ### Solution
-Add tracking badges to `EmailsTab.tsx` matching the design from `EmailList.tsx`.
 
-**File: `src/components/customers/EmailsTab.tsx`**
+**File: `src/components/customers/ExternalLMSLeadsTab.tsx`**
 
-1. Import `Eye` and `MousePointerClick` icons from lucide-react
-2. Add a Tooltip import for showing first_opened_at timestamp
-3. Display open/click badges on outbound emails that are tracked
+Fix the checkbox handler to ensure proper boolean coercion:
 
-```text
-Current EmailsTab card:
-+----------------------------------+
-| [>] Meeting follow-up            |
-| To: John | Jan 15, 2024          |
-| Hey, just following up on...     |
-+----------------------------------+
+```tsx
+// Line 296-299 in LMSCustomerRow
+<Checkbox
+  checked={selected}
+  onCheckedChange={(checked) => onSelect(checked === true)}
+/>
+```
 
-Enhanced EmailsTab card:
-+----------------------------------+
-| [>] Meeting follow-up            |
-| To: John | Jan 15, 2024          |
-| Hey, just following up on...     |
-| [Eye 3] [Click 1]                | <-- New tracking badges
-+----------------------------------+
+And ensure the header checkbox has the same fix:
+```tsx
+// Line 213-215
+<Checkbox
+  checked={selectedIds.size === filteredCustomers.length && filteredCustomers.length > 0}
+  onCheckedChange={(checked) => handleSelectAll(checked === true)}
+/>
 ```
 
 ---
 
-## Issue 3: Add LinkedIn Contact to CRM
+## Issue 3: Add Bulk Actions to Companies/Organisations
 
-### Current Problem
-When viewing a LinkedIn message from someone not in the CRM, you can only link them to an existing contact via a dropdown. There's no way to create a new contact directly from the LinkedIn message view.
+### Current State
+
+- **CustomersTab** and **OrganisationsTab** use `DataTable` component
+- `DataTable` component has no selection support built in
+- **ExternalLMSLeadsTab** has its own Table implementation with checkboxes
 
 ### Solution
-Add an "Add to CRM" button in the `LinkedInMessageView` that creates a new contact pre-filled with data from the LinkedIn connection, then optionally triggers an enrichment to fill in additional details.
 
-### Data Available from LinkedIn Sync
+Add bulk selection and action functionality to OrganisationsTab similar to ExternalLMSLeadsTab:
 
-From `linkedin_connections` table:
-- `name` - Full name (can split into first/last)
-- `headline` - Job title
-- `profile_url` - LinkedIn URL
-- `company` - Company name
+### File: `src/components/customers/OrganisationsTab.tsx`
 
-From `linkedin_messages` table:
-- `sender_name` - Fallback name
-- `profile_url` - LinkedIn URL
-- `company_name` - Company name
+1. Add state for selected IDs: `useState<Set<string>>(new Set())`
+2. Add a checkbox column at the start of the columns array
+3. Add header checkbox for select all
+4. Add bulk action bar component when selections exist
+5. Implement bulk actions:
+   - Delete selected
+   - Export selected
+   - Add labels to selected
+   - Enroll in sequence (if applicable)
 
-### Changes Required
+### Changes to DataTable (Optional Enhancement)
 
-**File: `src/components/inbox/LinkedInMessageView.tsx`**
+Alternatively, enhance `DataTable` to support selection natively:
 
-1. Import `useCreateContact` hook
-2. Add "Add to CRM" button next to "Link to contact" dropdown
-3. Show button only when there's no linked contact
-4. On click:
-   - Parse sender name into first/last name
-   - Create contact with available fields (name, title from headline, linkedin_url, company lookup)
-   - Link the new contact to the linkedin_connection
-   - Optionally trigger AI enrichment to populate more fields
-   - Show success toast with link to view contact
+**File: `src/components/ui/data-table.tsx`**
 
-### User Flow
-
-```text
-LinkedIn Message View (unlinked contact)
-+------------------------------------------+
-| [LinkedIn Icon] Chris Ferner             |
-| Marketing Director at TechCorp           |
-|------------------------------------------|
-| Link to contact: [Select...]             |
-|                                          |
-| [+ Add to CRM]  <-- NEW BUTTON           |
-|------------------------------------------|
-| [Reply in LinkedIn] [AI Draft]           |
-+------------------------------------------+
-
-Click "Add to CRM":
-1. Creates contact with:
-   - first_name: "Chris"
-   - last_name: "Ferner" 
-   - title: "Marketing Director at TechCorp" (from headline)
-   - linkedin_url: profile_url
-   - Searches for/creates company "TechCorp" if specified
-
-2. Links linkedin_connection.contact_id to new contact
-
-3. Shows toast: "Contact created! View Chris Ferner"
-
-4. (Optional) Auto-triggers enrichment to fill email, phone, etc.
+Add optional props:
+```typescript
+interface DataTableProps<T> {
+  // ... existing props
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onSelectionChange?: (ids: Set<string>) => void;
+  getRowId?: (row: T) => string;
+}
 ```
+
+However, for speed, it's simpler to add inline selection to OrganisationsTab directly (matching the ExternalLMSLeadsTab pattern).
 
 ---
 
-## Technical Implementation Details
+## Implementation Details
 
 ### File Changes Summary
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `OrganisationDetail.tsx` | Modify | Add ContactDetail import, state, click handlers |
-| `EmailsTab.tsx` | Modify | Add tracking badges (Eye, Click icons) |
-| `LinkedInMessageView.tsx` | Modify | Add "Add to CRM" button with contact creation logic |
+| `supabase/functions/meetalfred-sync/index.ts` | Modify | Improve campaign field extraction and add debugging |
+| `src/components/customers/ExternalLMSLeadsTab.tsx` | Modify | Fix checkbox boolean coercion bug |
+| `src/components/customers/OrganisationsTab.tsx` | Modify | Add bulk selection and action bar |
 
-### No Database Changes Required
+### Bulk Actions for Organisations
 
-All necessary tables and columns already exist:
-- `contacts` table has all required fields
-- `linkedin_connections.contact_id` for linking
-- `companies` table for company lookup/creation
+The bulk action bar will include:
+- Selection count display
+- "Clear Selection" button
+- "Delete Selected" button (with confirmation)
+- "Add Labels" dropdown
+- "Export to CSV" option
 
-### Dependencies
+### Example UI Flow for Organisations
 
-No new packages needed - all required components and icons are already available in the project.
+```text
++------------------------------------------+
+| [x] | Name           | Country | ...     |
++------------------------------------------+
+| [x] | Acme Corp      | USA     | ...     |
+| [x] | TechStart Inc  | UK      | ...     |
+| [ ] | GlobalCo       | Germany | ...     |
++------------------------------------------+
+
++------------------------------------------+
+| 2 selected | [Clear] [Add Labels] [Delete] |
++------------------------------------------+
+```
+
+---
+
+## Testing Checklist
+
+After implementation:
+1. Trigger a Meet Alfred sync and verify campaigns show correct names and stats
+2. Test LMS leads checkbox - selecting one should only select that one
+3. Test select all in LMS leads
+4. Test organisations bulk selection
+5. Test organisations bulk delete with confirmation
+6. Verify bulk action bar appears/disappears correctly
+
