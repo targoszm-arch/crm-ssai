@@ -1,180 +1,182 @@
 
+# Plan: Fix Customer Navigation, Email Tracking Visibility, and LinkedIn Add to CRM
 
-# Enhanced LMS Leads Table + Multi-Select Integration
+## Summary
 
-## Overview
-Add additional columns from the external LMS endpoint to the LMS Leads table (status, signup type, company size, use case, learning objectives, marketing status, created date, credits, plan) and enable multi-select functionality for LMS customers in both the Sequences enrollment modal and Abandonment campaigns.
-
----
-
-## Files to Modify
-
-### 1. Update Interface: `src/hooks/useExternalLMSCustomers.ts`
-
-**Changes**:
-- Add `status` field to `ExternalLMSCustomer` interface
-- The interface already includes most fields, verify `status` is captured
-
-```typescript
-export interface ExternalLMSCustomer {
-  id: string;
-  email: string;
-  full_name: string;
-  role?: string;
-  company_size?: string;
-  use_case?: string;
-  learning_objectives?: string;
-  marketing_consent?: boolean;
-  verified?: boolean;
-  created_at?: string;
-  credits_used?: number;
-  credits_total?: number;
-  plan?: string;
-  signup_type?: string;
-  status?: string; // NEW - e.g. "active", "trial", "expired"
-}
-```
+This plan addresses three issues:
+1. **Customer Click in Organisation View**: Contact cards don't open the contact detail drawer
+2. **Email Tracking Visibility**: Open/click stats exist but aren't visible in contact detail view
+3. **Add LinkedIn Contact to CRM**: No way to create a contact from unlinked LinkedIn messages
 
 ---
 
-### 2. Update Edge Function: `supabase/functions/fetch-lms-customers/index.ts`
+## Issue 1: Customer Click Navigation in Organisation Detail
 
-**Changes**:
-- Add `status` to the interface
-- Ensure all fields are passed through from external API
+### Current Problem
+In `OrganisationDetail.tsx`, contact cards (lines 223-249) are rendered as static divs with no click handler. When you click on a customer within an organisation, nothing happens.
 
----
+### Solution
+Add state management and click handlers to open the `ContactDetail` drawer when clicking on a contact card.
 
-### 3. Enhanced Table: `src/components/customers/ExternalLMSLeadsTab.tsx`
+### Changes Required
 
-**Current columns**: Name, Email, Plan, Role, Credits, Status (verified), Registered
+**File: `src/components/customers/OrganisationDetail.tsx`**
 
-**New columns to add**:
-- **Signup Type** - Badge showing how they signed up
-- **Company Size** - Text field
-- **Use Case** - Text field (potentially truncated with tooltip)
-- **Learning Objectives** - Text field (potentially in expandable row)
-- **Marketing Status** - Badge (Opted In / Not Opted)
-- **LMS Status** - Badge from the status field (active/trial/etc)
-- **Credits Available** - Progress bar (credits_total - credits_used)
-
-**Additional features**:
-- Row selection with checkboxes for multi-select
-- Bulk action bar when rows selected
-- "Enroll in Sequence" button to open EnrollContactModal with LMS customers
-
----
-
-### 4. Update Sequences Enrollment: `src/components/sequences/EnrollContactModal.tsx`
-
-**Changes**:
-- Add tabs: "CRM Contacts" | "LMS Customers"
-- LMS tab shows external LMS customers with multi-select
-- When enrolling LMS customers:
-  - Check if CRM contact exists (by email match)
-  - Create contact if missing with label "LMS Lead"
-  - Enroll in selected sequence
-- Use the same enrollment logic as `EnrollAbandonmentModal`
-
----
-
-### 5. Update Recovery Tab: `src/components/recovery/SignupAbandonmentTab.tsx`
-
-**Changes**:
-- Add additional columns to match the enhanced ExternalLMSLeadsTab:
-  - Company Size
-  - Use Case
-  - Learning Objectives
-  - LMS Status
-  - Credits Available
-- Keep existing functionality (unverified filter, bulk enrollment)
-
----
-
-## Implementation Details
-
-### Table Column Structure for LMS Leads
-
-| Column | Data Source | Display Type |
-|--------|-------------|--------------|
-| Select | - | Checkbox |
-| Name | full_name, email | Text + Subtext |
-| Status | status | Badge (color-coded) |
-| Signup Type | signup_type | Badge |
-| Company Size | company_size | Text |
-| Use Case | use_case | Truncated text with tooltip |
-| Learning Objectives | learning_objectives | Expandable/tooltip |
-| Marketing | marketing_consent | Badge (Yes/No) |
-| Created | created_at | Formatted date |
-| Credits | credits_used, credits_total | Progress bar |
-| Plan | plan | Badge |
-| Actions | - | Enroll button |
-
-### Enrollment Modal Tabs
+1. Import the `ContactDetail` component
+2. Add state: `selectedContact` and `contactDetailOpen`
+3. Make contact cards clickable with `cursor-pointer` and hover effect
+4. Add `onClick` handler to set selected contact and open the detail drawer
+5. Render `ContactDetail` component after the Organisation Sheet
 
 ```text
-+-------------------+--------------------+
-| CRM Contacts (42) | LMS Customers (128)|
-+-------------------+--------------------+
-|                                        |
-| [Search bar]                           |
-|                                        |
-| [ ] Contact/Customer Row               |
-| [ ] Contact/Customer Row               |
-| [ ] Contact/Customer Row               |
-|                                        |
-+----------------------------------------+
+Before:
++----------------------+
+| John Smith           |  <-- Static, no cursor change
+| Sales Director       |
++----------------------+
+
+After:
++----------------------+
+| John Smith       >   |  <-- Clickable, cursor-pointer, hover effect
+| Sales Director       |
++----------------------+
+       |
+       v (onClick)
+Opens ContactDetail Sheet
 ```
-
-### Multi-Select Flow
-
-1. User selects multiple LMS customers via checkboxes
-2. Clicks "Enroll in Sequence" button
-3. Modal opens with sequence selector
-4. On confirmation:
-   - For each LMS customer:
-     - Check if email exists in CRM contacts
-     - Create contact if not found (with "LMS Lead" label)
-     - Create sequence enrollment
-   - Display progress and results
 
 ---
 
-## Technical Details
+## Issue 2: Email Tracking Visibility in Contact Detail
 
-### Data Flow
+### Current Implementation Status
+
+Email tracking IS fully implemented in the backend:
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Tracking pixel injection | Working | `send-email/index.ts` |
+| Link click wrapping | Working | `send-email/index.ts` |
+| Open tracking endpoint | Working | `track-email-open/index.ts` |
+| Click tracking endpoint | Working | `track-email-click/index.ts` |
+| Database columns | Exist | `emails.open_count`, `emails.click_count`, `emails.first_opened_at` |
+| Inbox list badges | Visible | `EmailList.tsx` lines 297-313 |
+
+### Problem
+The `EmailsTab.tsx` in the Contact Detail view shows emails but doesn't display tracking statistics. The same badge pattern used in `EmailList.tsx` should be added here.
+
+### Solution
+Add tracking badges to `EmailsTab.tsx` matching the design from `EmailList.tsx`.
+
+**File: `src/components/customers/EmailsTab.tsx`**
+
+1. Import `Eye` and `MousePointerClick` icons from lucide-react
+2. Add a Tooltip import for showing first_opened_at timestamp
+3. Display open/click badges on outbound emails that are tracked
 
 ```text
-External LMS API (crm-customers)
-        |
-        v
-fetch-lms-customers Edge Function
-        |
-        v
-useExternalLMSCustomers Hook
-        |
-        +---> ExternalLMSLeadsTab (full table)
-        |
-        +---> EnrollContactModal (LMS tab)
-        |
-        +---> SignupAbandonmentTab (filtered for unverified)
+Current EmailsTab card:
++----------------------------------+
+| [>] Meeting follow-up            |
+| To: John | Jan 15, 2024          |
+| Hey, just following up on...     |
++----------------------------------+
+
+Enhanced EmailsTab card:
++----------------------------------+
+| [>] Meeting follow-up            |
+| To: John | Jan 15, 2024          |
+| Hey, just following up on...     |
+| [Eye 3] [Click 1]                | <-- New tracking badges
++----------------------------------+
 ```
-
-### Existing Enrollment Logic Reuse
-
-The `EnrollAbandonmentModal` already handles:
-- Contact creation with labels
-- Sequence enrollment
-- Progress tracking
-- Activity logging
-
-This logic will be extracted/reused in the enhanced `EnrollContactModal`.
 
 ---
 
-## Security Considerations
+## Issue 3: Add LinkedIn Contact to CRM
 
-- All LMS data accessed through authenticated proxy (fetch-lms-customers)
-- Contact creation respects RLS (user_id assignment)
-- Sequence enrollments tied to authenticated user
+### Current Problem
+When viewing a LinkedIn message from someone not in the CRM, you can only link them to an existing contact via a dropdown. There's no way to create a new contact directly from the LinkedIn message view.
 
+### Solution
+Add an "Add to CRM" button in the `LinkedInMessageView` that creates a new contact pre-filled with data from the LinkedIn connection, then optionally triggers an enrichment to fill in additional details.
+
+### Data Available from LinkedIn Sync
+
+From `linkedin_connections` table:
+- `name` - Full name (can split into first/last)
+- `headline` - Job title
+- `profile_url` - LinkedIn URL
+- `company` - Company name
+
+From `linkedin_messages` table:
+- `sender_name` - Fallback name
+- `profile_url` - LinkedIn URL
+- `company_name` - Company name
+
+### Changes Required
+
+**File: `src/components/inbox/LinkedInMessageView.tsx`**
+
+1. Import `useCreateContact` hook
+2. Add "Add to CRM" button next to "Link to contact" dropdown
+3. Show button only when there's no linked contact
+4. On click:
+   - Parse sender name into first/last name
+   - Create contact with available fields (name, title from headline, linkedin_url, company lookup)
+   - Link the new contact to the linkedin_connection
+   - Optionally trigger AI enrichment to populate more fields
+   - Show success toast with link to view contact
+
+### User Flow
+
+```text
+LinkedIn Message View (unlinked contact)
++------------------------------------------+
+| [LinkedIn Icon] Chris Ferner             |
+| Marketing Director at TechCorp           |
+|------------------------------------------|
+| Link to contact: [Select...]             |
+|                                          |
+| [+ Add to CRM]  <-- NEW BUTTON           |
+|------------------------------------------|
+| [Reply in LinkedIn] [AI Draft]           |
++------------------------------------------+
+
+Click "Add to CRM":
+1. Creates contact with:
+   - first_name: "Chris"
+   - last_name: "Ferner" 
+   - title: "Marketing Director at TechCorp" (from headline)
+   - linkedin_url: profile_url
+   - Searches for/creates company "TechCorp" if specified
+
+2. Links linkedin_connection.contact_id to new contact
+
+3. Shows toast: "Contact created! View Chris Ferner"
+
+4. (Optional) Auto-triggers enrichment to fill email, phone, etc.
+```
+
+---
+
+## Technical Implementation Details
+
+### File Changes Summary
+
+| File | Change Type | Description |
+|------|-------------|-------------|
+| `OrganisationDetail.tsx` | Modify | Add ContactDetail import, state, click handlers |
+| `EmailsTab.tsx` | Modify | Add tracking badges (Eye, Click icons) |
+| `LinkedInMessageView.tsx` | Modify | Add "Add to CRM" button with contact creation logic |
+
+### No Database Changes Required
+
+All necessary tables and columns already exist:
+- `contacts` table has all required fields
+- `linkedin_connections.contact_id` for linking
+- `companies` table for company lookup/creation
+
+### Dependencies
+
+No new packages needed - all required components and icons are already available in the project.
