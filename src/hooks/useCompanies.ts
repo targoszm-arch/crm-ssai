@@ -125,3 +125,31 @@ export function useUpdateCompany() {
     },
   });
 }
+
+export function useCreateCompany() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (company: Partial<Omit<Company, "id" | "created_at" | "updated_at">>) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase
+        .from("companies")
+        .insert({
+          ...company,
+          company_name: company.company_name || "Unnamed Company",
+          user_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as Company;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["companies"] });
+      queryClient.invalidateQueries({ queryKey: ["company-filter-options"] });
+    },
+  });
+}
