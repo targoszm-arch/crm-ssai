@@ -3,9 +3,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ExternalLink, UserPlus, Mail, Phone, MapPin, Calendar, Building2, Users, Sparkles, Loader2, DollarSign } from "lucide-react";
+import { ExternalLink, UserPlus, Mail, Phone, MapPin, Calendar, Building2, Users, Sparkles, Loader2, DollarSign, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
-import { useContactsByCompany } from "@/hooks/useContacts";
+import { useContactsByCompany, Contact } from "@/hooks/useContacts";
 import { Company, useUpdateCompany } from "@/hooks/useCompanies";
 import { Skeleton } from "@/components/ui/skeleton";
 import { enrichCompany } from "@/lib/api/enrichment";
@@ -13,7 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { EditableLabels } from "./EditableLabels";
 import { AddDealModal } from "@/components/deals/AddDealModal";
-
+import { ContactDetail } from "./ContactDetail";
 interface OrganisationDetailProps {
   company: Company | null;
   open: boolean;
@@ -44,9 +44,16 @@ function getConnectionStrengthBadge(strength: string | null) {
 export function OrganisationDetail({ company, open, onOpenChange, onAddContact }: OrganisationDetailProps) {
   const [isEnriching, setIsEnriching] = useState(false);
   const [showAddDeal, setShowAddDeal] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [contactDetailOpen, setContactDetailOpen] = useState(false);
   const { data: contacts, isLoading: contactsLoading } = useContactsByCompany(company?.id || null);
   const queryClient = useQueryClient();
   const updateCompany = useUpdateCompany();
+
+  const handleContactClick = (contact: Contact) => {
+    setSelectedContact(contact);
+    setContactDetailOpen(true);
+  };
 
   const handleEnrich = async () => {
     if (!company) return;
@@ -221,7 +228,11 @@ export function OrganisationDetail({ company, open, onOpenChange, onAddContact }
                     const initials = fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
                     
                     return (
-                      <div key={contact.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                      <div 
+                        key={contact.id} 
+                        className="flex items-start gap-3 p-3 rounded-lg border bg-card cursor-pointer hover:bg-accent/50 transition-colors group"
+                        onClick={() => handleContactClick(contact)}
+                      >
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm flex-shrink-0">
                           {initials}
                         </div>
@@ -232,19 +243,32 @@ export function OrganisationDetail({ company, open, onOpenChange, onAddContact }
                           )}
                           <div className="flex flex-wrap gap-3 mt-1">
                             {contact.email && (
-                              <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                              <span 
+                                className="flex items-center gap-1 text-xs text-primary hover:underline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.location.href = `mailto:${contact.email}`;
+                                }}
+                              >
                                 <Mail className="h-3 w-3" />
                                 {contact.email}
-                              </a>
+                              </span>
                             )}
                             {contact.phone && (
-                              <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                              <span 
+                                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.location.href = `tel:${contact.phone}`;
+                                }}
+                              >
                                 <Phone className="h-3 w-3" />
                                 {contact.phone}
-                              </a>
+                              </span>
                             )}
                           </div>
                         </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity self-center" />
                       </div>
                     );
                   })}
@@ -274,6 +298,13 @@ export function OrganisationDetail({ company, open, onOpenChange, onAddContact }
         open={showAddDeal}
         onOpenChange={setShowAddDeal}
         initialData={{ company_id: company.id }}
+      />
+
+      {/* Contact Detail Sheet */}
+      <ContactDetail
+        contact={selectedContact}
+        open={contactDetailOpen}
+        onOpenChange={setContactDetailOpen}
       />
     </>
   );
