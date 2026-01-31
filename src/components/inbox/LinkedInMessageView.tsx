@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { Linkedin, ExternalLink, X, User, Link2, Sparkles, Loader2, Copy, Check } from "lucide-react";
+import { Linkedin, ExternalLink, X, User, Link2, Sparkles, Loader2, Copy, Check, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -17,13 +17,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LinkedInMessage } from "@/hooks/useLinkedInMessages";
-import { useContacts, Contact } from "@/hooks/useContacts";
+import { useContacts, Contact, useCreateContact } from "@/hooks/useContacts";
 import { useGenerateLinkedInDraft, DraftTone } from "@/hooks/useGenerateLinkedInDraft";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { RichTextComposer } from "@/components/shared/RichTextComposer";
 import { Tables } from "@/integrations/supabase/types";
+import { useAuth } from "@/hooks/useAuth";
 
 type EmailTemplate = Tables<"email_templates">;
 
@@ -36,9 +37,12 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
   const { data: contacts } = useContacts({});
   const queryClient = useQueryClient();
   const generateDraft = useGenerateLinkedInDraft();
+  const createContact = useCreateContact();
+  const { user } = useAuth();
   const [draftText, setDraftText] = useState("");
   const [showDraft, setShowDraft] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isAddingToCRM, setIsAddingToCRM] = useState(false);
 
   // Get sender name from message or connection
   const senderName = message.sender_name || message.connection?.name || "LinkedIn User";
@@ -143,6 +147,68 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
     setShowDraft(true);
   };
 
+  const handleAddToCRM = async () => {
+    if (!user) {
+      toast({
+        title: "Not Authenticated",
+        description: "Please log in to add contacts.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAddingToCRM(true);
+    try {
+      // Parse name into first/last
+      const nameParts = senderName.trim().split(" ");
+      const firstName = nameParts[0] || "Unknown";
+      const lastName = nameParts.slice(1).join(" ") || "";
+
+      // Get additional data from connection if available
+      const headline = message.connection?.headline || "";
+      const linkedinUrl = profileUrl || "";
+      const company = companyName || "";
+
+      // Create the contact
+      const newContact = await createContact.mutateAsync({
+        first_name: firstName,
+        last_name: lastName,
+        title: headline,
+        linkedin_url: linkedinUrl,
+        user_id: user.id,
+        notes: company ? `Company: ${company}` : undefined,
+      });
+
+      // Link the LinkedIn connection to this new contact
+      if (message.connection_id) {
+        await supabase
+          .from("linkedin_connections")
+          .update({ contact_id: newContact.id })
+          .eq("id", message.connection_id);
+      }
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["linkedin-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+
+      toast({
+        title: "Contact Created",
+        description: `${firstName} ${lastName} has been added to your CRM.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to Add Contact",
+        description: error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAddingToCRM(false);
+    }
+  };
+
+  // Check if contact is already linked
+  const isContactLinked = !!message.connection?.contact_id;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header - fixed */}
@@ -189,7 +255,7 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
 
       {/* Link to Contact - fixed */}
       <div className="flex-shrink-0 px-4 py-3 border-b bg-muted/50">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Link2 className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">Link to contact:</span>
           <Select
@@ -214,6 +280,22 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
               <User className="h-3 w-3 mr-1" />
               {message.connection.contacts.first_name} {message.connection.contacts.last_name}
             </Badge>
+          )}
+          {/* Add to CRM button - show when no contact is linked */}
+          {!isContactLinked && message.connection_id && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAddToCRM}
+              disabled={isAddingToCRM}
+            >
+              {isAddingToCRM ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4 mr-1" />
+              )}
+              Add to CRM
+            </Button>
           )}
         </div>
       </div>
