@@ -40,21 +40,15 @@ export function useExternalLMSCustomers(params: FetchParams = {}) {
       if (params.limit) queryParams.set('limit', String(params.limit));
       if (params.offset) queryParams.set('offset', String(params.offset));
 
-      const { data, error } = await supabase.functions.invoke('fetch-lms-customers', {
-        body: null,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      // The function accepts query params via the URL, but we need to pass them differently
-      // Using invoke with query string in the function name path
+      // Get auth session for authorization header
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const response = await fetch(
         `https://getqcxnjsohtlagscmfc.supabase.co/functions/v1/fetch-lms-customers?${queryParams.toString()}`,
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            'Authorization': `Bearer ${session?.access_token}`,
             'Content-Type': 'application/json',
           },
         }
