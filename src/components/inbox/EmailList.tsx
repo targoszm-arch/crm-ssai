@@ -84,13 +84,19 @@ export function EmailList({
     if (!accountId) return;
 
     syncEmails.mutate(
-      { accountId, maxResults: 2000, daysBack: 100 },
+      { accountId, maxResults: 100, daysBack: 5 },
       {
         onSuccess: (data) => {
-          toast({
-            title: "Emails Synced",
-            description: `Synced ${data.syncedCount} new emails (${data.skippedCount || 0} already synced)`,
-          });
+          if (data.syncedCount > 0) {
+            toast({
+              title: "Inbox Updated",
+              description: `${data.syncedCount} new email${data.syncedCount > 1 ? 's' : ''} synced`,
+            });
+          } else {
+            toast({
+              title: "Inbox is up to date",
+            });
+          }
         },
         onError: (error) => {
           toast({
