@@ -23,6 +23,7 @@ import { CampaignDetailSheet } from "@/components/campaigns/CampaignDetailSheet"
 export default function Campaigns() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   
@@ -184,10 +185,11 @@ export default function Campaigns() {
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="search"
-                    placeholder="Search campaigns..."
+                    placeholder="Press Enter to search..."
                     className="pl-8 w-full"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={localSearch}
+                    onChange={(e) => setLocalSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && setSearchQuery(localSearch)}
                   />
                 </div>
                 <Button>

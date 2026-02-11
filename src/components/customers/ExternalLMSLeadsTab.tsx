@@ -44,6 +44,7 @@ export function ExternalLMSLeadsTab() {
   const [marketingFilter, setMarketingFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
 
@@ -120,9 +121,10 @@ export function ExternalLMSLeadsTab() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name, email, role..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Press Enter to search..."
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && setSearchQuery(localSearch)}
             className="pl-9"
           />
         </div>
