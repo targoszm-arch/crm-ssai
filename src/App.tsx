@@ -21,6 +21,7 @@ import Deals from "./pages/Deals";
 import Auth from "./pages/Auth";
 import OAuthCallback from "./pages/OAuthCallback";
 import Analytics from "./pages/Analytics";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -161,6 +162,16 @@ const App = () => (
               <AuthGuard>
                 <AppShell>
                   <Analytics />
+                </AppShell>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <AuthGuard>
+                <AppShell>
+                  <Settings />
                 </AppShell>
               </AuthGuard>
             }
