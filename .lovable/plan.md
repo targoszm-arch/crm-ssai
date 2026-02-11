@@ -1,45 +1,30 @@
-# Fix Inbox Sync: Faster Sync + Better Feedback
 
-## Problems
 
-1. Clicking "Sync" triggers a massive 2000-email / 100-day sync that's slow and hits resource limits
-2. Toast message says "Synced 0 new emails (1271 already synced)" -- confusing and unhelpful
-3. No visual distinction between "checking for new mail" and "nothing new"
+# Fix: Emails Not Appearing Due to Missing user_id
+
+## The Problem
+The `sync-emails` edge function inserts emails into the database **without setting `user_id`**. Since the emails table has RLS policies that filter by `auth.uid() = user_id`, all 731 recently synced emails are invisible to you. Only 557 older emails (that had `user_id` set) are visible.
+
+## The Fix
+
+### 1. Fix the edge function (`supabase/functions/sync-emails/index.ts`)
+- Read `user_id` from the email account record (line ~105 already fetches the full account)
+- Add `user_id: account.user_id` to the email insert (around line 310)
+
+### 2. Backfill existing NULL emails (one-time data fix)
+- Update all 731 emails that have `user_id = NULL` and `account_id = '22104790-...'` to set the correct `user_id` from the account owner
+- This will be done via a SQL migration that sets `emails.user_id = email_accounts.user_id` wherever it's NULL
 
 ## Changes
 
-### 1. Make manual Sync lightweight (src/components/inbox/EmailList.tsx)
+### File: `supabase/functions/sync-emails/index.ts`
+- Add `user_id: account.user_id` to the insert object at line ~310 (one line addition)
 
-- Change `handleSync` to use `maxResults: 100, daysBack: 5` instead of `2000 / 100`
-- This matches the auto-sync behavior and is fast (checks only recent emails)
-- Don't delete or overwrite existing emails. Leave them in the inbox.
-- Sort the emails by the most recent ones on the top
+### Database: Backfill migration
+- SQL: `UPDATE emails SET user_id = ea.user_id FROM email_accounts ea WHERE emails.account_id = ea.id AND emails.user_id IS NULL`
 
-### 2. Improve toast messages (src/components/inbox/EmailList.tsx + src/pages/Inbox.tsx)
+## Result
+- All 731 missing emails will immediately appear in your inbox
+- All future syncs will correctly tag emails with your user ID
+- No other changes needed
 
-- When new emails found: "Inbox Updated -- 3 new emails synced"
-- When no new emails: "Inbox is up to date" (no count of skipped emails)
-- On error: keep the destructive toast with the actual error message
-
-### 3. Auto-sync toast cleanup (src/pages/Inbox.tsx)
-
-- Auto-sync on page load: only show toast if new emails were found (already does this)
-- Keep the "Syncing..." header indicator so the user sees activity
-
-## Technical Details
-
-### File: `src/components/inbox/EmailList.tsx`
-
-- Line 87: Change `maxResults: 2000, daysBack: 100` to `maxResults: 100, daysBack: 1`
-- Lines 89-94: Update success toast:
-  - If `data.syncedCount > 0`: show "Inbox Updated" with count
-  - If `data.syncedCount === 0`: show "Inbox is up to date" (simple, no skipped count)
-
-### File: `src/pages/Inbox.tsx`
-
-- Lines 90-98: Auto-sync toast already only fires when `syncedCount > 0` -- no change needed there
-- The "Syncing..." indicator in the header already works correctly
-
-### No edge function changes
-
-The sync-emails edge function itself works fine. The issue is purely the parameters being sent and the toast messages shown.
