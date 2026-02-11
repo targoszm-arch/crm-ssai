@@ -12,10 +12,10 @@ export default function AppShell({ children }: AppShellProps) {
       <AppSidebar />
       <SidebarInset>
         <Header />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto mx-[10px]">
           {children}
         </main>
       </SidebarInset>
-    </SidebarProvider>
-  );
+    </SidebarProvider>);
+
 }

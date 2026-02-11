@@ -9,19 +9,19 @@ import { toast } from "sonner";
 const WEBHOOK_URL = "https://getqcxnjsohtlagscmfc.supabase.co/functions/v1/lms-webhook";
 
 const ACCEPTED_FIELDS = [
-  { name: "crm_user_id", required: true, description: "Your CRM user ID (UUID)" },
-  { name: "email", required: true, description: "Lead email address" },
-  { name: "name", required: false, description: "Full name" },
-  { name: "role", required: false, description: "Job title / role" },
-  { name: "company_size", required: false, description: "e.g. 1-10, 11-50, 51-200" },
-  { name: "use_case", required: false, description: "How they plan to use the product" },
-  { name: "learning_objectives", required: false, description: "Goals or objectives" },
-  { name: "marketing_consent", required: false, description: "Boolean – opted in to marketing" },
-  { name: "source", required: false, description: "Lead source identifier" },
-  { name: "plan", required: false, description: "Plan or tier" },
-];
+{ name: "crm_user_id", required: true, description: "Your CRM user ID (UUID)" },
+{ name: "email", required: true, description: "Lead email address" },
+{ name: "name", required: false, description: "Full name" },
+{ name: "role", required: false, description: "Job title / role" },
+{ name: "company_size", required: false, description: "e.g. 1-10, 11-50, 51-200" },
+{ name: "use_case", required: false, description: "How they plan to use the product" },
+{ name: "learning_objectives", required: false, description: "Goals or objectives" },
+{ name: "marketing_consent", required: false, description: "Boolean – opted in to marketing" },
+{ name: "source", required: false, description: "Lead source identifier" },
+{ name: "plan", required: false, description: "Plan or tier" }];
 
-function CopyButton({ text, label }: { text: string; label?: string }) {
+
+function CopyButton({ text, label }: {text: string;label?: string;}) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
     await navigator.clipboard.writeText(text);
@@ -33,8 +33,8 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
     <Button variant="outline" size="sm" onClick={handleCopy} className="gap-1.5">
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
       {copied ? "Copied" : "Copy"}
-    </Button>
-  );
+    </Button>);
+
 }
 
 export default function Settings() {
@@ -47,7 +47,7 @@ export default function Settings() {
       name: "Jane Doe",
       role: "VP of Sales",
       company_size: "51-200",
-      marketing_consent: true,
+      marketing_consent: true
     },
     null,
     2
@@ -56,8 +56,8 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">Manage integrations and webhook configuration.</p>
+        <h1 className="text-2xl font-bold tracking-tight px-[10px] py-[10px]">Settings</h1>
+        <p className="text-muted-foreground px-[10px] py-[10px]">Manage integrations and webhook configuration.</p>
       </div>
 
       {/* Webhook Configuration */}
@@ -112,19 +112,19 @@ export default function Settings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ACCEPTED_FIELDS.map((field) => (
-                    <tr key={field.name} className="border-b last:border-0">
+                  {ACCEPTED_FIELDS.map((field) =>
+                  <tr key={field.name} className="border-b last:border-0">
                       <td className="px-3 py-2 font-mono text-xs">{field.name}</td>
                       <td className="px-3 py-2">
-                        {field.required ? (
-                          <Badge variant="destructive" className="text-[10px]">Required</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-[10px]">Optional</Badge>
-                        )}
+                        {field.required ?
+                      <Badge variant="destructive" className="text-[10px]">Required</Badge> :
+
+                      <Badge variant="outline" className="text-[10px]">Optional</Badge>
+                      }
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">{field.description}</td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -145,6 +145,6 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
+    </div>);
+
 }
