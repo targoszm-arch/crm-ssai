@@ -16,6 +16,8 @@ import { AddContactModal } from "./AddContactModal";
 import { OrganisationsBulkActionBar } from "./OrganisationsBulkActionBar";
 import { renderLabels } from "@/lib/labelColors";
 import { toast } from "sonner";
+import { enrichCompanies } from "@/lib/api/enrichment";
+import { useQueryClient } from "@tanstack/react-query";
 
 function getConnectionStrengthBadge(strength: string | null) {
   if (!strength) return null;
@@ -73,6 +75,8 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [preselectedCompanyId, setPreselectedCompanyId] = useState<string | undefined>();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isEnriching, setIsEnriching] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: companies, isLoading } = useCompanies(filters, sorting);
   const { data: filterOptions } = useCompanyFilterOptions();
@@ -169,6 +173,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
   };
 
   const handleExportCSV = () => {
+    // ... keep existing code
     const selectedCompanies = companies?.filter(c => selectedIds.has(c.id)) || [];
     if (selectedCompanies.length === 0) return;
 
@@ -196,6 +201,26 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
     a.click();
     URL.revokeObjectURL(url);
     toast.success(`Exported ${selectedCompanies.length} organisations`);
+  };
+
+  const handleBulkEnrich = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setIsEnriching(true);
+    try {
+      const result = await enrichCompanies(ids, (current, total) => {
+        toast.loading(`Enriching ${current} of ${total}...`, { id: "bulk-enrich" });
+      });
+      toast.dismiss("bulk-enrich");
+      toast.success(`Enriched ${result.succeeded} organisation${result.succeeded !== 1 ? "s" : ""}${result.failed > 0 ? `, ${result.failed} failed` : ""}`);
+      queryClient.invalidateQueries({ queryKey: ["companies"] });
+      setSelectedIds(new Set());
+    } catch {
+      toast.dismiss("bulk-enrich");
+      toast.error("Enrichment failed");
+    } finally {
+      setIsEnriching(false);
+    }
   };
 
   const allColumns = [
@@ -539,7 +564,9 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
         onDelete={handleBulkDelete}
         onClearSelection={() => setSelectedIds(new Set())}
         onExport={handleExportCSV}
+        onEnrich={handleBulkEnrich}
         isDeleting={deleteCompanies.isPending}
+        isEnriching={isEnriching}
       />
 
       <div className="text-sm text-muted-foreground">

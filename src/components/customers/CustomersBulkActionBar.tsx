@@ -1,4 +1,4 @@
-import { Trash2, X, Download } from "lucide-react";
+import { Trash2, X, Download, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -18,7 +18,9 @@ interface CustomersBulkActionBarProps {
   onDelete: () => void;
   onClearSelection: () => void;
   onExport: () => void;
+  onEnrich?: () => void;
   isDeleting?: boolean;
+  isEnriching?: boolean;
 }
 
 export function CustomersBulkActionBar({
@@ -26,7 +28,9 @@ export function CustomersBulkActionBar({
   onDelete,
   onClearSelection,
   onExport,
+  onEnrich,
   isDeleting,
+  isEnriching,
 }: CustomersBulkActionBarProps) {
   if (selectedCount === 0) return null;
 
@@ -44,6 +48,15 @@ export function CustomersBulkActionBar({
           <Button variant="outline" size="sm" onClick={onExport}>
             <Download className="h-4 w-4 mr-1" />
             Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onEnrich}
+            disabled={isEnriching}
+          >
+            {isEnriching ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+            Enrich Selected
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
