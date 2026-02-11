@@ -198,3 +198,22 @@ export function useContactsByCompany(companyId: string | null) {
     enabled: !!companyId,
   });
 }
+
+export function useDeleteContacts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from("contacts")
+        .delete()
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-filter-options"] });
+      queryClient.invalidateQueries({ queryKey: ["company-contacts"] });
+    },
+  });
+}

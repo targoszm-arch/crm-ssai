@@ -82,23 +82,23 @@ export function ExternalLMSLeadsTab() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(new Set(filteredCustomers.map(c => c.id)));
+      setSelectedIds(new Set(filteredCustomers.map(c => c.email)));
     } else {
       setSelectedIds(new Set());
     }
   };
 
-  const handleSelectOne = (id: string, checked: boolean) => {
+  const handleSelectOne = (email: string, checked: boolean) => {
     const newSelected = new Set(selectedIds);
     if (checked) {
-      newSelected.add(id);
+      newSelected.add(email);
     } else {
-      newSelected.delete(id);
+      newSelected.delete(email);
     }
     setSelectedIds(newSelected);
   };
 
-  const selectedUsers = filteredCustomers.filter(c => selectedIds.has(c.id));
+  const selectedUsers = filteredCustomers.filter(c => selectedIds.has(c.email));
 
   if (isError) {
     return (
@@ -233,12 +233,12 @@ export function ExternalLMSLeadsTab() {
             <TableBody>
               {filteredCustomers.map((customer) => (
                 <LMSCustomerRow 
-                  key={customer.id} 
+                  key={customer.email} 
                   customer={customer}
-                  selected={selectedIds.has(customer.id)}
-                  onSelect={(checked) => handleSelectOne(customer.id, checked)}
+                  selected={selectedIds.has(customer.email)}
+                  onSelect={(checked) => handleSelectOne(customer.email, checked)}
                   onEnroll={() => {
-                    setSelectedIds(new Set([customer.id]));
+                    setSelectedIds(new Set([customer.email]));
                     setEnrollModalOpen(true);
                   }}
                 />
@@ -294,7 +294,7 @@ function LMSCustomerRow({ customer, selected, onSelect, onEnroll }: LMSCustomerR
   return (
     <TooltipProvider>
       <TableRow>
-        <TableCell>
+        <TableCell onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={selected}
             onCheckedChange={(checked) => onSelect(checked === true)}
