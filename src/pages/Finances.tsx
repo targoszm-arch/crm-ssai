@@ -35,6 +35,7 @@ interface ChartDataItem {
 
 export default function Finances() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
 
   const filteredEntries = financeData.filter(entry => {
@@ -232,17 +233,18 @@ export default function Finances() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search transactions..."
+                placeholder="Press Enter to search..."
                 className="pl-8 w-full"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={localSearch}
+                onChange={(e) => setLocalSearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && setSearchQuery(localSearch)}
               />
-              {searchQuery && (
+              {localSearch && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="absolute right-0 top-0 h-9 w-9"
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => { setLocalSearch(""); setSearchQuery(""); }}
                 >
                   <X className="h-4 w-4" />
                   <span className="sr-only">Clear search</span>

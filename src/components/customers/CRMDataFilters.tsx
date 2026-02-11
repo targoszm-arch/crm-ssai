@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, X } from "lucide-react";
-import { useDebounce } from "@/hooks/useDebounce";
 
 interface CRMDataFiltersProps {
   searchValue: string;
@@ -16,23 +15,22 @@ interface CRMDataFiltersProps {
 export function CRMDataFilters({
   searchValue,
   onSearchChange,
-  searchPlaceholder = "Search...",
+  searchPlaceholder = "Press Enter to search...",
   onClearFilters,
   hasActiveFilters = false,
   children,
 }: CRMDataFiltersProps) {
   const [localSearch, setLocalSearch] = useState(searchValue);
-  const debouncedSearch = useDebounce(localSearch, 300);
 
   useEffect(() => {
     setLocalSearch(searchValue);
   }, [searchValue]);
 
-  useEffect(() => {
-    if (debouncedSearch !== searchValue) {
-      onSearchChange(debouncedSearch);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      onSearchChange(localSearch);
     }
-  }, [debouncedSearch, searchValue, onSearchChange]);
+  };
 
   const handleClearSearch = () => {
     setLocalSearch("");
@@ -51,6 +49,7 @@ export function CRMDataFilters({
             className="pl-8 w-full"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
+            onKeyDown={handleKeyDown}
           />
           {localSearch && (
             <Button

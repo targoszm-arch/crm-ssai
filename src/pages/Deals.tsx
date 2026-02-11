@@ -26,6 +26,7 @@ type ViewMode = "kanban" | "list" | "table" | "forecast";
 
 export default function Deals() {
   const [search, setSearch] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | undefined>();
   const [addDealOpen, setAddDealOpen] = useState(false);
@@ -99,9 +100,10 @@ export default function Deals() {
           <div className="relative flex-1 min-w-0 sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search deals..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Press Enter to search..."
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && setSearch(localSearch)}
               className="pl-9"
             />
           </div>

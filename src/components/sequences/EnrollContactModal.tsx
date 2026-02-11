@@ -30,6 +30,7 @@ interface EnrollContactModalProps {
 
 export function EnrollContactModal({ open, onOpenChange, sequence }: EnrollContactModalProps) {
   const [search, setSearch] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"crm" | "lms">("crm");
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   const [selectedLMSIds, setSelectedLMSIds] = useState<string[]>([]);
@@ -181,6 +182,7 @@ export function EnrollContactModal({ open, onOpenChange, sequence }: EnrollConta
     setSelectedContactIds([]);
     setSelectedLMSIds([]);
     setSearch("");
+    setLocalSearch("");
     setActiveTab("crm");
     onOpenChange(false);
   };
@@ -241,9 +243,10 @@ export function EnrollContactModal({ open, onOpenChange, sequence }: EnrollConta
           <div className="relative mt-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder={activeTab === "crm" ? "Search contacts..." : "Search LMS customers..."}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Press Enter to search..."
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && setSearch(localSearch)}
               className="pl-9"
             />
           </div>

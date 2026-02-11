@@ -9,7 +9,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, X, Filter } from "lucide-react";
-import { useDebounce } from "@/hooks/useDebounce";
 
 export interface FilterOption {
   label: string;
@@ -30,28 +29,22 @@ interface DataFiltersProps {
 export function DataFilters({
   searchValue,
   onSearchChange,
-  searchPlaceholder = "Search...",
+  searchPlaceholder = "Press Enter to search...",
   filters,
   onClearFilters,
   hasActiveFilters,
 }: DataFiltersProps) {
-  // Local state for immediate UI feedback
   const [localSearch, setLocalSearch] = useState(searchValue);
-  
-  // Debounce the search value - only trigger callback after 300ms of no typing
-  const debouncedSearch = useDebounce(localSearch, 300);
 
-  // Sync local state when external value changes (e.g., clear filters)
   useEffect(() => {
     setLocalSearch(searchValue);
   }, [searchValue]);
 
-  // Trigger the actual search when debounced value changes
-  useEffect(() => {
-    if (debouncedSearch !== searchValue) {
-      onSearchChange(debouncedSearch);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      onSearchChange(localSearch);
     }
-  }, [debouncedSearch, searchValue, onSearchChange]);
+  };
 
   const handleClearSearch = () => {
     setLocalSearch("");
@@ -70,6 +63,7 @@ export function DataFilters({
             className="pl-8 w-full"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
+            onKeyDown={handleKeyDown}
           />
           {localSearch && (
             <Button

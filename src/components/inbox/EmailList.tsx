@@ -42,6 +42,7 @@ export function EmailList({
 }: EmailListProps) {
   const [filter, setFilter] = useState<"all" | "linked" | "unlinked">("all");
   const [search, setSearch] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
   
   const accountId = accounts[0]?.id;
   
@@ -202,9 +203,10 @@ export function EmailList({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search emails..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Press Enter to search..."
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && setSearch(localSearch)}
             className="pl-9"
           />
         </div>
