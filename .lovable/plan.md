@@ -1,30 +1,43 @@
 
+# Fix Multi-Select in LMS Leads + Add Bulk Actions to Customers Tab
 
-# Fix: Emails Not Appearing Due to Missing user_id
+## Problem: LMS Leads Select-All Bug
 
-## The Problem
-The `sync-emails` edge function inserts emails into the database **without setting `user_id`**. Since the emails table has RLS policies that filter by `auth.uid() = user_id`, all 731 recently synced emails are invisible to you. Only 557 older emails (that had `user_id` set) are visible.
+The external LMS API likely returns records without a unique `id` field (or with `undefined` IDs). When `customer.id` is `undefined` for all rows, clicking ANY row's checkbox adds `undefined` to the selection Set, and then `selectedIds.has(customer.id)` returns `true` for EVERY row -- making it look like all rows get selected at once.
 
-## The Fix
-
-### 1. Fix the edge function (`supabase/functions/sync-emails/index.ts`)
-- Read `user_id` from the email account record (line ~105 already fetches the full account)
-- Add `user_id: account.user_id` to the email insert (around line 310)
-
-### 2. Backfill existing NULL emails (one-time data fix)
-- Update all 731 emails that have `user_id = NULL` and `account_id = '22104790-...'` to set the correct `user_id` from the account owner
-- This will be done via a SQL migration that sets `emails.user_id = email_accounts.user_id` wherever it's NULL
+**Fix**: Use `customer.email` as the unique identifier instead of `customer.id`, since email is always present and unique. Also add `e.stopPropagation()` on row checkboxes (matching the Organisations pattern).
 
 ## Changes
 
-### File: `supabase/functions/sync-emails/index.ts`
-- Add `user_id: account.user_id` to the insert object at line ~310 (one line addition)
+### 1. Fix LMS Leads multi-select (`src/components/customers/ExternalLMSLeadsTab.tsx`)
+- Change all selection logic to use `customer.email` instead of `customer.id` as the unique key
+- Update `handleSelectAll` to map by `email`
+- Update `handleSelectOne` to use `email`
+- Update `selectedUsers` filter to match by `email`
+- Update the header checkbox `checked` comparison
+- Add `onClick={e.stopPropagation()}` to row checkboxes
+- Update `onEnroll` to use `email` in the Set
 
-### Database: Backfill migration
-- SQL: `UPDATE emails SET user_id = ea.user_id FROM email_accounts ea WHERE emails.account_id = ea.id AND emails.user_id IS NULL`
+### 2. Add bulk select + actions to Customers tab (`src/components/customers/CustomersTab.tsx`)
+- Add `selectedIds` state (Set of contact IDs)
+- Add `handleSelectAll` and `handleSelectOne` handlers
+- Add a checkbox "select" column as the first column (same pattern as Organisations)
+- Add a `useDeleteContacts` hook to `src/hooks/useContacts.ts`
+- Add a bulk action bar above the table with: Clear Selection, Export CSV, Delete Selected
+- Create a reusable `CustomersBulkActionBar.tsx` component (mirrors `OrganisationsBulkActionBar`)
 
-## Result
-- All 731 missing emails will immediately appear in your inbox
-- All future syncs will correctly tag emails with your user ID
-- No other changes needed
+### 3. Add `useDeleteContacts` hook (`src/hooks/useContacts.ts`)
+- New mutation that deletes contacts by an array of IDs
+- Invalidates contact queries on success
 
+### 4. New file: `src/components/customers/CustomersBulkActionBar.tsx`
+- Same structure as `OrganisationsBulkActionBar` but labeled for "contacts"
+- Actions: Clear, Export CSV, Delete (with confirmation dialog)
+
+### Files Modified
+- `src/components/customers/ExternalLMSLeadsTab.tsx` -- fix email-based selection
+- `src/components/customers/CustomersTab.tsx` -- add checkbox column, selection state, bulk bar
+- `src/hooks/useContacts.ts` -- add `useDeleteContacts` mutation
+
+### New Files
+- `src/components/customers/CustomersBulkActionBar.tsx` -- bulk action bar for contacts
