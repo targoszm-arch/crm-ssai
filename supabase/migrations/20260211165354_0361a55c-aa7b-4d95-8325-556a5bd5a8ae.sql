@@ -1,0 +1,1 @@
+UPDATE emails SET user_id = ea.user_id FROM email_accounts ea WHERE emails.account_id = ea.id AND emails.user_id IS NULL;

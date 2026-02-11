@@ -309,6 +309,7 @@ serve(async (req: Request): Promise<Response> => {
           .from("emails")
           .insert({
             account_id: accountId,
+            user_id: account.user_id,
             gmail_id: msg.id,
             thread_id: msg.threadId,
             contact_id: contactId,
