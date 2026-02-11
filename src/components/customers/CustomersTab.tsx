@@ -15,6 +15,8 @@ import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { renderLabels } from "@/lib/labelColors";
 import { toast } from "sonner";
+import { enrichContacts } from "@/lib/api/enrichment";
+import { useQueryClient } from "@tanstack/react-query";
 
 type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -54,6 +56,8 @@ export function CustomersTab() {
   const [selectedContact, setSelectedContact] = useState<ContactWithCompany | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isEnriching, setIsEnriching] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleViewContact = (contact: ContactWithCompany) => {
     setSelectedContact(contact);
@@ -96,6 +100,7 @@ export function CustomersTab() {
   };
 
   const handleBulkExport = () => {
+    // ... keep existing code
     const selected = (contacts || []).filter((c: any) => selectedIds.has(c.id));
     const headers = ["First Name", "Last Name", "Email", "Phone", "Title", "Company"];
     const rows = selected.map((c: any) => [
@@ -115,6 +120,26 @@ export function CustomersTab() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success(`Exported ${selected.length} contact${selected.length !== 1 ? "s" : ""}`);
+  };
+
+  const handleBulkEnrich = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setIsEnriching(true);
+    try {
+      const result = await enrichContacts(ids, (current, total) => {
+        toast.loading(`Enriching ${current} of ${total}...`, { id: "bulk-enrich-contacts" });
+      });
+      toast.dismiss("bulk-enrich-contacts");
+      toast.success(`Enriched ${result.succeeded} contact${result.succeeded !== 1 ? "s" : ""}${result.failed > 0 ? `, ${result.failed} failed` : ""}`);
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      setSelectedIds(new Set());
+    } catch {
+      toast.dismiss("bulk-enrich-contacts");
+      toast.error("Enrichment failed");
+    } finally {
+      setIsEnriching(false);
+    }
   };
   
   const {
@@ -559,7 +584,9 @@ export function CustomersTab() {
         onDelete={handleBulkDelete}
         onClearSelection={() => setSelectedIds(new Set())}
         onExport={handleBulkExport}
+        onEnrich={handleBulkEnrich}
         isDeleting={deleteContacts.isPending}
+        isEnriching={isEnriching}
       />
 
       <div className="text-sm text-muted-foreground">

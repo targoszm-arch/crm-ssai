@@ -1,4 +1,4 @@
-import { Trash2, X, Download, Tag } from "lucide-react";
+import { Trash2, X, Download, Tag, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -18,7 +18,9 @@ interface OrganisationsBulkActionBarProps {
   onDelete: () => void;
   onClearSelection: () => void;
   onExport: () => void;
+  onEnrich?: () => void;
   isDeleting?: boolean;
+  isEnriching?: boolean;
 }
 
 export function OrganisationsBulkActionBar({
@@ -26,7 +28,9 @@ export function OrganisationsBulkActionBar({
   onDelete,
   onClearSelection,
   onExport,
+  onEnrich,
   isDeleting,
+  isEnriching,
 }: OrganisationsBulkActionBarProps) {
   if (selectedCount === 0) return null;
 
@@ -53,6 +57,16 @@ export function OrganisationsBulkActionBar({
           >
             <Download className="h-4 w-4 mr-1" />
             Export CSV
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onEnrich}
+            disabled={isEnriching}
+          >
+            {isEnriching ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+            Enrich Selected
           </Button>
           
           <AlertDialog>
