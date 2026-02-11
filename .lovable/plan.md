@@ -1,62 +1,45 @@
+# Fix Inbox Sync: Faster Sync + Better Feedback
 
+## Problems
 
-# Fix Search Bars to Trigger on Enter Key Only
+1. Clicking "Sync" triggers a massive 2000-email / 100-day sync that's slow and hits resource limits
+2. Toast message says "Synced 0 new emails (1271 already synced)" -- confusing and unhelpful
+3. No visual distinction between "checking for new mail" and "nothing new"
 
-## Summary
-Currently, all search bars across the platform filter automatically as you type (with debounce). This change will make search only trigger when the user presses **Enter**, giving more control and reducing unnecessary filtering/API calls.
+## Changes
 
-## What Changes
+### 1. Make manual Sync lightweight (src/components/inbox/EmailList.tsx)
 
-Every search input will:
-- Still update the text field as you type (so you can see what you're typing)
-- Only trigger the actual search/filter when you press **Enter**
-- Still allow clearing via the X button (which also triggers search reset)
+- Change `handleSync` to use `maxResults: 100, daysBack: 5` instead of `2000 / 100`
+- This matches the auto-sync behavior and is fast (checks only recent emails)
+- Don't delete or overwrite existing emails. Leave them in the inbox.
+- Sort the emails by the most recent ones on the top
 
-## Files to Modify
+### 2. Improve toast messages (src/components/inbox/EmailList.tsx + src/pages/Inbox.tsx)
 
-### Shared Filter Components (affects Customers + Organisations tabs)
+- When new emails found: "Inbox Updated -- 3 new emails synced"
+- When no new emails: "Inbox is up to date" (no count of skipped emails)
+- On error: keep the destructive toast with the actual error message
 
-1. **`src/components/customers/CRMDataFilters.tsx`**
-   - Remove `useDebounce` import and logic
-   - Add `onKeyDown` handler that calls `onSearchChange` on Enter
-   - Keep local state for typing, only commit on Enter or clear
+### 3. Auto-sync toast cleanup (src/pages/Inbox.tsx)
 
-2. **`src/components/customers/DataFilters.tsx`**
-   - Same changes as CRMDataFilters
+- Auto-sync on page load: only show toast if new emails were found (already does this)
+- Keep the "Syncing..." header indicator so the user sees activity
 
-### Page-Level Inline Search Inputs
+## Technical Details
 
-3. **`src/pages/Deals.tsx`** - Deals search
-4. **`src/pages/Campaigns.tsx`** - Campaigns search
-5. **`src/pages/Finances.tsx`** - Transactions search
-6. **`src/pages/Orders.tsx`** - Orders search
-7. **`src/pages/CartAbandonment.tsx`** - Carts search
+### File: `src/components/inbox/EmailList.tsx`
 
-For pages 3-7: Add a local input state separate from the filter state, commit on Enter only.
+- Line 87: Change `maxResults: 2000, daysBack: 100` to `maxResults: 100, daysBack: 1`
+- Lines 89-94: Update success toast:
+  - If `data.syncedCount > 0`: show "Inbox Updated" with count
+  - If `data.syncedCount === 0`: show "Inbox is up to date" (simple, no skipped count)
 
-### Component-Level Search Inputs
+### File: `src/pages/Inbox.tsx`
 
-8. **`src/components/customers/ExternalLMSLeadsTab.tsx`** - LMS leads search
-9. **`src/components/inbox/EmailList.tsx`** - Email search
-10. **`src/components/recovery/SignupAbandonmentTab.tsx`** - Signup abandonment search
-11. **`src/components/templates/TemplateListModal.tsx`** - Template search
-12. **`src/components/sequences/EnrollContactModal.tsx`** - Contact enrollment search
+- Lines 90-98: Auto-sync toast already only fires when `syncedCount > 0` -- no change needed there
+- The "Syncing..." indicator in the header already works correctly
 
-### Not Changed (intentionally)
-- **`src/components/shared/LabelSelector.tsx`** - This is a small dropdown filter, instant search makes sense here
-- **`src/components/customers/FilterableTableHeader.tsx`** - Uses `CommandInput`, instant filter is appropriate for column filters
+### No edge function changes
 
-## Technical Approach
-
-For the shared components (`CRMDataFilters`, `DataFilters`):
-- Remove `useDebounce` dependency
-- Keep `localSearch` state for the input value
-- Add `handleKeyDown` that checks `e.key === "Enter"` and calls `onSearchChange(localSearch)`
-- Clear button still calls `onSearchChange("")` immediately
-
-For inline search inputs on pages/components:
-- Split into `localSearch` (controls the input) and the actual filter state
-- Add `onKeyDown` handler to the Input
-- On Enter: set the filter state from local state
-- On clear (X button): reset both states
-
+The sync-emails edge function itself works fine. The issue is purely the parameters being sent and the toast messages shown.
