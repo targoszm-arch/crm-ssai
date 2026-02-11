@@ -4,14 +4,17 @@ import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
 import { FilterableTableHeader } from "./FilterableTableHeader";
 import { ContactDetail } from "./ContactDetail";
-import { useContacts, useContactFilterOptions, Contact, ContactFilters, ContactSorting } from "@/hooks/useContacts";
+import { CustomersBulkActionBar } from "./CustomersBulkActionBar";
+import { useContacts, useContactFilterOptions, useDeleteContacts, Contact, ContactFilters, ContactSorting } from "@/hooks/useContacts";
 import { useColumnPreferences, ColumnDefinition } from "@/hooks/useColumnPreferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ExternalLink, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { renderLabels } from "@/lib/labelColors";
+import { toast } from "sonner";
 
 type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -50,6 +53,7 @@ export function CustomersTab() {
   const [sorting, setSorting] = useState<ContactSorting>({ column: "last_contacted", direction: "desc" });
   const [selectedContact, setSelectedContact] = useState<ContactWithCompany | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const handleViewContact = (contact: ContactWithCompany) => {
     setSelectedContact(contact);
@@ -58,6 +62,60 @@ export function CustomersTab() {
 
   const { data: contacts, isLoading } = useContacts(filters, sorting);
   const { data: filterOptions } = useContactFilterOptions();
+  const deleteContacts = useDeleteContacts();
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked && contacts) {
+      setSelectedIds(new Set(contacts.map((c: any) => c.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    const newSelected = new Set(selectedIds);
+    if (checked) {
+      newSelected.add(id);
+    } else {
+      newSelected.delete(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleBulkDelete = () => {
+    const ids = Array.from(selectedIds);
+    deleteContacts.mutate(ids, {
+      onSuccess: () => {
+        toast.success(`Deleted ${ids.length} contact${ids.length !== 1 ? "s" : ""}`);
+        setSelectedIds(new Set());
+      },
+      onError: (err) => {
+        toast.error("Failed to delete contacts: " + (err as Error).message);
+      },
+    });
+  };
+
+  const handleBulkExport = () => {
+    const selected = (contacts || []).filter((c: any) => selectedIds.has(c.id));
+    const headers = ["First Name", "Last Name", "Email", "Phone", "Title", "Company"];
+    const rows = selected.map((c: any) => [
+      c.first_name || "",
+      c.last_name || "",
+      c.email || "",
+      c.phone || "",
+      c.title || "",
+      c.companies?.company_name || "",
+    ]);
+    const csv = [headers, ...rows].map((r) => r.map((v: string) => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "contacts-export.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${selected.length} contact${selected.length !== 1 ? "s" : ""}`);
+  };
   
   const {
     columns: columnPrefs,
@@ -136,7 +194,24 @@ export function CustomersTab() {
 
   const allColumns = [
     {
-      id: "name",
+      id: "select",
+      accessorKey: "select",
+      header: (
+        <Checkbox
+          checked={selectedIds.size === (contacts?.length || 0) && (contacts?.length || 0) > 0}
+          onCheckedChange={(checked) => handleSelectAll(checked === true)}
+        />
+      ),
+      cell: (contact: ContactWithCompany) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={selectedIds.has(contact.id)}
+            onCheckedChange={(checked) => handleSelectOne(contact.id, checked === true)}
+          />
+        </div>
+      ),
+    },
+    {
       accessorKey: "name",
       header: (
         <FilterableTableHeader
@@ -449,7 +524,7 @@ export function CustomersTab() {
     },
   ];
 
-  const columns = allColumns.filter((col) => isVisible(col.id));
+  const columns = allColumns.filter((col) => col.id === "select" || isVisible(col.id));
 
   if (isLoading) {
     return (
@@ -478,6 +553,14 @@ export function CustomersTab() {
           onReset={resetToDefault}
         />
       </CRMDataFilters>
+
+      <CustomersBulkActionBar
+        selectedCount={selectedIds.size}
+        onDelete={handleBulkDelete}
+        onClearSelection={() => setSelectedIds(new Set())}
+        onExport={handleBulkExport}
+        isDeleting={deleteContacts.isPending}
+      />
 
       <div className="text-sm text-muted-foreground">
         Showing {contacts?.length || 0} customers
