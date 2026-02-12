@@ -138,6 +138,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "calendar_events_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "calendar_events_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
@@ -871,6 +878,13 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "emails_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts_safe"
             referencedColumns: ["id"]
           },
           {
@@ -2154,7 +2168,36 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      email_accounts_safe: {
+        Row: {
+          created_at: string | null
+          email_address: string | null
+          expires_at: string | null
+          id: string | null
+          provider: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email_address?: string | null
+          expires_at?: string | null
+          id?: string | null
+          provider?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email_address?: string | null
+          expires_at?: string | null
+          id?: string | null
+          provider?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       update_user_consent: {

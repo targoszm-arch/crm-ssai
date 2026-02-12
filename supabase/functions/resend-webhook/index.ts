@@ -1,9 +1,67 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { encode as hexEncode } from "https://deno.land/std@0.208.0/encoding/hex.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+async function verifyResendSignature(req: Request, body: string): Promise<boolean> {
+  const webhookSecret = Deno.env.get("RESEND_WEBHOOK_SECRET");
+  if (!webhookSecret) {
+    console.error("RESEND_WEBHOOK_SECRET not configured");
+    return false;
+  }
+
+  const signatureHeader = req.headers.get("svix-signature");
+  const timestampHeader = req.headers.get("svix-timestamp");
+  const msgIdHeader = req.headers.get("svix-id");
+
+  if (!signatureHeader || !timestampHeader || !msgIdHeader) {
+    console.error("Missing webhook signature headers");
+    return false;
+  }
+
+  // Check timestamp is within 5 minutes to prevent replay attacks
+  const timestamp = parseInt(timestampHeader, 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - timestamp) > 300) {
+    console.error("Webhook timestamp too old or in the future");
+    return false;
+  }
+
+  // Construct the signed content
+  const signedContent = `${msgIdHeader}.${timestampHeader}.${body}`;
+
+  // Decode the secret (base64 with whsec_ prefix)
+  const secretBytes = Uint8Array.from(
+    atob(webhookSecret.startsWith("whsec_") ? webhookSecret.slice(6) : webhookSecret),
+    (c) => c.charCodeAt(0)
+  );
+
+  // Compute HMAC-SHA256
+  const key = await crypto.subtle.importKey(
+    "raw",
+    secretBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signatureBytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signedContent));
+  const computedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureBytes)));
+
+  // Compare against all provided signatures (comma-separated, each prefixed with v1,)
+  const signatures = signatureHeader.split(" ");
+  for (const sig of signatures) {
+    const [version, value] = sig.split(",");
+    if (version === "v1" && value === computedSignature) {
+      return true;
+    }
+  }
+
+  console.error("Webhook signature verification failed");
+  return false;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -11,11 +69,23 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Read body as text for signature verification
+    const bodyText = await req.text();
+
+    // Verify webhook signature
+    const isValid = await verifyResendSignature(req, bodyText);
+    if (!isValid) {
+      return new Response(JSON.stringify({ error: "Invalid webhook signature" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const payload = await req.json();
+    const payload = JSON.parse(bodyText);
     console.log("Resend webhook received:", JSON.stringify(payload, null, 2));
 
     const { type, data } = payload;
@@ -63,7 +133,6 @@ Deno.serve(async (req) => {
       case "email.bounced":
         updates.bounced_at = new Date().toISOString();
         updates.status = "bounced";
-        // Also update enrollment status
         await supabase
           .from("sequence_enrollments")
           .update({ status: "bounced" })
@@ -71,7 +140,6 @@ Deno.serve(async (req) => {
         break;
       case "email.complained":
         updates.status = "complained";
-        // Unsubscribe the contact
         await supabase
           .from("sequence_enrollments")
           .update({ status: "unsubscribed" })
@@ -101,7 +169,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error("Resend webhook error:", error);
     return new Response(
-      JSON.stringify({ success: false, error: String(error) }),
+      JSON.stringify({ success: false, error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
