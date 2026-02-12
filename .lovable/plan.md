@@ -1,50 +1,66 @@
 
-# Add Bulk Enrich to Customers and Organisations Tabs
+
+# Push LMS Leads to Apollo API
 
 ## Overview
-Add an "Enrich Selected" button to both the Customers and Organisations bulk action bars. When you select records via checkboxes and click "Enrich Selected", only the selected records get enriched via the existing Hunter.io + OpenAI edge functions. The enrichment runs sequentially to avoid rate limits.
+Create a scheduled edge function that syncs LMS leads from the `lms_leads` table to Apollo's People Match/Enrichment API, creating or updating contacts in Apollo. A tracking column will prevent re-processing already-synced leads.
 
-## Changes
+## Steps
 
-### 1. Add "Enrich Selected" to `OrganisationsBulkActionBar.tsx`
-- Add a new `onEnrich` prop and `isEnriching` loading state prop
-- Add a "Sparkles" icon button labeled "Enrich Selected" between Export and Delete
-- Shows a loading spinner while enrichment is in progress
+### 1. Add Apollo API Key Secret
+Before building, you'll need to provide your Apollo API key. It will be stored securely as a Supabase Edge Function secret (`APOLLO_API_KEY`).
 
-### 2. Add "Enrich Selected" to `CustomersBulkActionBar.tsx`
-- Same pattern: add `onEnrich` and `isEnriching` props
-- Add the "Enrich Selected" button with Sparkles icon
+### 2. Database Migration -- Add Sync Tracking
+Add columns to `lms_leads` to track Apollo sync status:
+- `apollo_synced_at` (timestamptz, nullable) -- when last pushed to Apollo
+- `apollo_contact_id` (text, nullable) -- Apollo's contact ID returned from the API
 
-### 3. Wire bulk enrich in `OrganisationsTab.tsx`
-- Import `enrichCompany` from `@/lib/api/enrichment`
-- Add `isEnriching` state
-- Add `handleBulkEnrich` function that loops through `selectedIds`, calls `enrichCompany(id)` for each selected company sequentially, shows a toast with progress, and invalidates the companies query when done
-- Pass `onEnrich` and `isEnriching` to `OrganisationsBulkActionBar`
+This avoids re-processing leads that have already been synced.
 
-### 4. Wire bulk enrich in `CustomersTab.tsx`
-- Import `enrichContact` from `@/lib/api/enrichment`
-- Add `isEnriching` state
-- Add `handleBulkEnrich` function that loops through `selectedIds`, calls `enrichContact(id)` for each selected contact sequentially, shows progress toasts, and invalidates the contacts query when done
-- Pass `onEnrich` and `isEnriching` to `CustomersBulkActionBar`
+### 3. Create Edge Function: `sync-leads-apollo`
+A new edge function at `supabase/functions/sync-leads-apollo/index.ts` that:
 
-### 5. Add batch enrichment API to `src/lib/api/enrichment.ts`
-- Add `enrichCompanies(ids: string[])` helper that calls `enrichCompany` sequentially with error handling per record
-- Add `enrichContacts(ids: string[])` helper that does the same for contacts
-- Returns a summary: `{ succeeded: number, failed: number }`
+1. Uses the service role key to query all `lms_leads` where `apollo_synced_at IS NULL` (unsynced leads), limited to batches of 50
+2. For each lead, calls Apollo's People Match API:
+   ```
+   POST https://api.apollo.io/api/v1/people/match
+   Headers: x-api-key, Content-Type: application/json
+   Body: { email, first_name, last_name, organization_name }
+   ```
+3. Parses the response and stores the returned `contact_id` from Apollo
+4. Updates the `lms_leads` row with `apollo_synced_at = now()` and `apollo_contact_id`
+5. Includes rate limiting (small delay between calls) to respect Apollo API limits
+6. Returns a summary of synced/skipped/errored leads
 
-## Files Modified
-- `src/components/customers/OrganisationsBulkActionBar.tsx` -- add Enrich button
-- `src/components/customers/CustomersBulkActionBar.tsx` -- add Enrich button
-- `src/components/customers/OrganisationsTab.tsx` -- wire bulk enrich handler
-- `src/components/customers/CustomersTab.tsx` -- wire bulk enrich handler
-- `src/lib/api/enrichment.ts` -- add batch helpers
+The function will accept an optional `force` parameter to re-sync already-synced leads.
 
-## No New Files
-All changes go into existing files.
+### 4. Register in `supabase/config.toml`
+```toml
+[functions.sync-leads-apollo]
+verify_jwt = false
+```
+
+### 5. Set Up Cron Job
+Create a `pg_cron` scheduled job that calls this function every hour (or configurable interval) using `pg_net`:
+```sql
+SELECT cron.schedule('sync-leads-apollo-hourly', '0 * * * *', ...);
+```
+
+### 6. Add Manual Trigger Button (Optional)
+Add a "Sync to Apollo" button on the LMS Leads tab in the Customers page that calls the edge function on-demand.
 
 ## Technical Details
-- Enrichment calls are sequential (not parallel) to respect Hunter.io rate limits (15 requests/second on paid plans)
-- Each call invokes the existing edge functions (`enrich-company` / `enrich-contact`) which already handle Hunter.io + OpenAI pipeline
-- Progress is shown via toast notifications ("Enriching 3 of 10...")
-- On completion, query cache is invalidated to refresh the table with enriched data
-- Failed individual enrichments are counted but don't stop the batch
+
+**Apollo API endpoint**: `POST https://api.apollo.io/api/v1/people/match`
+- Sends: `email`, `first_name`, `last_name`, `organization_name` (derived from the lead's company association)
+- Returns: enriched person data including Apollo `contact_id`, `linkedin_url`, `title`, `organization` details
+
+**Data mapping from `lms_leads`**:
+- `email` -> Apollo `email`
+- `full_name` -> split into `first_name` / `last_name`
+- Company name looked up from `companies` table via `company_id`
+
+**Error handling**: Individual lead failures won't block the batch -- errors are logged and the lead remains unsynced for retry on the next run.
+
+**New secret required**: `APOLLO_API_KEY`
+
