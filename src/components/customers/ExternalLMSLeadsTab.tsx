@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useExternalLMSCustomers, ExternalLMSCustomer } from "@/hooks/useExternalLMSCustomers";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -35,6 +37,7 @@ import {
   Search,
   Mail,
   Building2,
+  Upload,
 } from "lucide-react";
 import { format } from "date-fns";
 import { EnrollAbandonmentModal } from "@/components/recovery/EnrollAbandonmentModal";
@@ -47,6 +50,24 @@ export function ExternalLMSLeadsTab() {
   const [localSearch, setLocalSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
+  const [isSyncingApollo, setIsSyncingApollo] = useState(false);
+
+  const handleSyncToApollo = async () => {
+    setIsSyncingApollo(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke("sync-leads-apollo", {
+        body: { force: false },
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      });
+      if (error) throw error;
+      toast.success(`Apollo sync complete: ${data?.synced || 0} synced, ${data?.errors || 0} errors`);
+    } catch (err: any) {
+      toast.error("Apollo sync failed: " + (err.message || "Unknown error"));
+    } finally {
+      setIsSyncingApollo(false);
+    }
+  };
 
   const { data: customers, isLoading, isError, error, refetch, isFetching } = useExternalLMSCustomers({
     signupType: signupType || undefined,
@@ -171,6 +192,16 @@ export function ExternalLMSLeadsTab() {
           disabled={isFetching}
         >
           <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSyncToApollo}
+          disabled={isSyncingApollo}
+        >
+          <Upload className={`h-4 w-4 mr-2 ${isSyncingApollo ? 'animate-spin' : ''}`} />
+          {isSyncingApollo ? "Syncing..." : "Sync to Apollo"}
         </Button>
       </div>
 
