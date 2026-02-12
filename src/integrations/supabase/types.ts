@@ -1274,6 +1274,8 @@ export type Database = {
       }
       lms_leads: {
         Row: {
+          apollo_contact_id: string | null
+          apollo_synced_at: string | null
           company_id: string | null
           company_size: string | null
           contact_id: string | null
@@ -1297,6 +1299,8 @@ export type Database = {
           verified: boolean | null
         }
         Insert: {
+          apollo_contact_id?: string | null
+          apollo_synced_at?: string | null
           company_id?: string | null
           company_size?: string | null
           contact_id?: string | null
@@ -1320,6 +1324,8 @@ export type Database = {
           verified?: boolean | null
         }
         Update: {
+          apollo_contact_id?: string | null
+          apollo_synced_at?: string | null
           company_id?: string | null
           company_size?: string | null
           contact_id?: string | null
