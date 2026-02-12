@@ -12,6 +12,29 @@ serve(async (req) => {
   }
 
   try {
+    // Authenticate user
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userId = user.id;
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -46,6 +69,7 @@ serve(async (req) => {
     
     const companies: Array<{
       company_name: string;
+      user_id: string;
       labels: string | null;
       address: string | null;
       website: string | null;
@@ -82,10 +106,8 @@ serve(async (req) => {
           record[header] = values[index] || null;
         });
 
-        // Get industry - prefer first occurrence (non-duplicate), fallback to duplicate if first is empty
         const industry = record["Organization - Industry"] || record["Organization - Industry_1"] || null;
         
-        // Get employee count with correct case (lowercase 'e' in 'employees')
         const rawEmployeeCount = record["Organization - Number of employees"] || 
                                   record["Organization - Number of Employees"] || 
                                   record["Organization - Number of employees_1"] || null;
@@ -93,9 +115,9 @@ serve(async (req) => {
         const employeeCount = parseEmployeeCount(rawEmployeeCount);
         const employeeRange = createEmployeeRange(employeeCount);
 
-        // Map all CSV columns to database columns
         const company = {
           company_name: record["Organization - Name"] || record["Record"] || "Unknown",
+          user_id: userId,
           labels: record["Organization - Labels"] || null,
           address: record["Organization - Address"] || null,
           website: record["Organization - Website"] || null,
@@ -120,14 +142,12 @@ serve(async (req) => {
           stage: mapLabel(record["Organization - Labels"]),
         };
 
-        // Log first record for debugging
         if (i === 1) {
           console.log("First record industry:", industry);
           console.log("First record employee_count:", employeeCount);
           console.log("First record employee_range:", employeeRange);
         }
 
-        // Skip records without a name
         if (company.company_name && company.company_name !== "Unknown" && company.company_name !== "-") {
           companies.push(company);
         }
@@ -138,26 +158,23 @@ serve(async (req) => {
 
     console.log(`Parsed ${companies.length} companies from CSV`);
 
-    // Collect all company names from CSV for later cleanup (if clearExisting)
     const csvCompanyNames = companies.map(c => c.company_name.toLowerCase().trim());
     const csvCompanyNamesSet = new Set(csvCompanyNames);
 
-    // UPSERT LOGIC: Match by company_name (case-insensitive)
-    // 1. Fetch all existing companies
+    // Only fetch companies belonging to this user
     const { data: existingCompanies, error: fetchError } = await supabase
       .from("companies")
-      .select("id, company_name");
+      .select("id, company_name")
+      .eq("user_id", userId);
 
     if (fetchError) {
       console.log("Error fetching existing companies:", fetchError.message);
       throw new Error(`Failed to fetch existing companies: ${fetchError.message}`);
     }
 
-    // Build a map of lowercase company_name -> existing record
     const existingMap = new Map<string, { id: string; company_name: string }>();
     for (const company of existingCompanies || []) {
       const key = company.company_name.toLowerCase().trim();
-      // If duplicate names exist, keep the first one found (or you could prefer one with contacts)
       if (!existingMap.has(key)) {
         existingMap.set(key, company);
       }
@@ -165,7 +182,6 @@ serve(async (req) => {
 
     console.log(`Found ${existingMap.size} unique existing companies by name`);
 
-    // Separate into updates and inserts
     const toUpdate: Array<{ id: string; data: typeof companies[0] }> = [];
     const toInsert: typeof companies = [];
 
@@ -185,7 +201,6 @@ serve(async (req) => {
     let updated = 0;
     let inserted = 0;
 
-    // Perform updates (one at a time to preserve IDs)
     for (const { id, data } of toUpdate) {
       const { error: updateError } = await supabase
         .from("companies")
@@ -193,7 +208,8 @@ serve(async (req) => {
           ...data,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", userId);
 
       if (updateError) {
         console.log(`Error updating company ${id}:`, updateError.message);
@@ -205,7 +221,6 @@ serve(async (req) => {
 
     console.log(`Updated ${updated} companies`);
 
-    // Batch insert new companies in chunks of 100
     const chunkSize = 100;
     for (let i = 0; i < toInsert.length; i += chunkSize) {
       const chunk = toInsert.slice(i, i + chunkSize);
@@ -224,16 +239,14 @@ serve(async (req) => {
 
     console.log(`Inserted ${inserted} new companies`);
 
-    // If clearExisting is true, delete companies NOT in the CSV
-    // BUT only if they have no linked contacts (to prevent orphaning)
     let deleted = 0;
     if (clearExisting) {
       console.log("Cleaning up companies not in CSV...");
       
-      // Get all companies that are NOT in the CSV
       const { data: allCompanies } = await supabase
         .from("companies")
-        .select("id, company_name");
+        .select("id, company_name")
+        .eq("user_id", userId);
 
       const companiesToDelete: string[] = [];
       for (const company of allCompanies || []) {
@@ -246,7 +259,6 @@ serve(async (req) => {
       if (companiesToDelete.length > 0) {
         console.log(`Found ${companiesToDelete.length} companies to potentially delete`);
 
-        // Check which have contacts - don't delete those
         const { data: companiesWithContacts } = await supabase
           .from("contacts")
           .select("company_id")
@@ -261,7 +273,8 @@ serve(async (req) => {
           const { error: deleteError } = await supabase
             .from("companies")
             .delete()
-            .in("id", safeToDelete);
+            .in("id", safeToDelete)
+            .eq("user_id", userId);
 
           if (deleteError) {
             console.log("Error deleting orphan companies:", deleteError.message);

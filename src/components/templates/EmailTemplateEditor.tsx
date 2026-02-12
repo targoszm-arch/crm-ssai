@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -612,7 +613,7 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
         </div>
         <div
           className="p-4 border rounded-md bg-white dark:bg-muted/20 prose prose-sm max-w-none dark:prose-invert"
-          dangerouslySetInnerHTML={{ __html: extractBodyContent(value) }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(extractBodyContent(value)) }}
         />
       </div>
 
