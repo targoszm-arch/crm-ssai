@@ -12,6 +12,29 @@ serve(async (req) => {
   }
 
   try {
+    // Authenticate user
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userId = user.id;
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -25,16 +48,16 @@ serve(async (req) => {
       );
     }
 
-    // Fetch all companies to create a lookup map by name
+    // Fetch all companies belonging to this user for matching
     const { data: companiesData, error: companiesError } = await supabase
       .from("companies")
-      .select("id, company_name");
+      .select("id, company_name")
+      .eq("user_id", userId);
 
     if (companiesError) {
       throw new Error(`Failed to fetch companies: ${companiesError.message}`);
     }
 
-    // Create a map of company names (lowercase) to IDs for matching
     const companyMap = new Map<string, string>();
     companiesData?.forEach((company) => {
       if (company.company_name) {
@@ -65,7 +88,6 @@ serve(async (req) => {
           record[header] = values[index] || null;
         });
 
-        // Get organization name and find matching company
         const orgName = record["Person - Organization"] || null;
         let companyId: string | null = null;
         
@@ -74,11 +96,11 @@ serve(async (req) => {
           if (companyId) matchedCount++;
         }
 
-        // Map all CSV columns to database columns
         const contact = {
           first_name: record["Person - First name"] || record["Person - Name"]?.split(" ")[0] || "Unknown",
           last_name: record["Person - Last name"] || null,
           company_id: companyId,
+          user_id: userId,
           title: record["Person - Job title"] || null,
           email: record["Person - Email - Work"] || record["Person - Email - Home"] || record["Person - Email - Other"] || null,
           phone: cleanPhone(record["Person - Phone - Mobile"] || record["Person - Phone - Work"] || record["Person - Phone - Home"] || record["Person - Phone - Other"]),
@@ -103,7 +125,6 @@ serve(async (req) => {
           done_activities: parseInt(record["Person - Done activities"]) || 0,
         };
 
-        // Skip records without a first name
         if (contact.first_name && contact.first_name !== "Unknown") {
           contacts.push(contact);
         }
@@ -114,7 +135,6 @@ serve(async (req) => {
 
     console.log(`Parsed ${contacts.length} contacts, ${matchedCount} matched to companies`);
 
-    // Batch insert in chunks of 100
     const chunkSize = 100;
     let inserted = 0;
 

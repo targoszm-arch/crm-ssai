@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { format } from "date-fns";
 import { Mail, User, Send, Link2, X, Sparkles, Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -352,7 +353,7 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
         <div className="prose prose-sm max-w-none dark:prose-invert">
           {email.body_html ? (
             <div 
-              dangerouslySetInnerHTML={{ __html: email.body_html }} 
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(email.body_html) }} 
               className="email-content"
             />
           ) : (

@@ -46,6 +46,27 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Authenticate user
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const hunterApiKey = Deno.env.get("HUNTER_API_KEY");
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     if (!hunterApiKey) throw new Error("HUNTER_API_KEY not configured");
@@ -60,10 +81,12 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`Enriching contact: ${contactId}`);
 
+    // Verify contact belongs to user
     const { data: contact, error: fetchError } = await supabase
       .from("contacts")
       .select("*, companies!contacts_company_id_fkey(company_name, industry, website, domains)")
       .eq("id", contactId)
+      .eq("user_id", user.id)
       .single();
 
     if (fetchError || !contact) {

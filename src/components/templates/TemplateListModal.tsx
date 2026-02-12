@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { sanitizeHtml } from "@/lib/sanitize";
 import {
   Dialog,
   DialogContent,
@@ -254,7 +255,7 @@ export function TemplateListModal({
                         <div
                           className="mt-3 text-xs text-muted-foreground line-clamp-2 prose prose-sm max-w-none dark:prose-invert"
                           dangerouslySetInnerHTML={{
-                            __html: template.body_html.slice(0, 150),
+                            __html: sanitizeHtml(template.body_html.slice(0, 150)),
                           }}
                         />
                       )}
