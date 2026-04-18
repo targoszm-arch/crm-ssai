@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.sync-leads-apollo]
 verify_jwt = false
+
+[functions.mcp]
+verify_jwt = false
