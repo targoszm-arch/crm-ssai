@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, Loader2, CheckCircle2, AlertCircle, Users, Building2 } from "lucide-react";
+import { Upload, Loader2, Users, Building2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +16,6 @@ type ImportType = "organizations" | "contacts";
 export function ImportDataButton() {
   const [isImporting, setIsImporting] = useState(false);
   const [importType, setImportType] = useState<ImportType | null>(null);
-  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -31,7 +30,6 @@ export function ImportDataButton() {
     if (!file || !importType) return;
 
     setIsImporting(true);
-    setResult(null);
 
     try {
       const csvData = await file.text();
@@ -52,10 +50,6 @@ export function ImportDataButton() {
 
           if (saved === 0) {
             // Parsed fine but nothing matched — almost always a column-header mismatch.
-            setResult({
-              success: false,
-              message: `0 imported — check CSV column headers`,
-            });
             toast({
               title: "No organisations imported",
               description:
@@ -63,10 +57,6 @@ export function ImportDataButton() {
               variant: "destructive",
             });
           } else {
-            setResult({
-              success: true,
-              message: `Imported ${saved} organisations (${inserted} new, ${updated} updated)`,
-            });
             toast({
               title: "Organisations Imported",
               description: `${inserted} new, ${updated} updated${data.deleted ? `, ${data.deleted} removed` : ""}. Now import contacts.`,
@@ -86,10 +76,6 @@ export function ImportDataButton() {
         if (error) throw new Error(error.message);
 
         if (data.success) {
-          setResult({
-            success: true,
-            message: `Imported ${data.imported} contacts (${data.matched} linked)`,
-          });
           toast({
             title: "Contacts Imported",
             description: `Successfully imported ${data.imported} contacts. ${data.matched} linked to organisations.`,
@@ -103,7 +89,6 @@ export function ImportDataButton() {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Import failed";
-      setResult({ success: false, message });
       toast({
         title: "Import Failed",
         description: message,
@@ -154,16 +139,6 @@ export function ImportDataButton() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {result && (
-        <span className={`flex items-center gap-1 text-sm ${result.success ? "text-green-600" : "text-red-600"}`}>
-          {result.success ? (
-            <CheckCircle2 className="h-4 w-4" />
-          ) : (
-            <AlertCircle className="h-4 w-4" />
-          )}
-          {result.message}
-        </span>
-      )}
     </div>
   );
 }
