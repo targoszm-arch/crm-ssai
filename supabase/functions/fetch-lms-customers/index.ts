@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
     const offset = url.searchParams.get('offset') || '0';
 
     // Build external API URL with query params
-    const externalUrl = new URL('https://tozhflrmsjjgzfgqchaq.supabase.co/functions/v1/crm-customers');
+    const externalUrl = new URL('https://oxlujbymtjugefaqmwuy.supabase.co/functions/v1/crm-customers');
     if (since) externalUrl.searchParams.set('since', since);
     if (signupType) externalUrl.searchParams.set('signup_type', signupType);
     if (marketing) externalUrl.searchParams.set('marketing', marketing);

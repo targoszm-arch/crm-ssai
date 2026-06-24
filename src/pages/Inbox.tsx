@@ -88,18 +88,23 @@ export default function Inbox() {
       setIsAutoSyncing(true);
       
       syncEmails.mutate(
-        { accountId: currentAccount.id, maxResults: 100, daysBack: 1 },
+        { accountId: currentAccount.id, maxResults: 500, daysBack: 30 },
         {
           onSuccess: (data) => {
-            if (data.syncedCount > 0) {
-              toast({
-                title: "Inbox Updated",
-                description: `${data.syncedCount} new email${data.syncedCount > 1 ? 's' : ''} synced`,
-              });
-            }
+            toast({
+              title: "Inbox Updated",
+              description: `${data.syncedCount} new, ${data.skippedCount} already synced, ${data.errorCount} errors`,
+            });
             setIsAutoSyncing(false);
           },
-          onError: () => setIsAutoSyncing(false),
+          onError: (error) => {
+            toast({
+              title: "Email Sync Failed",
+              description: error instanceof Error ? error.message : "Unknown error",
+              variant: "destructive",
+            });
+            setIsAutoSyncing(false);
+          },
         }
       );
     }
