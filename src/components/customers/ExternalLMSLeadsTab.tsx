@@ -316,6 +316,19 @@ interface LMSCustomerRowProps {
   onEnroll: () => void;
 }
 
+// LMS profiles often have no full_name, so derive a readable name from the email
+// local part (e.g. "ursula.wcnutrition@gmail.com" -> "Ursula Wcnutrition").
+function nameFromEmail(email?: string | null): string {
+  if (!email) return "Unknown";
+  const local = email.split("@")[0] || "";
+  const derived = local
+    .split(/[._\-+]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+  return derived || email;
+}
+
 function LMSCustomerRow({ customer, selected, onSelect, onEnroll }: LMSCustomerRowProps) {
   const creditsAvailable = (customer.credits_total || 0) - (customer.credits_used || 0);
   const creditsPercentage = customer.credits_total && customer.credits_total > 0 
@@ -346,8 +359,8 @@ function LMSCustomerRow({ customer, selected, onSelect, onEnroll }: LMSCustomerR
           <div className="flex items-center gap-2">
             <GraduationCap className="h-4 w-4 text-primary shrink-0" />
             <div className="min-w-0">
-              <div className="truncate">{customer.full_name}</div>
-              <div className="text-xs text-muted-foreground truncate">{customer.email}</div>
+              <div className="truncate">{customer.full_name?.trim() || nameFromEmail(customer.email)}</div>
+              <div className="text-xs text-muted-foreground truncate">{customer.email || "—"}</div>
             </div>
           </div>
         </TableCell>
