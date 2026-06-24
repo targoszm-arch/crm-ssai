@@ -115,8 +115,18 @@ export default function Inbox() {
     try {
       const { data, error } = await supabase.functions.invoke("meetalfred-sync", { body: {} });
       if (error) throw error;
-      toast({ title: "Meet Alfred Sync Complete", description: `Synced messages` });
+      const r = data?.results;
+      const parts: string[] = [];
+      if (r?.campaigns?.synced) parts.push(`${r.campaigns.synced} campaigns`);
+      if (r?.replies?.synced) parts.push(`${r.replies.synced} replies`);
+      if (r?.connections?.synced) parts.push(`${r.connections.synced} connections`);
+      if (r?.leads?.synced) parts.push(`${r.leads.synced} leads`);
+      toast({
+        title: "Meet Alfred Sync Complete",
+        description: parts.length ? `Synced: ${parts.join(", ")}` : "No new data to sync",
+      });
       queryClient.invalidateQueries({ queryKey: ["linkedin-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     } catch (error) {
       toast({ title: "Sync Failed", description: error instanceof Error ? error.message : "Failed", variant: "destructive" });
     } finally {
