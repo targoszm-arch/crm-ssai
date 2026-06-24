@@ -13,7 +13,7 @@ export default function Customers() {
   const [addContactOpen, setAddContactOpen] = useState(false);
 
   return (
-    <div className="container mx-auto py-6 space-y-6 animate-fade-in">
+    <div className="w-full px-4 py-6 space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
