@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     console.log("Tracking added to email, sending via Resend...");
 
     // Send email via Resend
-    const fromAddress = from_email || "noreply@crm-ssai.lovable.app";
+    const fromAddress = from_email || "hello@skillstudio.ai";
     const fromDisplay = from_name ? `${from_name} <${fromAddress}>` : fromAddress;
 
     const { data: emailResult, error: sendError } = await resend.emails.send({
