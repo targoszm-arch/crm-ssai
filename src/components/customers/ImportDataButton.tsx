@@ -45,14 +45,32 @@ export function ImportDataButton() {
         if (error) throw new Error(error.message);
 
         if (data.success) {
-          setResult({
-            success: true,
-            message: `Imported ${data.imported} organisations`,
-          });
-          toast({
-            title: "Organisations Imported",
-            description: `Successfully imported ${data.imported} organisations. Now import contacts.`,
-          });
+          const inserted = data.inserted ?? 0;
+          const updated = data.updated ?? 0;
+          const saved = inserted + updated;
+
+          if (saved === 0) {
+            // Parsed fine but nothing matched — almost always a column-header mismatch.
+            setResult({
+              success: false,
+              message: `0 imported — check CSV column headers`,
+            });
+            toast({
+              title: "No organisations imported",
+              description:
+                "The file was read but no rows matched. The importer expects Pipedrive-style headers like \"Organization - Name\". Check your column names.",
+              variant: "destructive",
+            });
+          } else {
+            setResult({
+              success: true,
+              message: `Imported ${saved} organisations (${inserted} new, ${updated} updated)`,
+            });
+            toast({
+              title: "Organisations Imported",
+              description: `${inserted} new, ${updated} updated${data.deleted ? `, ${data.deleted} removed` : ""}. Now import contacts.`,
+            });
+          }
           queryClient.invalidateQueries({ queryKey: ["companies"] });
           queryClient.invalidateQueries({ queryKey: ["company-filter-options"] });
         } else {

@@ -67,11 +67,13 @@ serve(async (req) => {
 
     console.log(`Loaded ${companyMap.size} companies for matching`);
 
-    // Parse CSV
-    const lines = csvData.split("\n");
-    const headers = parseCSVLine(lines[0]);
-    
-    console.log("CSV Headers:", headers.slice(0, 15));
+    // Parse CSV — tolerate a BOM, \r\n / \r line endings, and comma/semicolon/tab/pipe delimiters.
+    const normalizedCsv = csvData.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
+    const lines = normalizedCsv.split("\n");
+    const delimiter = detectDelimiter(lines[0]);
+    const headers = parseCSVLine(lines[0], delimiter);
+
+    console.log("CSV Headers:", headers.slice(0, 15), "delimiter:", JSON.stringify(delimiter));
     
     const contacts = [];
     const errors = [];
@@ -81,48 +83,73 @@ serve(async (req) => {
       if (!lines[i].trim()) continue;
       
       try {
-        const values = parseCSVLine(lines[i]);
+        const values = parseCSVLine(lines[i], delimiter);
         const record: Record<string, any> = {};
 
         headers.forEach((header, index) => {
           record[header] = values[index] || null;
         });
 
-        const orgName = record["Person - Organization"] || null;
+        // Format-agnostic column lookup (case/space/punctuation-insensitive, with fuzzy fallback).
+        const pick = buildPicker(record);
+
+        const orgName = pick([
+          "Person - Organization", "Organization", "Organisation", "Company", "Company Name",
+          "Account", "Account Name", "Employer", "Organization Name",
+        ]);
         let companyId: string | null = null;
-        
+
         if (orgName) {
-          companyId = companyMap.get(orgName.toLowerCase().trim()) || null;
+          companyId = companyMap.get(String(orgName).toLowerCase().trim()) || null;
           if (companyId) matchedCount++;
         }
 
+        // Derive first/last name from explicit columns, or split a full-name column.
+        const fullName = pick(["Person - Name", "Full Name", "Name", "Contact Name", "Contact"]);
+        const fullParts = fullName ? String(fullName).trim().split(/\s+/) : [];
+        const firstName =
+          pick(["Person - First name", "First name", "First Name", "Given Name", "Firstname"]) ||
+          (fullParts.length ? fullParts[0] : null) ||
+          "Unknown";
+        const lastName =
+          pick(["Person - Last name", "Last name", "Last Name", "Surname", "Family Name", "Lastname"]) ||
+          (fullParts.length > 1 ? fullParts.slice(1).join(" ") : null);
+
         const contact = {
-          first_name: record["Person - First name"] || record["Person - Name"]?.split(" ")[0] || "Unknown",
-          last_name: record["Person - Last name"] || null,
+          first_name: firstName,
+          last_name: lastName,
           company_id: companyId,
           user_id: userId,
-          title: record["Person - Job title"] || null,
-          email: record["Person - Email - Work"] || record["Person - Email - Home"] || record["Person - Email - Other"] || null,
-          phone: cleanPhone(record["Person - Phone - Mobile"] || record["Person - Phone - Work"] || record["Person - Phone - Home"] || record["Person - Phone - Other"]),
-          work_location: record["Person - Country of Postal address"] || null,
-          linkedin_url: record["Person - LinkedIn URL (Lead CRM)"] || buildLinkedInUrl(record["Person - linkedin_handle"]) || null,
-          facebook_url: record["Person - Facebook URL"] || null,
-          instagram_url: record["Person - Instagram URL"] || null,
-          last_contacted: parseTimestamp(record["Person - Last activity date"]),
-          last_email_received: parseTimestamp(record["Person - Last email received"]),
-          notes: record["Person - Personalization_Notes"] || record["Person - Description"] || null,
-          connection_strength: record["Person - Connection strength"] || null,
-          labels: record["Person - Labels"] || null,
-          function: record["Person - Function"] || null,
-          marketing_status: record["Person - Marketing status"] || null,
-          seniority_level: record["Person - Seniority level"] || null,
-          next_recommended_action: record["Person - Next recommended action"] || null,
-          buying_signals: record["Person - Buying signals"] || null,
-          pain_point: record["Person - Pain Point detected"] || null,
-          interest_level: record["Person - Interest level"] || null,
-          lqs: parseInt(record["Person - LQS"]) || null,
-          email_messages_count: parseInt(record["Person - Email messages count"]) || 0,
-          done_activities: parseInt(record["Person - Done activities"]) || 0,
+          title: pick(["Person - Job title", "Job title", "Job Title", "Title", "Position", "Role"]),
+          email: pick([
+            "Person - Email - Work", "Email", "Email Address", "Work Email", "E-mail",
+            "Person - Email - Home", "Person - Email - Other", "Email - Work",
+          ]),
+          phone: cleanPhone(pick([
+            "Person - Phone - Mobile", "Phone", "Mobile", "Phone Number", "Telephone", "Cell",
+            "Person - Phone - Work", "Person - Phone - Home", "Person - Phone - Other",
+          ])),
+          work_location: pick(["Person - Country of Postal address", "Country", "Location", "City", "Region"]),
+          linkedin_url:
+            pick(["Person - LinkedIn URL (Lead CRM)", "LinkedIn", "LinkedIn URL", "LinkedIn profile"]) ||
+            buildLinkedInUrl(pick(["Person - linkedin_handle", "LinkedIn Handle", "linkedin_handle"])),
+          facebook_url: pick(["Person - Facebook URL", "Facebook URL", "Facebook"]),
+          instagram_url: pick(["Person - Instagram URL", "Instagram URL", "Instagram"]),
+          last_contacted: parseTimestamp(pick(["Person - Last activity date", "Last activity date", "Last Contacted"])),
+          last_email_received: parseTimestamp(pick(["Person - Last email received", "Last email received"])),
+          notes: pick(["Person - Personalization_Notes", "Person - Description", "Notes", "Description", "About"]),
+          connection_strength: pick(["Person - Connection strength", "Connection strength"]),
+          labels: pick(["Person - Labels", "Labels", "Label", "Tags", "Tag"]),
+          function: pick(["Person - Function", "Function", "Department"]),
+          marketing_status: pick(["Person - Marketing status", "Marketing status", "Marketing Status", "Subscription"]),
+          seniority_level: pick(["Person - Seniority level", "Seniority level", "Seniority"]),
+          next_recommended_action: pick(["Person - Next recommended action", "Next recommended action"]),
+          buying_signals: pick(["Person - Buying signals", "Buying signals"]),
+          pain_point: pick(["Person - Pain Point detected", "Pain Point", "Pain point detected"]),
+          interest_level: pick(["Person - Interest level", "Interest level"]),
+          lqs: parseInt(pick(["Person - LQS", "LQS"])) || null,
+          email_messages_count: parseInt(pick(["Person - Email messages count", "Email messages count"])) || 0,
+          done_activities: parseInt(pick(["Person - Done activities", "Done activities"])) || 0,
         };
 
         if (contact.first_name && contact.first_name !== "Unknown") {
@@ -161,6 +188,8 @@ serve(async (req) => {
         imported: inserted,
         total: contacts.length,
         matched: matchedCount,
+        rowsParsed: lines.length - 1,
+        detectedHeaders: headers.slice(0, 40),
         errors: errors.slice(0, 10),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -174,7 +203,7 @@ serve(async (req) => {
   }
 });
 
-function parseCSVLine(line: string): string[] {
+function parseCSVLine(line: string, delimiter = ","): string[] {
   const result = [];
   let current = "";
   let inQuotes = false;
@@ -189,7 +218,7 @@ function parseCSVLine(line: string): string[] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (char === "," && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       result.push(current.trim());
       current = "";
     } else {
@@ -199,6 +228,56 @@ function parseCSVLine(line: string): string[] {
 
   result.push(current.trim());
   return result;
+}
+
+// Pick the most likely delimiter from the header row.
+function detectDelimiter(headerLine: string): string {
+  const candidates = [",", ";", "\t", "|"];
+  let best = ",";
+  let bestCount = -1;
+  for (const d of candidates) {
+    const realCount = headerLine.split(d).length - 1;
+    if (realCount > bestCount) {
+      bestCount = realCount;
+      best = d;
+    }
+  }
+  return best;
+}
+
+function normalizeKey(s: string): string {
+  return (s ?? "").toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Returns a lookup that matches a logical field against many header aliases,
+// ignoring case/spacing/punctuation, with a fuzzy "contains" fallback.
+function buildPicker(record: Record<string, any>) {
+  const norm: Record<string, any> = {};
+  for (const k of Object.keys(record)) {
+    const nk = normalizeKey(k);
+    const v = record[k];
+    if (nk && (norm[nk] === undefined || norm[nk] === null || norm[nk] === "")) {
+      norm[nk] = v;
+    }
+  }
+  const keys = Object.keys(norm);
+  return (aliases: string[]): any => {
+    for (const a of aliases) {
+      const v = norm[normalizeKey(a)];
+      if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+    }
+    for (const a of aliases) {
+      const na = normalizeKey(a);
+      if (na.length < 4) continue;
+      for (const key of keys) {
+        if (key.includes(na) || na.includes(key)) {
+          const v = norm[key];
+          if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+        }
+      }
+    }
+    return null;
+  };
 }
 
 function cleanPhone(phone: string | null): string | null {

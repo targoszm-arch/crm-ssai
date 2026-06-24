@@ -48,9 +48,11 @@ serve(async (req) => {
       );
     }
 
-    // Parse CSV
-    const lines = csvData.split("\n");
-    const rawHeaders = parseCSVLine(lines[0]);
+    // Parse CSV — tolerate a BOM, \r\n / \r line endings, and comma/semicolon/tab/pipe delimiters.
+    const normalizedCsv = csvData.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
+    const lines = normalizedCsv.split("\n");
+    const delimiter = detectDelimiter(lines[0]);
+    const rawHeaders = parseCSVLine(lines[0], delimiter);
     
     // Handle duplicate column names by appending occurrence index
     const headerOccurrences: Record<string, number> = {};
@@ -99,47 +101,56 @@ serve(async (req) => {
       if (!lines[i].trim()) continue;
       
       try {
-        const values = parseCSVLine(lines[i]);
+        const values = parseCSVLine(lines[i], delimiter);
         const record: Record<string, any> = {};
 
         headers.forEach((header, index) => {
           record[header] = values[index] || null;
         });
 
-        const industry = record["Organization - Industry"] || record["Organization - Industry_1"] || null;
-        
-        const rawEmployeeCount = record["Organization - Number of employees"] || 
-                                  record["Organization - Number of Employees"] || 
-                                  record["Organization - Number of employees_1"] || null;
-        
+        // Format-agnostic column lookup (case/space/punctuation-insensitive, with fuzzy fallback).
+        const pick = buildPicker(record);
+
+        const industry = pick(["Organization - Industry", "Industry", "Sector", "Vertical"]);
+
+        const rawEmployeeCount = pick([
+          "Organization - Number of employees", "Number of employees", "Employees",
+          "Employee Count", "Headcount", "Company Size", "Size", "# Employees",
+        ]);
+
         const employeeCount = parseEmployeeCount(rawEmployeeCount);
         const employeeRange = createEmployeeRange(employeeCount);
 
+        const labelsValue = pick(["Organization - Labels", "Labels", "Label", "Tags", "Tag"]);
+
         const company = {
-          company_name: record["Organization - Name"] || record["Record"] || "Unknown",
+          company_name: pick([
+            "Organization - Name", "Organization Name", "Organisation Name", "Company Name",
+            "Account Name", "Organisation", "Organization", "Company", "Account", "Record", "Name",
+          ]) || "Unknown",
           user_id: userId,
-          labels: record["Organization - Labels"] || null,
-          address: record["Organization - Address"] || null,
-          website: record["Organization - Website"] || null,
-          linkedin_url: record["Organization - LinkedIn profile"] || record["LinkedIn"] || null,
+          labels: labelsValue,
+          address: pick(["Organization - Address", "Address", "Street", "Location"]),
+          website: pick(["Organization - Website", "Website", "Company Website", "Web", "URL", "Site"]),
+          linkedin_url: pick(["Organization - LinkedIn profile", "LinkedIn", "LinkedIn URL", "LinkedIn profile", "LinkedIn Company"]),
           industry: industry,
-          annual_turnover: parseRevenue(record["Organization - Annual revenue"]),
-          funding_raised: parseFunding(record["Organization - Total Funding"] || record["Funding raised"]),
+          annual_turnover: parseRevenue(pick(["Organization - Annual revenue", "Annual revenue", "Revenue", "Turnover", "Annual Turnover"])),
+          funding_raised: parseFunding(pick(["Organization - Total Funding", "Total Funding", "Funding raised", "Funding"])),
           employee_count: employeeCount,
           employee_range: employeeRange,
-          people_count: parseInt(record["Organization - People"]) || 0,
-          next_activity_date: parseTimestamp(record["Organization - Next activity date"]),
-          done_activities: parseInt(record["Organization - Done activities"]) || 0,
-          email_messages_count: parseInt(record["Organization - Email messages count"]) || 0,
-          description: record["Organization - Description"] || null,
-          foundation_date: parseFoundationYear(record["Organization - Year Founded"] || record["Foundation date"]),
-          domains: record["Domains"] || record["Organization - Domain"] || null,
-          categories: record["Categories"] || null,
-          connection_strength: record["Connection strength"] || null,
-          country: record["Organization - Country of Address"] || record["Primary location > Country"] || null,
-          client_id: record["Organization - ID"] || null,
-          last_interaction: parseTimestamp(record["Organization - Last activity date"]),
-          stage: mapLabel(record["Organization - Labels"]),
+          people_count: parseInt(pick(["Organization - People", "People", "Contacts", "Number of Contacts"])) || 0,
+          next_activity_date: parseTimestamp(pick(["Organization - Next activity date", "Next activity date", "Next Activity"])),
+          done_activities: parseInt(pick(["Organization - Done activities", "Done activities"])) || 0,
+          email_messages_count: parseInt(pick(["Organization - Email messages count", "Email messages count"])) || 0,
+          description: pick(["Organization - Description", "Description", "About", "Notes", "Summary"]),
+          foundation_date: parseFoundationYear(pick(["Organization - Year Founded", "Year Founded", "Foundation date", "Founded", "Founded Year"])),
+          domains: pick(["Domains", "Domain", "Organization - Domain"]),
+          categories: pick(["Categories", "Category"]),
+          connection_strength: pick(["Connection strength", "Connection Strength"]),
+          country: pick(["Organization - Country of Address", "Country", "Primary location > Country", "Country/Region", "HQ Country"]),
+          client_id: pick(["Organization - ID", "ID", "Company ID", "Account ID"]),
+          last_interaction: parseTimestamp(pick(["Organization - Last activity date", "Last activity date", "Last interaction", "Last Activity"])),
+          stage: mapLabel(labelsValue),
         };
 
         if (i === 1) {
@@ -293,6 +304,8 @@ serve(async (req) => {
         inserted,
         deleted,
         total: companies.length,
+        rowsParsed: lines.length - 1,
+        detectedHeaders: headers.slice(0, 40),
         errors: errors.slice(0, 10),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -306,7 +319,7 @@ serve(async (req) => {
   }
 });
 
-function parseCSVLine(line: string): string[] {
+function parseCSVLine(line: string, delimiter = ","): string[] {
   const result = [];
   let current = "";
   let inQuotes = false;
@@ -321,7 +334,7 @@ function parseCSVLine(line: string): string[] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (char === "," && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       result.push(current.trim());
       current = "";
     } else {
@@ -331,6 +344,56 @@ function parseCSVLine(line: string): string[] {
 
   result.push(current.trim());
   return result;
+}
+
+// Pick the most likely delimiter from the header row.
+function detectDelimiter(headerLine: string): string {
+  const candidates = [",", ";", "\t", "|"];
+  let best = ",";
+  let bestCount = -1;
+  for (const d of candidates) {
+    const realCount = headerLine.split(d).length - 1;
+    if (realCount > bestCount) {
+      bestCount = realCount;
+      best = d;
+    }
+  }
+  return best;
+}
+
+function normalizeKey(s: string): string {
+  return (s ?? "").toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Returns a lookup that matches a logical field against many header aliases,
+// ignoring case/spacing/punctuation, with a fuzzy "contains" fallback.
+function buildPicker(record: Record<string, any>) {
+  const norm: Record<string, any> = {};
+  for (const k of Object.keys(record)) {
+    const nk = normalizeKey(k);
+    const v = record[k];
+    if (nk && (norm[nk] === undefined || norm[nk] === null || norm[nk] === "")) {
+      norm[nk] = v;
+    }
+  }
+  const keys = Object.keys(norm);
+  return (aliases: string[]): any => {
+    for (const a of aliases) {
+      const v = norm[normalizeKey(a)];
+      if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+    }
+    for (const a of aliases) {
+      const na = normalizeKey(a);
+      if (na.length < 4) continue;
+      for (const key of keys) {
+        if (key.includes(na) || na.includes(key)) {
+          const v = norm[key];
+          if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+        }
+      }
+    }
+    return null;
+  };
 }
 
 function mapLabel(label: string | null): string {
