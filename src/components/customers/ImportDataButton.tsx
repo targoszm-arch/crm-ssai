@@ -37,9 +37,10 @@ export function ImportDataButton() {
       const csvData = await file.text();
 
       if (importType === "organizations") {
-        // Import organizations - clear existing and replace
+        // Additive import: insert new orgs + update matching ones by name.
+        // Never deletes existing orgs (clearExisting stays false).
         const { data, error } = await supabase.functions.invoke("import-companies", {
-          body: { csvData, clearExisting: true },
+          body: { csvData, clearExisting: false },
         });
 
         if (error) throw new Error(error.message);
@@ -58,7 +59,7 @@ export function ImportDataButton() {
             toast({
               title: "No organisations imported",
               description:
-                "The file was read but no rows matched. The importer expects Pipedrive-style headers like \"Organization - Name\". Check your column names.",
+                "The file was read but no organisation name column was found. Make sure one column is the company/organisation name.",
               variant: "destructive",
             });
           } else {
