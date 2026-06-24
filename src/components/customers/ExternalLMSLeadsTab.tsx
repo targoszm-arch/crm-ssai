@@ -69,37 +69,43 @@ export function ExternalLMSLeadsTab() {
     }
   };
 
+  // Fetch all leads once; all filtering happens client-side below.
   const { data: customers, isLoading, isError, error, refetch, isFetching } = useExternalLMSCustomers({
-    signupType: signupType || undefined,
-    marketing: marketingFilter === "true" ? true : marketingFilter === "false" ? false : undefined,
-    limit: 100,
+    limit: 500,
   });
 
-  // Client-side search filtering
-  const filteredCustomers = customers?.filter(customer => {
-    if (!searchQuery) {
-      // Apply status filter
-      if (statusFilter && statusFilter !== "all") {
-        if (customer.status !== statusFilter) return false;
-      }
-      return true;
+  const isActive = (value: string) => value !== "" && value !== "all";
+
+  const filteredCustomers = (customers ?? []).filter((customer) => {
+    // Signup type
+    if (isActive(signupType) && customer.signup_type !== signupType) return false;
+
+    // LMS status
+    if (isActive(statusFilter) && customer.status !== statusFilter) return false;
+
+    // Marketing consent
+    if (marketingFilter === "true" && customer.marketing_consent !== true) return false;
+    if (marketingFilter === "false" && customer.marketing_consent === true) return false;
+
+    // Free-text search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const haystack = [
+        customer.full_name,
+        customer.email,
+        customer.role,
+        customer.use_case,
+        customer.company_size,
+        customer.status,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(query)) return false;
     }
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = (
-      customer.full_name?.toLowerCase().includes(query) ||
-      customer.email?.toLowerCase().includes(query) ||
-      customer.role?.toLowerCase().includes(query) ||
-      customer.use_case?.toLowerCase().includes(query) ||
-      customer.company_size?.toLowerCase().includes(query)
-    );
-    
-    // Apply status filter
-    if (statusFilter && statusFilter !== "all") {
-      if (customer.status !== statusFilter) return false;
-    }
-    
-    return matchesSearch;
-  }) || [];
+
+    return true;
+  });
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -158,7 +164,6 @@ export function ExternalLMSLeadsTab() {
             <SelectItem value="all">All Types</SelectItem>
             <SelectItem value="instructor">Instructor</SelectItem>
             <SelectItem value="learner">Learner</SelectItem>
-            <SelectItem value="enterprise">Enterprise</SelectItem>
           </SelectContent>
         </Select>
 
@@ -168,9 +173,13 @@ export function ExternalLMSLeadsTab() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="trial">Trial</SelectItem>
-            <SelectItem value="expired">Expired</SelectItem>
+            <SelectItem value="Active">Active</SelectItem>
+            <SelectItem value="Verified">Verified</SelectItem>
+            <SelectItem value="Instructor Trial">Instructor Trial</SelectItem>
+            <SelectItem value="At Risk">At Risk</SelectItem>
+            <SelectItem value="Inactive">Inactive</SelectItem>
+            <SelectItem value="Churned">Churned</SelectItem>
+            <SelectItem value="Not Verified">Not Verified</SelectItem>
           </SelectContent>
         </Select>
 
@@ -315,10 +324,12 @@ function LMSCustomerRow({ customer, selected, onSelect, onEnroll }: LMSCustomerR
 
   const getStatusVariant = (status?: string) => {
     switch (status) {
-      case "active": return "default";
-      case "trial": return "secondary";
-      case "expired": return "destructive";
-      default: return "outline";
+      case "Active": return "default";
+      case "Verified":
+      case "Instructor Trial": return "secondary";
+      case "At Risk":
+      case "Churned": return "destructive";
+      default: return "outline"; // Inactive, Not Verified, unknown
     }
   };
 

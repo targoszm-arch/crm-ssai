@@ -60,19 +60,35 @@ export function useExternalLMSCustomers(params: FetchParams = {}) {
       }
 
       const result = await response.json();
-      
-      // Handle both array response and object with customers array
-      if (Array.isArray(result)) {
-        return result as ExternalLMSCustomer[];
-      }
-      if (result.customers && Array.isArray(result.customers)) {
-        return result.customers as ExternalLMSCustomer[];
-      }
-      if (result.data && Array.isArray(result.data)) {
-        return result.data as ExternalLMSCustomer[];
-      }
-      
-      return [] as ExternalLMSCustomer[];
+
+      // The LMS crm-customers endpoint may return a bare array, { customers }, or { data }.
+      const raw: any[] = Array.isArray(result)
+        ? result
+        : Array.isArray(result?.customers)
+        ? result.customers
+        : Array.isArray(result?.data)
+        ? result.data
+        : [];
+
+      // Normalize the LMS payload field names to this interface (the API uses
+      // user_id / role_type / marketing_emails_consent / used_credits / etc.).
+      return raw.map((c: any): ExternalLMSCustomer => ({
+        id: c.user_id ?? c.id ?? c.email,
+        email: c.email,
+        full_name: c.full_name,
+        role: c.role_type ?? c.role,
+        company_size: c.company_size,
+        use_case: c.use_case,
+        learning_objectives: c.learning_objective ?? c.learning_objectives,
+        marketing_consent: c.marketing_emails_consent ?? c.marketing_consent,
+        verified: c.email_verified ?? c.verified,
+        created_at: c.created_at,
+        credits_used: c.used_credits ?? c.credits_used,
+        credits_total: c.total_credits ?? c.credits_total,
+        plan: c.billing_plan ?? c.plan,
+        signup_type: c.signup_type,
+        status: c.status,
+      }));
     },
     staleTime: 30000, // 30 seconds
   });
