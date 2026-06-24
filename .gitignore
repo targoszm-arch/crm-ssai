@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 .lovable/
 .vercel
+supabase/.temp/
+.vercel
