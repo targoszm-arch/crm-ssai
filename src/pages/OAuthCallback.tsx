@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 // Fixed redirect URI - must match exactly what's in get-google-config and Google Cloud Console
-const FIXED_REDIRECT_URI = "https://crm-ssai.lovable.app/oauth/callback";
+const FIXED_REDIRECT_URI = "https://crm-ssai.vercel.app/oauth/callback";
 
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams();

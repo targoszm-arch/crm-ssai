@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // Fixed production redirect URI - register this EXACTLY in Google Cloud Console
-const FIXED_REDIRECT_URI = "https://crm-ssai.lovable.app/oauth/callback";
+const FIXED_REDIRECT_URI = "https://crm-ssai.vercel.app/oauth/callback";
 
 serve(async (req: Request): Promise<Response> => {
   // Handle CORS preflight
