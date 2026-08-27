@@ -21,6 +21,7 @@ import Deals from "./pages/Deals";
 import Auth from "./pages/Auth";
 import OAuthCallback from "./pages/OAuthCallback";
 import Analytics from "./pages/Analytics";
+import Visitors from "./pages/Visitors";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -152,6 +153,16 @@ const App = () => (
               <AuthGuard>
                 <AppShell>
                   <Calendar />
+                </AppShell>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/visitors"
+            element={
+              <AuthGuard>
+                <AppShell>
+                  <Visitors />
                 </AppShell>
               </AuthGuard>
             }

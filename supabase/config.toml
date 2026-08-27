@@ -92,3 +92,8 @@ verify_jwt = false
 
 [functions.mcp]
 verify_jwt = false
+
+# Called by the tracking snippet on the public marketing site, so it cannot
+# require a JWT.
+[functions.track-website-visit]
+verify_jwt = false

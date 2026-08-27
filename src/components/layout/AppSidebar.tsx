@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Users, ShoppingCart, LineChart, Calendar, CreditCard, Settings, Home, MessageSquare, GanttChartSquare, Wallet, Mail, Workflow, DollarSign } from "lucide-react";
+import { Users, ShoppingCart, LineChart, Calendar, CreditCard, Settings, Home, MessageSquare, GanttChartSquare, Wallet, Mail, Workflow, DollarSign, Radar } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail } from "@/components/ui/sidebar";
 const mainNavItems = [{
   icon: Home,
@@ -37,6 +37,10 @@ const mainNavItems = [{
   icon: Wallet,
   label: "Finances",
   path: "/finances"
+}, {
+  icon: Radar,
+  label: "Visitors",
+  path: "/visitors"
 }, {
   icon: LineChart,
   label: "Analytics",
