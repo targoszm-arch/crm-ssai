@@ -2172,8 +2172,219 @@ export type Database = {
         }
         Relationships: []
       }
+      visitor_ip_cache: {
+        Row: {
+          asn: string | null
+          asn_name: string | null
+          asn_type: string | null
+          city: string | null
+          classification: string
+          company_domain: string | null
+          company_name: string | null
+          country: string | null
+          ip_hash: string
+          raw: Json | null
+          region: string | null
+          resolved_at: string
+          resolver: string | null
+        }
+        Insert: {
+          asn?: string | null
+          asn_name?: string | null
+          asn_type?: string | null
+          city?: string | null
+          classification?: string
+          company_domain?: string | null
+          company_name?: string | null
+          country?: string | null
+          ip_hash: string
+          raw?: Json | null
+          region?: string | null
+          resolved_at?: string
+          resolver?: string | null
+        }
+        Update: {
+          asn?: string | null
+          asn_name?: string | null
+          asn_type?: string | null
+          city?: string | null
+          classification?: string
+          company_domain?: string | null
+          company_name?: string | null
+          country?: string | null
+          ip_hash?: string
+          raw?: Json | null
+          region?: string | null
+          resolved_at?: string
+          resolver?: string | null
+        }
+        Relationships: []
+      }
+      visitor_sites: {
+        Row: {
+          allowed_origins: string[]
+          created_at: string
+          domain: string | null
+          id: string
+          is_active: boolean
+          name: string
+          site_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allowed_origins?: string[]
+          created_at?: string
+          domain?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          site_key?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allowed_origins?: string[]
+          created_at?: string
+          domain?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          site_key?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      website_visits: {
+        Row: {
+          asn: string | null
+          asn_name: string | null
+          asn_type: string | null
+          city: string | null
+          classification: string
+          company_domain: string | null
+          company_name: string | null
+          country: string | null
+          created_at: string
+          id: string
+          ip_hash: string | null
+          matched_company_id: string | null
+          page_title: string | null
+          path: string | null
+          raw: Json | null
+          referrer: string | null
+          region: string | null
+          resolver: string | null
+          session_id: string | null
+          site_id: string
+          user_agent: string | null
+          user_id: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+          visited_at: string
+        }
+        Insert: {
+          asn?: string | null
+          asn_name?: string | null
+          asn_type?: string | null
+          city?: string | null
+          classification?: string
+          company_domain?: string | null
+          company_name?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          matched_company_id?: string | null
+          page_title?: string | null
+          path?: string | null
+          raw?: Json | null
+          referrer?: string | null
+          region?: string | null
+          resolver?: string | null
+          session_id?: string | null
+          site_id: string
+          user_agent?: string | null
+          user_id: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visited_at?: string
+        }
+        Update: {
+          asn?: string | null
+          asn_name?: string | null
+          asn_type?: string | null
+          city?: string | null
+          classification?: string
+          company_domain?: string | null
+          company_name?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          matched_company_id?: string | null
+          page_title?: string | null
+          path?: string | null
+          raw?: Json | null
+          referrer?: string | null
+          region?: string | null
+          resolver?: string | null
+          session_id?: string | null
+          site_id?: string
+          user_agent?: string | null
+          user_id?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visited_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "website_visits_matched_company_id_fkey"
+            columns: ["matched_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "website_visits_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "visitor_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
+      website_visitor_companies: {
+        Row: {
+          city: string | null
+          company_domain: string | null
+          company_name: string | null
+          country: string | null
+          first_seen: string | null
+          last_path: string | null
+          last_referrer: string | null
+          last_seen: string | null
+          matched_company_id: string | null
+          page_views: number | null
+          site_id: string | null
+          unique_pages: number | null
+          user_id: string | null
+          visit_count: number | null
+        }
+        Relationships: []
+      }
       email_accounts_safe: {
         Row: {
           created_at: string | null
