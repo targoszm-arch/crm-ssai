@@ -42,13 +42,13 @@ Taken from the live database, not from the original spec, which got two of them 
   `consent_granted`, `consent_denied`, `consent_revoked`. Anything else fails the insert.
 - `marketing_consent_log.entity_type` is CHECK-constrained to `profile` or `contact`.
 
-## Open item from the backfill
+## Conflict resolved
 
-One person disagrees across the two sources: `gdpr_consents` records marketing consent
-granted on their signup date, while `profiles.marketing_emails_consent` is false. Neither
-side was overwritten — guessing at a consent record is worse than carrying a known
-conflict. **Treat them as non-consenting until it is decided.** The query that finds them
-is at the bottom of `01`.
+One person disagreed across the two sources: `gdpr_consents` recorded marketing consent
+granted on their signup date, while `profiles.marketing_emails_consent` was false. Decided
+29 Aug — **treat as non-consenting**. The row was revoked rather than deleted, because a
+revocation you cannot evidence is as bad as no consent record, and logged as
+`consent_revoked`. `marketing` granted is now 21, exactly matching the profile flags.
 
 ## Remaining order
 

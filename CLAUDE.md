@@ -32,7 +32,7 @@ there were 64 live subscriptions as of 29 Aug 2026, not the two we had written d
 ## Consent conventions (LMS)
 
 `gdpr_consents` is the state table, and as of 29 Aug it is the accurate one — 228 `product`
-rows and 22 `marketing` rows, backfilled from `profiles`. When writing consent anywhere:
+rows and 21 granted `marketing` rows (plus 1 revoked), backfilled from `profiles`. When writing consent anywhere:
 
 - `consent_type` is a bare noun: `'marketing'`, `'product'`. Never `'marketing_emails'`.
 - Never write a `granted = false` marketing row. The absence of a row is stronger evidence

@@ -52,12 +52,20 @@ commit;
 -- Result after the run: marketing granted 22, product granted 228.
 select consent_type, granted, count(*) from gdpr_consents group by 1,2 order by 1,2;
 
--- UNRESOLVED, left deliberately untouched — one person disagrees across the two sources:
--- gdpr_consents says marketing consent was granted on their signup date, the profile flag
--- says false. Neither side was overwritten, because guessing at a consent record is worse
--- than carrying a known conflict. Until it is decided, treat them as NON-consenting.
-select p.email, p.marketing_emails_consent as profile_says, g.granted as gdpr_says,
-       g.granted_at::date as granted_on
+-- RESOLVED 2026-08-29. One person disagreed across the two sources: gdpr_consents recorded
+-- marketing consent granted on their signup date, while the profile flag said false.
+-- Decision (Magda): treat as NON-consenting. The row was revoked rather than deleted —
+-- a revocation you cannot evidence is as bad as no consent record at all — and logged as
+-- consent_revoked. Result: marketing granted = 21, exactly matching the profile flags,
+-- plus 1 revoked row.
+--
+-- update gdpr_consents g set granted = false, revoked_at = now(), updated_at = now()
+--   from profiles p
+--  where p.id = g.user_id and g.consent_type = 'marketing' and g.granted
+--    and p.marketing_emails_consent is not true;
+--
+-- This should now return zero rows:
+select p.email, p.marketing_emails_consent as profile_says, g.granted as gdpr_says
 from gdpr_consents g join profiles p on p.id = g.user_id
 where g.consent_type = 'marketing' and g.granted and p.marketing_emails_consent is not true;
 
