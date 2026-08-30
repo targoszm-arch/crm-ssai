@@ -1,0 +1,113 @@
+name: Deploy Supabase functions
+
+# Edge functions were deployed by hand until now, and the repo had drifted: five
+# functions sat in main having never been deployed at all, including the website
+# visitor tracker. This deploys what changed, on merge, so that cannot happen quietly.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/**"
+      - "supabase/config.toml"
+      - ".github/workflows/deploy-supabase-functions.yml"
+  workflow_dispatch:
+    inputs:
+      functions:
+        description: 'Function names, comma-separated. Use "all" to deploy every function in the repo.'
+        required: true
+        default: all
+
+concurrency:
+  group: deploy-supabase-functions
+  cancel-in-progress: false # never interrupt a half-finished deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # need the previous commit to diff against
+
+      - name: Work out which functions to deploy
+        id: pick
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.functions }}" = "all" ]; then
+              names=$(ls supabase/functions)
+            else
+              names=$(echo "${{ inputs.functions }}" | tr ',' '\n' | tr -d ' ')
+            fi
+          else
+            # Any function directory touched by this push.
+            names=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} -- 'supabase/functions/**' \
+                    | cut -d/ -f3 | sort -u)
+          fi
+
+          missing=""
+          for n in $names; do
+            [ -d "supabase/functions/$n" ] || missing="$missing $n"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::No such function directory:$missing"
+            exit 1
+          fi
+
+          echo "names<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$names" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "Selected:" $names
+
+      # The CLI defaults verify_jwt to true. Several functions here MUST be public —
+      # tracking pixels, the Framer site's visitor beacon, inbound webhooks — and they
+      # stay public only because config.toml says so. A function with no entry would be
+      # silently deployed as authenticated and stop working, so require the decision to
+      # be explicit rather than inherited from a default.
+      - name: Require an explicit verify_jwt for every function being deployed
+        run: |
+          set -euo pipefail
+          undeclared=""
+          while read -r n; do
+            [ -z "$n" ] && continue
+            grep -q "^\[functions\.$n\]" supabase/config.toml || undeclared="$undeclared $n"
+          done <<< "${{ steps.pick.outputs.names }}"
+          if [ -n "$undeclared" ]; then
+            echo "::error::No [functions.<name>] block in supabase/config.toml for:$undeclared"
+            echo "Add one setting verify_jwt explicitly — true for functions called with a user session,"
+            echo "false for tracking pixels, public beacons and inbound webhooks."
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          ref=$(grep '^project_id' supabase/config.toml | cut -d'"' -f2)
+          failed=""
+          while read -r n; do
+            [ -z "$n" ] && continue
+            echo "::group::$n"
+            # No --no-verify-jwt flag: the CLI reads verify_jwt per function from config.toml,
+            # which the step above has already proven is set for each of these.
+            if supabase functions deploy "$n" --project-ref "$ref"; then
+              echo "- \`$n\` deployed" >> "$GITHUB_STEP_SUMMARY"
+            else
+              failed="$failed $n"
+              echo "- \`$n\` **FAILED**" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "::endgroup::"
+          done <<< "${{ steps.pick.outputs.names }}"
+
+          # Deploy every function we can rather than stopping at the first failure,
+          # then fail the job — a partial deploy you know about beats one you don't.
+          if [ -n "$failed" ]; then
+            echo "::error::Failed to deploy:$failed"
+            exit 1
+          fi
