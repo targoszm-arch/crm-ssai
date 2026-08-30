@@ -3,6 +3,7 @@ import { sanitizeHtml } from "@/lib/sanitize";
 import { format } from "date-fns";
 import { Mail, User, Send, Link2, X, Sparkles, Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -220,34 +221,32 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
         <div className="flex items-center gap-3 flex-wrap">
           <Link2 className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">Link to contact:</span>
-          <Select
-            value={email.contact_id || "unlinked"}
-            onValueChange={(value) => {
-              if (value === "create-new") {
-                setAddContactOpen(true);
-              } else {
-                handleLinkContact(value === "unlinked" ? "" : value);
-              }
-            }}
-          >
-            <SelectTrigger className="w-[200px] h-8">
-              <SelectValue placeholder="Select contact" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="unlinked">No contact</SelectItem>
-              <SelectItem value="create-new">
-                <span className="flex items-center gap-2">
-                  <UserPlus className="h-3.5 w-3.5" />
-                  Create new contact
-                </span>
-              </SelectItem>
-              {contacts?.map((contact: Contact) => (
-                <SelectItem key={contact.id} value={contact.id}>
-                  {contact.first_name} {contact.last_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+              className="w-[200px] h-8"
+              options={[
+                { value: "unlinked", label: "No contact" },
+                { value: "create-new", label: "Create new contact" },
+                ...(contacts ?? []).map((contact: Contact) => ({
+                  value: contact.id,
+                  label: [contact.first_name, contact.last_name].filter(Boolean).join(" ")
+                    || contact.name || "(no name)",
+                  hint: contact.email ?? undefined,
+                })),
+              ]}
+              value={email.contact_id || "unlinked"}
+              onChange={(value) => {
+                if (!value) return;
+                if (value === "create-new") {
+                  setAddContactOpen(true);
+                } else {
+                  handleLinkContact(value === "unlinked" ? "" : value);
+                }
+              }}
+              placeholder="Select contact"
+              searchPlaceholder="Search by name or email..."
+              emptyText="No contact found."
+              
+            />
           {email.contacts && (
             <Badge variant="secondary">
               <User className="h-3 w-3 mr-1" />

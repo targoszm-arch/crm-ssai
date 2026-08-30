@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Send, Sparkles, Loader2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -196,21 +197,19 @@ export function ComposeEmail({
             </div>
             <div className="w-[200px]">
               <Label className="text-xs text-muted-foreground">Select Contact</Label>
-              <Select value={selectedContactId} onValueChange={handleSelectContact}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose contact" />
-                </SelectTrigger>
-                <SelectContent>
-                  {contacts?.map((contact: Contact) => (
-                    <SelectItem key={contact.id} value={contact.id}>
-                      {contact.first_name} {contact.last_name}
-                      {contact.email && (
-                        <span className="text-muted-foreground ml-1">({contact.email})</span>
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={(contacts ?? []).map((contact: Contact) => ({
+                  value: contact.id,
+                  label: [contact.first_name, contact.last_name].filter(Boolean).join(" ")
+                    || contact.name || "(no name)",
+                  hint: contact.email ?? undefined,
+                }))}
+                value={selectedContactId}
+                onChange={handleSelectContact}
+                placeholder="Choose contact"
+                searchPlaceholder="Search by name or email..."
+                emptyText="No contact found."
+              />
             </div>
           </div>
 

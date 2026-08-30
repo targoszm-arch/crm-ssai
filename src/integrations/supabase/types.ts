@@ -320,6 +320,17 @@ export type Database = {
           company_id: string | null
           connection_strength: string | null
           created_at: string
+          city: string | null
+          country: string | null
+          current_job_start_date: string | null
+          department: string | null
+          email_last_verified_at: string | null
+          email_status: string | null
+          region: string | null
+          source: string | null
+          time_zone: string | null
+          twitter_url: string | null
+          do_not_contact: boolean
           done_activities: number | null
           email: string | null
           email_messages_count: number | null
@@ -359,6 +370,17 @@ export type Database = {
           company_id?: string | null
           connection_strength?: string | null
           created_at?: string
+          city?: string | null
+          country?: string | null
+          current_job_start_date?: string | null
+          department?: string | null
+          email_last_verified_at?: string | null
+          email_status?: string | null
+          region?: string | null
+          source?: string | null
+          time_zone?: string | null
+          twitter_url?: string | null
+          do_not_contact?: boolean
           done_activities?: number | null
           email?: string | null
           email_messages_count?: number | null
@@ -398,6 +420,17 @@ export type Database = {
           company_id?: string | null
           connection_strength?: string | null
           created_at?: string
+          city?: string | null
+          country?: string | null
+          current_job_start_date?: string | null
+          department?: string | null
+          email_last_verified_at?: string | null
+          email_status?: string | null
+          region?: string | null
+          source?: string | null
+          time_zone?: string | null
+          twitter_url?: string | null
+          do_not_contact?: boolean
           done_activities?: number | null
           email?: string | null
           email_messages_count?: number | null
@@ -1446,6 +1479,63 @@ export type Database = {
           },
         ]
       }
+      newsletter_sends: {
+        Row: {
+          audience_id: string | null
+          audience_type: string | null
+          content_lab_article_id: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          preview_text: string | null
+          raw: Json | null
+          recipient_count: number | null
+          scheduled_at: string | null
+          sent_at: string | null
+          status: string | null
+          subject_line: string | null
+          synced_at: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          audience_id?: string | null
+          audience_type?: string | null
+          content_lab_article_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id: string
+          preview_text?: string | null
+          raw?: Json | null
+          recipient_count?: number | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject_line?: string | null
+          synced_at?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          audience_id?: string | null
+          audience_type?: string | null
+          content_lab_article_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          preview_text?: string | null
+          raw?: Json | null
+          recipient_count?: number | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject_line?: string | null
+          synced_at?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       pipeline_stages: {
         Row: {
           color: string | null
@@ -1981,6 +2071,7 @@ export type Database = {
       }
       sequences: {
         Row: {
+          category: string | null
           created_at: string | null
           description: string | null
           from_email: string | null
@@ -1994,6 +2085,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          category?: string | null
           created_at?: string | null
           description?: string | null
           from_email?: string | null
@@ -2007,6 +2099,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          category?: string | null
           created_at?: string | null
           description?: string | null
           from_email?: string | null

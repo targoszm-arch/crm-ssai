@@ -16,11 +16,24 @@
   "use strict";
 
   try {
-    var script = document.currentScript;
+    // document.currentScript is null whenever the snippet is injected rather than
+    // parsed inline — which is what Framer's custom-code block does. Falling back to
+    // finding our own tag by its data-site-key is what makes this work there; without
+    // it the tracker returns silently and looks like nothing is wrong.
+    var script = document.currentScript ||
+      document.querySelector("script[data-site-key]");
     if (!script) return;
 
     var siteKey = script.getAttribute("data-site-key");
     if (!siteKey) return;
+
+    // Opt-in logging, so setup can be confirmed without guessing. Add
+    // data-debug="true" to the snippet, load the page, read the console.
+    var debug = script.getAttribute("data-debug") === "true";
+    function log(msg, extra) {
+      if (debug) console.log("[ssai-visitor] " + msg, extra === undefined ? "" : extra);
+    }
+    log("tracker loaded", { siteKey: siteKey });
 
     var endpoint = script.getAttribute("data-endpoint") ||
       "https://getqcxnjsohtlagscmfc.supabase.co/functions/v1/track-website-visit";
@@ -91,7 +104,10 @@
         // straight through with no CORS preflight.
         if (navigator.sendBeacon) {
           var blob = new Blob([payload], { type: "text/plain;charset=UTF-8" });
-          if (navigator.sendBeacon(endpoint, blob)) return;
+          if (navigator.sendBeacon(endpoint, blob)) {
+            log("sent via sendBeacon", endpoint);
+            return;
+          }
         }
 
         // no-cors means a network or CORS failure can never reach the console.
@@ -101,7 +117,11 @@
           keepalive: true,
           headers: { "Content-Type": "text/plain;charset=UTF-8" },
           body: payload
-        }).catch(function () {});
+        }).then(function () {
+          log("sent via fetch", endpoint);
+        }).catch(function (err) {
+          log("send failed", err);
+        });
       } catch (e) {}
     }
 

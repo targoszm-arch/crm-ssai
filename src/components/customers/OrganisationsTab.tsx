@@ -40,7 +40,7 @@ function getConnectionStrengthBadge(strength: string | null) {
 }
 
 const ORGANISATION_COLUMNS: ColumnDefinition[] = [
-  { id: "company_name", label: "Name", defaultVisible: true },
+  { id: "company_name", label: "Name", defaultVisible: true , locked: true },
   { id: "labels", label: "Labels", defaultVisible: false },
   { id: "address", label: "Address", defaultVisible: false },
   { id: "website", label: "Website", defaultVisible: false },
