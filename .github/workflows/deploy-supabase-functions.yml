@@ -86,9 +86,19 @@ jobs:
 
       - name: Deploy
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          # The CLI reads SUPABASE_ACCESS_TOKEN from the environment; the repository
+          # secret holding it is named GHACTIONSCRMSSAI, matching the label on the
+          # Supabase personal access token it came from.
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.GHACTIONSCRMSSAI }}
         run: |
           set -euo pipefail
+          # Fail with something readable rather than an opaque CLI auth error if the
+          # secret is missing, renamed, or scoped to the wrong tab.
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "::error::Repository secret GHACTIONSCRMSSAI is empty or not set."
+            echo "Add it under Settings > Secrets and variables > Actions (not Codespaces or Dependabot)."
+            exit 1
+          fi
           ref=$(grep '^project_id' supabase/config.toml | cut -d'"' -f2)
           failed=""
           while read -r n; do
