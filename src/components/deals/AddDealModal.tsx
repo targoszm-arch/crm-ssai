@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -165,20 +166,24 @@ export function AddDealModal({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Contact Person</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select contact" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {contacts?.map((contact) => (
-                            <SelectItem key={contact.id} value={contact.id}>
-                              {contact.first_name} {contact.last_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        {/* 5,801 contacts — searchable, because scrolling this is not a
+                            realistic way to find anyone. */}
+                        <SearchableSelect
+                          options={(contacts ?? []).map((contact) => ({
+                            value: contact.id,
+                            label: [contact.first_name, contact.last_name]
+                              .filter(Boolean)
+                              .join(" ") || contact.name || "(no name)",
+                            hint: contact.email ?? undefined,
+                          }))}
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="Select contact"
+                          searchPlaceholder="Search by name or email..."
+                          emptyText="No contact found."
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -190,20 +195,20 @@ export function AddDealModal({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Organization</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select organization" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {companies?.map((company) => (
-                            <SelectItem key={company.id} value={company.id}>
-                              {company.company_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        {/* 1,217 companies — same reason. */}
+                        <SearchableSelect
+                          options={(companies ?? []).map((company) => ({
+                            value: company.id,
+                            label: company.company_name || "(unnamed)",
+                          }))}
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="Select organization"
+                          searchPlaceholder="Search organizations..."
+                          emptyText="No organization found."
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

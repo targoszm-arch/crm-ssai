@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { Calendar, CheckSquare, Loader2 } from "lucide-react";
+import { Calendar, CheckSquare, Loader2, Linkedin, MessageSquare, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useActivities } from "@/hooks/useActivities";
 
 interface ActivitiesTabProps {
   contactId: string;
@@ -43,7 +44,13 @@ export function ActivitiesTab({ contactId }: ActivitiesTabProps) {
     enabled: !!contactId,
   });
 
-  const isLoading = tasksLoading || eventsLoading;
+  // The activities table is where every Meet Alfred / LinkedIn touch lands — 62k rows of
+  // connections, replies and leads, all already linked to a contact. This tab used to read
+  // only tasks and calendar_events, so it showed "No activities yet" on contacts that had
+  // hundreds of recorded touches.
+  const { data: timeline, isLoading: timelineLoading } = useActivities(contactId);
+
+  const isLoading = tasksLoading || eventsLoading || timelineLoading;
 
   if (isLoading) {
     return (
@@ -53,19 +60,55 @@ export function ActivitiesTab({ contactId }: ActivitiesTabProps) {
     );
   }
 
-  const hasActivities = (tasks && tasks.length > 0) || (events && events.length > 0);
+  const hasActivities =
+    (tasks && tasks.length > 0) ||
+    (events && events.length > 0) ||
+    (timeline && timeline.length > 0);
 
   if (!hasActivities) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         <p className="text-sm">No activities yet</p>
-        <p className="text-xs mt-1">Tasks and calendar events linked to this contact will appear here</p>
+        <p className="text-xs mt-1">
+          LinkedIn touches, tasks and calendar events linked to this contact will appear here
+        </p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {/* LinkedIn / Meet Alfred timeline */}
+      {timeline && timeline.length > 0 && (
+        <div className="space-y-2">
+          <h5 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            LinkedIn ({timeline.length}
+            {timeline.length === 50 ? "+" : ""})
+          </h5>
+          {timeline.map((activity) => (
+            <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+              {activityIcon(activity.activity_type)}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{activityLabel(activity.activity_type)}</p>
+                {activity.description && (
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-3">
+                    {activity.description}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {format(new Date(activity.occurred_at), "MMM dd, yyyy 'at' h:mm a")}
+                </p>
+              </div>
+              {activity.source && (
+                <Badge variant="outline" className="text-xs shrink-0">
+                  {activity.source}
+                </Badge>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Tasks */}
       {tasks && tasks.length > 0 && (
         <div className="space-y-2">
@@ -117,4 +160,28 @@ export function ActivitiesTab({ contactId }: ActivitiesTabProps) {
       )}
     </div>
   );
+}
+
+// activity_type is free text. These are the three Meet Alfred writes today; anything else
+// falls back to a readable version of the raw value rather than being hidden.
+function activityLabel(type: string): string {
+  switch (type) {
+    case "linkedin_connection":
+      return "LinkedIn connection";
+    case "linkedin_reply":
+      return "LinkedIn reply";
+    case "linkedin_lead":
+      return "LinkedIn lead";
+    case "sequence_click_routed":
+      return "Clicked a link in a sequence email";
+    default:
+      return type.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  }
+}
+
+function activityIcon(type: string) {
+  const cls = "h-4 w-4 mt-0.5 text-muted-foreground shrink-0";
+  if (type === "linkedin_reply") return <MessageSquare className={cls} />;
+  if (type === "linkedin_lead") return <UserPlus className={cls} />;
+  return <Linkedin className={cls} />;
 }
