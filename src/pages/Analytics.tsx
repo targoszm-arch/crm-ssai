@@ -23,6 +23,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Mail, MousePointerClick, Eye, AlertTriangle, Clock, ExternalLink } from "lucide-react";
 import { useSequences } from "@/hooks/useSequences";
 import { useSequenceAnalytics, useAllSequencesAnalytics, RecipientData } from "@/hooks/useSequenceAnalytics";
+import { NewslettersTab } from "@/components/analytics/NewslettersTab";
+import { SequenceListTab } from "@/components/analytics/SequenceListTab";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 
@@ -160,7 +162,21 @@ export default function Analytics() {
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="recipients">Recipients</TabsTrigger>
+            <TabsTrigger value="list">List</TabsTrigger>
+            <TabsTrigger value="newsletters">Newsletters</TabsTrigger>
           </TabsList>
+
+          {/* Every sequence grouped by category — the single-sequence picker above cannot
+              show two runs of the same category side by side. */}
+          <TabsContent value="list" className="space-y-6 mt-6">
+            <SequenceListTab onSelectSequence={setSelectedSequenceId} />
+          </TabsContent>
+
+          {/* Newsletters come from Content Lab and carry no per-recipient events, so they
+              cannot share the sequence charts. */}
+          <TabsContent value="newsletters" className="space-y-6 mt-6">
+            <NewslettersTab />
+          </TabsContent>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
             {isLoadingAnalytics ? (
