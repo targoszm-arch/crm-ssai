@@ -112,12 +112,20 @@ export default function Visitors() {
   const [selected, setSelected] = useState<VisitorCompany | null>(null);
 
   const days = Number(range);
-  const { data: sites } = useVisitorSites();
+  const { data: sites, isLoading: sitesLoading } = useVisitorSites();
   const { data: companies, isLoading } = useVisitorCompanies(days);
   const { data: visits } = useWebsiteVisits(days);
   const addToCrm = useAddVisitorToCrm();
 
   const hasSite = (sites?.length ?? 0) > 0;
+
+  // Tabs must be controlled here. defaultValue is read once on mount, and on that first
+  // render the sites query has not resolved — so hasSite is false and the page always
+  // opened on Setup, even with a site configured. While the query is in flight assume
+  // Companies (the steady state once set up) so the common case never flickers; fall back
+  // to Setup only once we actually know there are no sites.
+  const [tab, setTab] = useState<string | null>(null);
+  const activeTab = tab ?? (sitesLoading || hasSite ? "companies" : "setup");
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -199,7 +207,7 @@ export default function Visitors() {
         />
       </div>
 
-      <Tabs defaultValue={hasSite ? "companies" : "setup"}>
+      <Tabs value={activeTab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="companies">Companies</TabsTrigger>
           <TabsTrigger value="visits">All page views</TabsTrigger>
