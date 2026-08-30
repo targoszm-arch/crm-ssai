@@ -4,6 +4,12 @@ export interface ColumnDefinition {
   id: string;
   label: string;
   defaultVisible: boolean;
+  /**
+   * Identity columns (a person's name, a company's name) cannot be hidden. A table whose
+   * rows cannot be told apart is not a usable table, and preferences are persisted, so one
+   * accidental toggle leaves it that way for good.
+   */
+  locked?: boolean;
 }
 
 export interface ColumnPreference {
@@ -58,7 +64,14 @@ export function useColumnPreferences(
         
         // Remove columns that no longer exist
         const defaultIds = new Set(defaultColumns.map((c) => c.id));
-        return merged.filter((p) => defaultIds.has(p.id));
+        const lockedIds = new Set(
+          defaultColumns.filter((c) => c.locked).map((c) => c.id),
+        );
+        // Repair stored preferences that hide a locked column — including ones saved
+        // before the column was locked.
+        return merged
+          .filter((p) => defaultIds.has(p.id))
+          .map((p) => (lockedIds.has(p.id) ? { ...p, visible: true } : p));
       }
     } catch {
       // Ignore localStorage errors
@@ -88,13 +101,17 @@ export function useColumnPreferences(
     [columns]
   );
 
-  const toggleColumn = useCallback((columnId: string) => {
-    setColumns((prev) =>
-      prev.map((col) =>
-        col.id === columnId ? { ...col, visible: !col.visible } : col
-      )
-    );
-  }, []);
+  const toggleColumn = useCallback(
+    (columnId: string) => {
+      if (defaultColumns.some((c) => c.id === columnId && c.locked)) return;
+      setColumns((prev) =>
+        prev.map((col) =>
+          col.id === columnId ? { ...col, visible: !col.visible } : col,
+        ),
+      );
+    },
+    [defaultColumns],
+  );
 
   const reorderColumn = useCallback((fromIndex: number, toIndex: number) => {
     setColumns((prev) => {

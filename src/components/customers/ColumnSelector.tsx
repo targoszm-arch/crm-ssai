@@ -33,6 +33,10 @@ export function ColumnSelector({
     return columnDefinitions.find((c) => c.id === id)?.label || id;
   };
 
+  // Identity columns cannot be toggled off — see ColumnDefinition.locked.
+  const isLocked = (id: string) =>
+    columnDefinitions.find((c) => c.id === id)?.locked === true;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -70,13 +74,21 @@ export function ColumnSelector({
                   <Checkbox
                     checked={col.visible}
                     onCheckedChange={() => onToggle(col.id)}
+                    disabled={isLocked(col.id)}
                     id={`col-${col.id}`}
                   />
                   <label
                     htmlFor={`col-${col.id}`}
-                    className="text-sm cursor-pointer truncate flex-1"
+                    className={
+                      isLocked(col.id)
+                        ? "text-sm truncate flex-1 text-muted-foreground"
+                        : "text-sm cursor-pointer truncate flex-1"
+                    }
                   >
                     {getLabel(col.id)}
+                    {isLocked(col.id) && (
+                      <span className="ml-1 text-xs text-muted-foreground">(always shown)</span>
+                    )}
                   </label>
                 </div>
                 <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
