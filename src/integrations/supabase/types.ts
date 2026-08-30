@@ -1795,6 +1795,53 @@ export type Database = {
           },
         ]
       }
+      sequence_click_routes: {
+        Row: {
+          created_at: string
+          enrol_sequence_id: string | null
+          id: string
+          is_active: boolean
+          label: string
+          match_pattern: string
+          priority: number
+          topic: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          enrol_sequence_id?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          match_pattern: string
+          priority?: number
+          topic: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          enrol_sequence_id?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          match_pattern?: string
+          priority?: number
+          topic?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sequence_click_routes_enrol_sequence_id_fkey"
+            columns: ["enrol_sequence_id"]
+            isOneToOne: false
+            referencedRelation: "sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sequence_emails: {
         Row: {
           body_html: string | null
@@ -2417,6 +2464,20 @@ export type Database = {
       }
     }
     Functions: {
+      increment_contact_clicks: {
+        Args: {
+          contact_id_param: string
+        }
+        Returns: undefined
+      }
+      route_sequence_click: {
+        Args: {
+          p_contact_id: string
+          p_link_url: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       update_user_consent: {
         Args: {
           consent_type_param: string

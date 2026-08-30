@@ -85,13 +85,28 @@ Deno.serve(async (req) => {
 
     // Update contact total_clicks
     if (contactId) {
-      await supabase.rpc("increment_contact_clicks", { contact_id_param: contactId }).catch(() => {
-        // Fallback if RPC doesn't exist
-        supabase
-          .from("contacts")
-          .update({ total_clicks: supabase.raw("COALESCE(total_clicks, 0) + 1") })
-          .eq("id", contactId);
+      const { error: countError } = await supabase.rpc("increment_contact_clicks", {
+        contact_id_param: contactId,
       });
+      if (countError) {
+        // Not fatal: the click is already recorded in email_tracking_events, which is what
+        // segmentation reads. The counter is a convenience.
+        console.error("increment_contact_clicks failed:", countError);
+      }
+
+      // Turn the click into a segment: label the contact for whichever card they clicked
+      // and enrol them in that topic's follow-on sequence. Everything the routing decides
+      // is decided in Postgres, in route_sequence_click, so that this function and
+      // resend-webhook cannot drift apart — Supabase deploys them independently.
+      const { data: routed, error: routeError } = await supabase.rpc("route_sequence_click", {
+        p_contact_id: contactId,
+        p_link_url: decodedUrl,
+      });
+      if (routeError) {
+        console.error("route_sequence_click failed:", routeError);
+      } else {
+        console.log("Click routing:", routed);
+      }
     }
 
     console.log(`✓ Recorded click for sequence email ${emailId}`);

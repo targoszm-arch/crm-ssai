@@ -101,9 +101,16 @@ export function useCreateSequence() {
 
   return useMutation({
     mutationFn: async (sequence: Partial<Sequence>) => {
+      // sequences has RLS "auth.uid() = user_id" on INSERT, so an insert that leaves
+      // user_id null is rejected outright — which is why creating a sequence from the UI
+      // has never worked.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       const { data, error } = await supabase
         .from("sequences")
         .insert({
+          user_id: user.id,
           name: sequence.name || "New Sequence",
           description: sequence.description,
           trigger_type: sequence.trigger_type || "manual",
@@ -170,6 +177,10 @@ export function useEnrollContact() {
 
   return useMutation({
     mutationFn: async ({ sequenceId, contactId, metadata }: { sequenceId: string; contactId: string; metadata?: Record<string, any> }) => {
+      // Same RLS rule as sequences: an enrolment with a null user_id cannot be inserted.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       // Get sequence to find first step timing
       const { data: sequence } = await supabase
         .from("sequences")
@@ -191,6 +202,7 @@ export function useEnrollContact() {
       const { data, error } = await supabase
         .from("sequence_enrollments")
         .insert({
+          user_id: user.id,
           sequence_id: sequenceId,
           contact_id: contactId,
           current_step: 0,

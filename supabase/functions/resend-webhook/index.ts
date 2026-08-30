@@ -100,7 +100,14 @@ Deno.serve(async (req) => {
     // Find the sequence_email by resend_message_id
     const { data: sequenceEmail, error: findError } = await supabase
       .from("sequence_emails")
-      .select("id, enrollment_id")
+      .select(`
+        id,
+        enrollment_id,
+        sequence_enrollments (
+          contact_id,
+          user_id
+        )
+      `)
       .eq("resend_message_id", data.email_id)
       .single();
 
@@ -126,10 +133,52 @@ Deno.serve(async (req) => {
         updates.opened_at = new Date().toISOString();
         updates.status = "opened";
         break;
-      case "email.clicked":
-        updates.clicked_at = new Date().toISOString();
+      case "email.clicked": {
+        const clickedAt = new Date().toISOString();
+        updates.clicked_at = clickedAt;
         updates.status = "clicked";
+
+        // Resend tells us WHICH link was clicked, in data.click.link. This used to be
+        // dropped, which made segmentation impossible for anything Resend sent — and under
+        // the two-machine rule Resend sends the lifecycle mail, so this is the path the
+        // indoctrination email's four cards actually take.
+        const enrollment = (sequenceEmail as any).sequence_enrollments;
+        const contactId = enrollment?.contact_id ?? null;
+        const linkUrl: string | null = data?.click?.link ?? null;
+
+        if (contactId && linkUrl) {
+          // email_tracking_events is where clicks are read from for reporting. Write it
+          // here too so a Resend-sent click and a CRM-sent click look the same downstream.
+          const { error: eventError } = await supabase.from("email_tracking_events").insert({
+            email_id: sequenceEmail.id,
+            contact_id: contactId,
+            event_type: "click",
+            link_url: linkUrl,
+            occurred_at: clickedAt,
+            user_agent: data?.click?.user_agent ?? null,
+            ip_address: data?.click?.ip_address ?? null,
+          });
+          if (eventError) {
+            console.error("Error recording click event:", eventError);
+          }
+
+          // Same Postgres function track-sequence-click calls, so both click paths segment
+          // identically rather than each growing its own copy of the rules.
+          const { data: routed, error: routeError } = await supabase.rpc("route_sequence_click", {
+            p_contact_id: contactId,
+            p_link_url: linkUrl,
+            p_user_id: enrollment?.user_id ?? null,
+          });
+          if (routeError) {
+            console.error("route_sequence_click failed:", routeError);
+          } else {
+            console.log("Click routing:", routed);
+          }
+        } else if (!linkUrl) {
+          console.log("email.clicked with no data.click.link — nothing to segment on");
+        }
         break;
+      }
       case "email.bounced":
         updates.bounced_at = new Date().toISOString();
         updates.status = "bounced";
