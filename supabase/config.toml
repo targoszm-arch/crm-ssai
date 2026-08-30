@@ -112,3 +112,8 @@ verify_jwt = true
 
 [functions.sync-stripe-income]
 verify_jwt = true
+
+# Called from the app with the user's session — it writes contacts and lms_leads,
+# so it must never be reachable without one.
+[functions.backfill-lms-leads]
+verify_jwt = true
