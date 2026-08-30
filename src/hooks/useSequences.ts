@@ -181,6 +181,21 @@ export function useEnrollContact() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // Hard suppression must block a manual enrolment too, not only click-routing.
+      const { data: contact } = await supabase
+        .from("contacts")
+        .select("do_not_contact, marketing_status, email")
+        .eq("id", contactId)
+        .maybeSingle();
+
+      if (contact?.do_not_contact) {
+        throw new Error("This contact is marked do-not-contact and cannot be enrolled.");
+      }
+      const status = String(contact?.marketing_status ?? "").toLowerCase();
+      if (["unsubscribed", "bounced", "complained", "do not contact"].includes(status)) {
+        throw new Error(`This contact is ${contact?.marketing_status} and cannot be enrolled.`);
+      }
+
       // Get sequence to find first step timing
       const { data: sequence } = await supabase
         .from("sequences")

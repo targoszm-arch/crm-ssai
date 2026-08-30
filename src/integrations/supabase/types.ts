@@ -320,6 +320,17 @@ export type Database = {
           company_id: string | null
           connection_strength: string | null
           created_at: string
+          city: string | null
+          country: string | null
+          current_job_start_date: string | null
+          department: string | null
+          email_last_verified_at: string | null
+          email_status: string | null
+          region: string | null
+          source: string | null
+          time_zone: string | null
+          twitter_url: string | null
+          do_not_contact: boolean
           done_activities: number | null
           email: string | null
           email_messages_count: number | null
@@ -359,6 +370,17 @@ export type Database = {
           company_id?: string | null
           connection_strength?: string | null
           created_at?: string
+          city?: string | null
+          country?: string | null
+          current_job_start_date?: string | null
+          department?: string | null
+          email_last_verified_at?: string | null
+          email_status?: string | null
+          region?: string | null
+          source?: string | null
+          time_zone?: string | null
+          twitter_url?: string | null
+          do_not_contact?: boolean
           done_activities?: number | null
           email?: string | null
           email_messages_count?: number | null
@@ -398,6 +420,17 @@ export type Database = {
           company_id?: string | null
           connection_strength?: string | null
           created_at?: string
+          city?: string | null
+          country?: string | null
+          current_job_start_date?: string | null
+          department?: string | null
+          email_last_verified_at?: string | null
+          email_status?: string | null
+          region?: string | null
+          source?: string | null
+          time_zone?: string | null
+          twitter_url?: string | null
+          do_not_contact?: boolean
           done_activities?: number | null
           email?: string | null
           email_messages_count?: number | null

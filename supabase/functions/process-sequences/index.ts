@@ -38,6 +38,8 @@ Deno.serve(async (req) => {
           first_name,
           last_name,
           email,
+          do_not_contact,
+          marketing_status,
           companies!contacts_company_id_fkey (
             company_name
           )
@@ -68,6 +70,28 @@ Deno.serve(async (req) => {
         
         if (!contact?.email) {
           console.log(`Skipping enrollment ${enrollment.id} - no email`);
+          continue;
+        }
+
+        // Hard suppression, checked at the send gate and not only at enrolment. Someone can
+        // be flagged after they were enrolled, and the flag has to stop the next email as
+        // well as the next enrolment or it guarantees nothing.
+        if (contact.do_not_contact === true) {
+          console.log(`Skipping enrollment ${enrollment.id} - contact is do_not_contact`);
+          await supabase
+            .from("sequence_enrollments")
+            .update({ status: "unsubscribed" })
+            .eq("id", enrollment.id);
+          continue;
+        }
+
+        const marketingStatus = String(contact.marketing_status ?? "").toLowerCase();
+        if (["unsubscribed", "bounced", "complained", "do not contact"].includes(marketingStatus)) {
+          console.log(`Skipping enrollment ${enrollment.id} - marketing_status ${marketingStatus}`);
+          await supabase
+            .from("sequence_enrollments")
+            .update({ status: "unsubscribed" })
+            .eq("id", enrollment.id);
           continue;
         }
 
