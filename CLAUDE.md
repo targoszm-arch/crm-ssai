@@ -29,6 +29,20 @@ whether they are a paying customer. Customer exclusion is a query
 (`stripe_subscription_id is not null` in the LMS), never a hand-maintained list of names —
 there were 64 live subscriptions as of 29 Aug 2026, not the two we had written down.
 
+## Consent conventions (LMS)
+
+`gdpr_consents` is the state table, and as of 29 Aug it is the accurate one — 228 `product`
+rows and 21 granted `marketing` rows (plus 1 revoked), backfilled from `profiles`. When writing consent anywhere:
+
+- `consent_type` is a bare noun: `'marketing'`, `'product'`. Never `'marketing_emails'`.
+- Never write a `granted = false` marketing row. The absence of a row is stronger evidence
+  of non-consent than a false one someone could argue was a default. Revocation is
+  different — that keeps the row and stamps `revoked_at`.
+- `marketing_consent_log.action` only accepts `consent_requested`, `consent_granted`,
+  `consent_denied`, `consent_revoked`.
+- `marketing_consent_verified_at` is null for all 228 profiles. Nobody has confirmed
+  anything yet, so the real marketing list is 22 unverified addresses.
+
 ## System of record
 
 `LMS -> CRM -> Resend`, one direction only. The LMS owns consent state

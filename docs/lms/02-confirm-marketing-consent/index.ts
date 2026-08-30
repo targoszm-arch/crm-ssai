@@ -8,6 +8,13 @@
 //   * the abandoned-signup footer, which today points at a static /unsubscribe page
 //     that records nothing
 //
+// Schema conventions this depends on, taken from the live database:
+//   * gdpr_consents.consent_type is the bare noun 'marketing' (not 'marketing_emails'),
+//     with UNIQUE (user_id, consent_type).
+//   * marketing_consent_log.action is CHECK-constrained to
+//     consent_requested | consent_granted | consent_denied | consent_revoked.
+//   * marketing_consent_log.entity_type is CHECK-constrained to profile | contact.
+//
 // The token columns already exist on profiles (consent_verification_token,
 // consent_verification_expires_at, marketing_consent_verified_at, marketing_consent_ip).
 // This function is what finally writes to them.
@@ -92,7 +99,7 @@ Deno.serve(async (req) => {
       .from("gdpr_consents")
       .select("id")
       .eq("user_id", profile.id)
-      .eq("consent_type", "marketing_emails")
+      .eq("consent_type", "marketing")
       .maybeSingle();
 
     const consentRow = revoking
@@ -105,7 +112,7 @@ Deno.serve(async (req) => {
     } else {
       const { error: e } = await supabase.from("gdpr_consents").insert({
         user_id: profile.id,
-        consent_type: "marketing_emails",
+        consent_type: "marketing",
         ...consentRow,
       });
       if (e) throw e;
@@ -115,7 +122,7 @@ Deno.serve(async (req) => {
     const { error: logError } = await supabase.from("marketing_consent_log").insert({
       entity_type: "profile",
       entity_id: profile.id,
-      action: revoking ? "marketing_emails_revoked" : "marketing_emails_granted",
+      action: revoking ? "consent_revoked" : "consent_granted",
       ip_address: ip,
       user_agent: userAgent,
       token_used: token,
