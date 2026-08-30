@@ -90,6 +90,22 @@ Deno.serve(async (req) => {
     const { data: { user } } = await supabaseAuth.auth.getUser();
     if (!user) return json({ error: "Unauthorized" }, 401);
 
+    // A valid session is not authorisation. This imports every LMS customer and stores them
+    // under the caller's user_id, so any account created through public sign-up could pull
+    // the whole customer list and then read it back through its own RLS policies.
+    // BACKFILL_OWNER_IDS is a comma-separated allow-list of auth user ids.
+    const allowed = (Deno.env.get("BACKFILL_OWNER_IDS") ?? "")
+      .split(",").map((s) => s.trim()).filter(Boolean);
+    if (allowed.length === 0) {
+      return json({
+        error: "BACKFILL_OWNER_IDS not configured",
+        detail: "Set it to the auth user id(s) permitted to run the backfill.",
+      }, 500);
+    }
+    if (!allowed.includes(user.id)) {
+      return json({ error: "Forbidden" }, 403);
+    }
+
     const apiKey = Deno.env.get("CRM_WEBHOOK_API_KEY");
     if (!apiKey) return json({ error: "CRM_WEBHOOK_API_KEY not configured" }, 500);
 
@@ -101,22 +117,35 @@ Deno.serve(async (req) => {
     );
 
     // ── Pull everyone the LMS knows about ──────────────────────────────────
-    const lmsUrl = new URL(LMS_ENDPOINT);
-    lmsUrl.searchParams.set("limit", "1000");
-    const res = await fetch(lmsUrl.toString(), {
-      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      return json(
-        { error: "LMS endpoint failed", status: res.status, details: text.slice(0, 400) },
-        502,
-      );
+    // Page until a short page comes back. One limit=1000 request would silently import the
+    // first page only and still report success, leaving every later customer missing.
+    const PAGE = 500;
+    const customers: LmsCustomer[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const lmsUrl = new URL(LMS_ENDPOINT);
+      lmsUrl.searchParams.set("limit", String(PAGE));
+      lmsUrl.searchParams.set("offset", String(offset));
+
+      const res = await fetch(lmsUrl.toString(), {
+        headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        return json(
+          { error: "LMS endpoint failed", status: res.status, offset, details: text.slice(0, 400) },
+          502,
+        );
+      }
+      const payload = await res.json();
+      const page: LmsCustomer[] = Array.isArray(payload)
+        ? payload
+        : payload?.customers ?? payload?.data ?? [];
+
+      customers.push(...page);
+      if (page.length < PAGE) break;
+      // Guard against an endpoint that ignores offset and returns the same full page.
+      if (offset > 50_000) break;
     }
-    const payload = await res.json();
-    const customers: LmsCustomer[] = Array.isArray(payload)
-      ? payload
-      : payload?.customers ?? payload?.data ?? [];
 
     const report = {
       apply,
@@ -143,10 +172,16 @@ Deno.serve(async (req) => {
       // ── Contact ─────────────────────────────────────────────────────────
       // Match on email so an LMS signup who is already a Meet Alfred contact is not
       // duplicated. contacts has no unique index on email, so this is an explicit lookup.
+      // Scoped to this owner: the service role bypasses RLS, so an unscoped lookup could
+      // match — and then modify — another tenant's contact with the same address.
+      // Escaped, because ilike treats _ and % as wildcards and real addresses contain _:
+      // "john_doe@x.com" would otherwise match "johnXdoe@x.com".
+      const emailPattern = email.replace(/([\\%_])/g, "\\$1");
       const { data: existing } = await supabase
         .from("contacts")
         .select("id, marketing_status, source")
-        .ilike("email", email)
+        .eq("user_id", user.id)
+        .ilike("email", emailPattern)
         .limit(1)
         .maybeSingle();
 
@@ -198,6 +233,7 @@ Deno.serve(async (req) => {
       const { data: existingLead } = await supabase
         .from("lms_leads")
         .select("id")
+        .eq("user_id", user.id)
         .eq("email", email)
         .limit(1)
         .maybeSingle();

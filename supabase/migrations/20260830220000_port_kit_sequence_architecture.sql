@@ -32,6 +32,15 @@ declare
   s_review         uuid := '5e900000-0000-4000-8000-000000000041';
 begin
 
+-- These rows are owned by a specific auth user, and sequences.user_id has a foreign key to
+-- auth.users. On a fresh database — supabase db reset, CI, a preview branch — that row does
+-- not exist and the first insert would abort the entire migration chain. Seed data must not
+-- be able to break schema migrations, so skip quietly when the owner is not there.
+if not exists (select 1 from auth.users where id = v_user) then
+  raise notice 'Skipping Kit sequence seed: owner % not present in auth.users', v_user;
+  return;
+end if;
+
 -- ---------------------------------------------------------------------------
 -- 1. Entry: welcome, then the indoctrination email that does the segmenting.
 -- ---------------------------------------------------------------------------

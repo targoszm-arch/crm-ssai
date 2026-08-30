@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { Calendar, CheckSquare, Loader2, Linkedin, MessageSquare, UserPlus } from "lucide-react";
+import {
+  Calendar, CheckSquare, Loader2, Linkedin, MessageSquare, UserPlus,
+  MousePointerClick, Activity,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useActivities } from "@/hooks/useActivities";
 
@@ -82,7 +85,7 @@ export function ActivitiesTab({ contactId }: ActivitiesTabProps) {
       {timeline && timeline.length > 0 && (
         <div className="space-y-2">
           <h5 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            LinkedIn ({timeline.length}
+            Activity ({timeline.length}
             {timeline.length === 50 ? "+" : ""})
           </h5>
           {timeline.map((activity) => (
@@ -183,5 +186,9 @@ function activityIcon(type: string) {
   const cls = "h-4 w-4 mt-0.5 text-muted-foreground shrink-0";
   if (type === "linkedin_reply") return <MessageSquare className={cls} />;
   if (type === "linkedin_lead") return <UserPlus className={cls} />;
-  return <Linkedin className={cls} />;
+  if (type === "linkedin_connection") return <Linkedin className={cls} />;
+  if (type === "sequence_click_routed") return <MousePointerClick className={cls} />;
+  // useActivities is not filtered by source, so anything the CRM records shows up here.
+  // A LinkedIn icon as the catch-all would mislabel emails, meetings and notes.
+  return <Activity className={cls} />;
 }

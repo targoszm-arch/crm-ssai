@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,17 @@ export function SearchableSelect({
   id,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
-  const selected = options.find((o) => o.value === value);
+
+  // Command runs the filter once per option, so looking each one up with find() inside it
+  // makes every keystroke O(n^2). At 5,801 contacts that is tens of millions of comparisons
+  // per character typed. Index once instead.
+  const byValue = useMemo(() => {
+    const map = new Map<string, SearchableSelectOption>();
+    for (const option of options) map.set(option.value, option);
+    return map;
+  }, [options]);
+
+  const selected = byValue.get(value ?? "");
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -71,7 +81,7 @@ export function SearchableSelect({
           filter={(itemValue, search) => {
             // itemValue is the option's value; match against the label and hint instead so
             // typing a name or an email finds the row rather than needing its uuid.
-            const option = options.find((o) => o.value === itemValue);
+            const option = byValue.get(itemValue);
             if (!option) return 0;
             const haystack = `${option.label} ${option.hint ?? ""}`.toLowerCase();
             return haystack.includes(search.toLowerCase()) ? 1 : 0;
@@ -86,7 +96,10 @@ export function SearchableSelect({
                   key={option.value}
                   value={option.value}
                   onSelect={(v) => {
-                    onChange(v === value ? "" : v);
+                    // Deliberately NOT a toggle. Clicking the already-selected option used
+                    // to emit "", which is forwarded straight to a uuid column and fails
+                    // the insert with an invalid-uuid error rather than clearing anything.
+                    onChange(v);
                     setOpen(false);
                   }}
                 >
