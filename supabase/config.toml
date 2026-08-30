@@ -97,3 +97,18 @@ verify_jwt = false
 # require a JWT.
 [functions.track-website-visit]
 verify_jwt = false
+
+# Called from the app with the user's session, so a JWT is required. Listed
+# explicitly because the deploy workflow refuses to deploy a function whose
+# verify_jwt is left to the CLI default.
+[functions.export-apollo]
+verify_jwt = true
+
+[functions.sync-gmail-receipts]
+verify_jwt = true
+
+[functions.sync-revolut]
+verify_jwt = true
+
+[functions.sync-stripe-income]
+verify_jwt = true
