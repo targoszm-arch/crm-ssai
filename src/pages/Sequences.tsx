@@ -21,6 +21,7 @@ import { SequenceBuilderSheet } from "@/components/sequences/SequenceBuilderShee
 import { EnrollContactModal } from "@/components/sequences/EnrollContactModal";
 import { SequenceEnrollmentsSheet } from "@/components/sequences/SequenceEnrollmentsSheet";
 import { TemplateListModal } from "@/components/templates/TemplateListModal";
+import { ClickRoutesPanel } from "@/components/sequences/ClickRoutesPanel";
 
 const triggerTypeLabels: Record<string, string> = {
   new_customer: "New Customer",
@@ -37,7 +38,11 @@ const statusColors: Record<string, string> = {
 };
 
 export default function Sequences() {
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  // The status tabs double as the sequence filter, but "Click routing" is a different view
+  // rather than another status — keep the tab and the filter separate so it can't be read
+  // as a status nothing has.
+  const [activeTab, setActiveTab] = useState<string>("all");
+  const statusFilter = activeTab === "routing" ? "all" : activeTab;
   const { data: sequences, isLoading } = useSequences(statusFilter === "all" ? undefined : statusFilter);
   const { data: stats } = useSequenceStats();
   const updateSequence = useUpdateSequence();
@@ -194,13 +199,18 @@ export default function Sequences() {
       </div>
 
 
-      <Tabs defaultValue="all" className="w-full" onValueChange={setStatusFilter}>
+      <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="all">All Sequences</TabsTrigger>
           <TabsTrigger value="active">Active</TabsTrigger>
           <TabsTrigger value="draft">Drafts</TabsTrigger>
+          <TabsTrigger value="routing">Click Routing</TabsTrigger>
         </TabsList>
-        
+
+        <TabsContent value="routing" className="mt-6">
+          <ClickRoutesPanel />
+        </TabsContent>
+
         <TabsContent value={statusFilter} className="mt-6">
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
