@@ -69,9 +69,14 @@ export function useColumnPreferences(
         );
         // Repair stored preferences that hide a locked column — including ones saved
         // before the column was locked.
+        // Locked columns are forced visible AND pulled to the front. Making Name visible
+        // but leaving it at whatever order was stored can park it off the right edge of a
+        // wide table, which looks identical to it still being hidden.
         return merged
           .filter((p) => defaultIds.has(p.id))
-          .map((p) => (lockedIds.has(p.id) ? { ...p, visible: true } : p));
+          .map((p) =>
+            lockedIds.has(p.id) ? { ...p, visible: true, order: -1 } : p,
+          );
       }
     } catch {
       // Ignore localStorage errors
