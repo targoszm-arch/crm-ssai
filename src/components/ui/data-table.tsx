@@ -37,8 +37,12 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   return (
     <div className={cn("rounded-md", className)}>
-      <div className="relative overflow-auto">
-        <Table>
+      <div className="relative overflow-x-auto">
+        {/* The Table primitive sets w-full, which makes a wide table squeeze its columns
+            down to the container instead of overflowing it — so the horizontal scrollbar
+            never appears and the right-hand columns get crushed or clipped. min-w-max
+            lets it size to its content and lets this wrapper scroll. */}
+        <Table className="min-w-max">
           <TableHeader>
             <TableRow>
               {columns.map((column) => (

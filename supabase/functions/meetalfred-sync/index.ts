@@ -1,5 +1,29 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Every table this function writes has an RLS policy of auth.uid() = user_id. Running with
+// the service role bypasses that on write, so rows without a user_id were inserted happily
+// and then invisible to the account that owns them — 96% of activities and 89% of LinkedIn
+// connections had been hidden that way, and the Inbox appeared stuck in January while the
+// sync was in fact running daily. Stamping the owner is what makes written data readable.
+let OWNER_ID: string | null = null;
+
+async function resolveOwnerId(supabase: ReturnType<typeof createClient>): Promise<string> {
+  const configured = Deno.env.get("CRM_OWNER_USER_ID");
+  if (configured) return configured;
+
+  // Single-tenant fallback, so this keeps working without configuration. It refuses to
+  // guess rather than silently picking one of several owners.
+  const { data, error } = await supabase.auth.admin.listUsers();
+  if (error) throw new Error(`Cannot resolve owner: ${error.message}`);
+  const users = data?.users ?? [];
+  if (users.length !== 1) {
+    throw new Error(
+      `Cannot resolve owner: found ${users.length} auth users. Set CRM_OWNER_USER_ID.`,
+    );
+  }
+  return users[0].id;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -76,6 +100,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    OWNER_ID = await resolveOwnerId(supabase);
+    console.log(`Syncing as owner ${OWNER_ID}`);
 
     const url = new URL(req.url);
     const syncType = url.searchParams.get("type") || "all";
@@ -234,6 +260,7 @@ Deno.serve(async (req) => {
             
             const { error: campError } = await supabase.from("campaigns").upsert(
               {
+                user_id: OWNER_ID,
                 meetalfred_id: campaign.id,
                 name: campaignName,
                 type: sequenceType || "linkedin",
@@ -243,7 +270,7 @@ Deno.serve(async (req) => {
                 sent_count: Number(sentCount) || 0,
                 last_synced_at: new Date().toISOString(),
               },
-              { onConflict: "meetalfred_id" }
+              { onConflict: "user_id,meetalfred_id" }
             );
             
             if (campError) {
@@ -385,6 +412,7 @@ Deno.serve(async (req) => {
             
             const { error: connError } = await supabase.from("linkedin_connections").upsert(
               {
+                user_id: OWNER_ID,
                 linkedin_id: linkedinId,
                 name: connectionName,
                 headline: conn.person?.headline || conn.headline,
@@ -394,7 +422,7 @@ Deno.serve(async (req) => {
                 synced_at: new Date().toISOString(),
                 contact_id: contactId,
               },
-              { onConflict: "linkedin_id" }
+              { onConflict: "user_id,linkedin_id" }
             );
             
             if (connError) {
@@ -454,6 +482,7 @@ Deno.serve(async (req) => {
             
             if (!email) {
               const { error: leadError } = await supabase.from("leads").insert({
+                user_id: OWNER_ID,
                 contact_id: contactId,
                 contact_name: leadName,
                 company_name: personData.company || lead.companyName || null,
@@ -471,6 +500,7 @@ Deno.serve(async (req) => {
             } else {
               const { error: leadError } = await supabase.from("leads").upsert(
                 {
+                  user_id: OWNER_ID,
                   contact_id: contactId,
                   contact_name: leadName,
                   company_name: personData.company || lead.companyName || null,
@@ -479,7 +509,7 @@ Deno.serve(async (req) => {
                   status: "New",
                   notes: personData.headline ? `Headline: ${personData.headline}` : null,
                 },
-                { onConflict: "email", ignoreDuplicates: true }
+                { onConflict: "user_id,email", ignoreDuplicates: true }
               );
               
               if (leadError) {
@@ -637,6 +667,7 @@ async function processReplies(
           .from("linkedin_connections")
           .upsert(
             {
+              user_id: OWNER_ID,
               linkedin_id: linkedinId,
               name: personName,
               headline: reply.headline || reply.person?.headline,
@@ -646,7 +677,7 @@ async function processReplies(
               synced_at: new Date().toISOString(),
               contact_id: contactId,
             },
-            { onConflict: "linkedin_id" }
+            { onConflict: "user_id,linkedin_id" }
           )
           .select("id")
           .single();
@@ -661,6 +692,7 @@ async function processReplies(
       // Insert/update the reply message with ALL extracted data
       const { error: msgError } = await supabase.from("linkedin_messages").upsert(
         {
+          user_id: OWNER_ID,
           sender_linkedin_id: senderId,
           recipient_linkedin_id: "me",
           message_text: messageText,
@@ -674,7 +706,7 @@ async function processReplies(
           company_name: companyName,
           raw_payload: reply,
         },
-        { onConflict: "sender_linkedin_id,message_timestamp" }
+        { onConflict: "user_id,sender_linkedin_id,message_timestamp" }
       );
       
       if (msgError) {
@@ -720,11 +752,13 @@ async function findOrCreateContact(
   }
 
   try {
-    // Try to find existing contact by email first
+    // Scoped to the owner. The service role bypasses RLS, so an unscoped lookup would
+    // happily return — and then reuse — another owner's contact with the same address.
     if (email) {
       const { data: emailContact } = await supabase
         .from("contacts")
         .select("id")
+        .eq("user_id", OWNER_ID)
         .eq("email", email)
         .single();
       
@@ -739,6 +773,7 @@ async function findOrCreateContact(
       const { data: linkedinContact } = await supabase
         .from("contacts")
         .select("id")
+        .eq("user_id", OWNER_ID)
         .eq("linkedin_url", linkedinUrl)
         .single();
       
@@ -753,6 +788,7 @@ async function findOrCreateContact(
       const { data: newContact, error: createError } = await supabase
         .from("contacts")
         .insert({
+          user_id: OWNER_ID,
           first_name: firstName || "Unknown",
           last_name: lastName || null,
           email: email || null,
@@ -797,6 +833,7 @@ async function logActivity(
   
   try {
     const { error } = await supabase.from("activities").insert({
+      user_id: OWNER_ID,
       contact_id: activity.contact_id,
       company_id: activity.company_id,
       activity_type: activity.activity_type,
