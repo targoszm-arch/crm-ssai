@@ -125,10 +125,20 @@ async function resolveViaIpapiIs(ip: string): Promise<Resolved | null> {
     return null;
   }
 
-  const company = data.company ?? {};
-  const asn = data.asn ?? {};
-  const location = data.location ?? {};
-  const type = String(company.type ?? asn.type ?? "").toLowerCase();
+  // With an API key, ipapi.is nests company/asn/location objects and returns
+  // an explicit organisation `type` plus `is_crawler`. Without one — the free
+  // tier, which is what runs without IPAPI_IS_KEY set — it returns a flatter
+  // shape instead: top-level `company_name`, `asn_num`, `asn_org`, `cc`, no
+  // `type` field and no `is_crawler` at all. The two were never told apart
+  // here, so every free-tier hit parsed to nulls and got silently discarded.
+  const company = data.company ?? null;
+  const asn = data.asn ?? null;
+
+  const companyName = str(company?.name ?? data.company_name, 200);
+  const asnName = str(asn?.org ?? asn?.descr ?? data.asn_org, 200);
+  const asnNum = asn?.asn ?? data.asn_num;
+  const type = String(company?.type ?? asn?.type ?? "").toLowerCase();
+  const nameForIspCheck = companyName ?? asnName ?? "";
 
   let classification: Resolved["classification"] = "unknown";
   if (data.is_crawler === true) {
@@ -142,18 +152,23 @@ async function resolveViaIpapiIs(ip: string): Promise<Resolved | null> {
     classification = "isp";
   } else if (["business", "education", "government"].includes(type)) {
     classification = "company";
+  } else if (!type && nameForIspCheck) {
+    // Free tier gives no `type` at all — fall back to name-based ISP
+    // detection so a Comcast/Vodafone/etc. connection isn't counted as an
+    // identified company just because a name came back.
+    classification = ISP_NAME_HINTS.test(nameForIspCheck) ? "isp" : "company";
   }
 
   return {
-    company_name: str(company.name ?? asn.org ?? asn.descr, 200),
-    company_domain: cleanDomain(company.domain ?? asn.domain),
-    asn: asn.asn ? String(asn.asn) : null,
-    asn_name: str(asn.org ?? asn.descr, 200),
+    company_name: companyName ?? asnName,
+    company_domain: cleanDomain(company?.domain),
+    asn: asnNum != null ? String(asnNum) : null,
+    asn_name: asnName,
     asn_type: type || null,
     classification,
-    country: str(location.country_code ?? location.country, 80),
-    region: str(location.state, 120),
-    city: str(location.city, 120),
+    country: str(data.location?.country_code ?? data.location?.country ?? data.cc, 80),
+    region: str(data.location?.state, 120),
+    city: str(data.location?.city, 120),
     resolver: "ipapi_is",
     raw: {
       company,
@@ -211,9 +226,13 @@ async function resolveIp(ip: string): Promise<Resolved> {
   for (const provider of providers) {
     try {
       const result = await provider(ip);
-      // Only accept an answer that actually named something; otherwise fall
-      // through to the next provider.
-      if (result && (result.company_name || result.classification !== "unknown")) {
+      // Accept an answer that named something, classified the traffic, or at
+      // least located it — a geo-only hit still beats nothing, and previously
+      // got discarded entirely alongside the truly empty ones.
+      if (
+        result &&
+        (result.company_name || result.classification !== "unknown" || result.country)
+      ) {
         return result;
       }
     } catch (error) {
