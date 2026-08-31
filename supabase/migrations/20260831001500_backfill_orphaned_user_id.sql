@@ -20,16 +20,33 @@ do $$
 declare
   v_owner uuid;
   v_users int;
+  v_configured text;
 begin
-  select count(*) into v_users from auth.users;
-  if v_users = 0 then
-    raise notice 'No auth users; nothing to backfill.';
-    return;
+  -- An explicit owner, matching CRM_OWNER_USER_ID on the sync function. Without this the
+  -- single-user guard below would abort the whole migration chain on any installation that
+  -- has more than one account — which the app permits, since sign-up is public — even when
+  -- the integration owner is perfectly well known. Set it with:
+  --   alter database postgres set app.crm_owner_user_id = '<uuid>';
+  v_configured := current_setting('app.crm_owner_user_id', true);
+
+  if v_configured is not null and btrim(v_configured) <> '' then
+    v_owner := v_configured::uuid;
+    if not exists (select 1 from auth.users where id = v_owner) then
+      raise exception 'app.crm_owner_user_id % is not an auth user.', v_owner;
+    end if;
+  else
+    select count(*) into v_users from auth.users;
+    if v_users = 0 then
+      raise notice 'No auth users; nothing to backfill.';
+      return;
+    end if;
+    if v_users <> 1 then
+      raise exception
+        'Found % auth users and no app.crm_owner_user_id. Backfill aborted rather than '
+        'assigning data to the wrong owner — set that setting and re-run.', v_users;
+    end if;
+    select id into v_owner from auth.users;
   end if;
-  if v_users <> 1 then
-    raise exception 'Expected exactly one auth user, found %. Backfill aborted — the owner is not unambiguous.', v_users;
-  end if;
-  select id into v_owner from auth.users;
 
   update contacts             set user_id = v_owner where user_id is null;
   update companies            set user_id = v_owner where user_id is null;
@@ -37,6 +54,9 @@ begin
   update activities           set user_id = v_owner where user_id is null;
   update linkedin_connections set user_id = v_owner where user_id is null;
   update linkedin_messages    set user_id = v_owner where user_id is null;
+  -- campaigns is written by the same sync and was missed on the first pass: 7 rows were
+  -- still orphaned, invisible behind the campaigns RLS policy.
+  update campaigns            set user_id = v_owner where user_id is null;
 
   raise notice 'Backfilled orphaned rows to owner %', v_owner;
 end $$;

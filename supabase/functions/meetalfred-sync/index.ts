@@ -270,7 +270,7 @@ Deno.serve(async (req) => {
                 sent_count: Number(sentCount) || 0,
                 last_synced_at: new Date().toISOString(),
               },
-              { onConflict: "meetalfred_id" }
+              { onConflict: "user_id,meetalfred_id" }
             );
             
             if (campError) {
@@ -422,7 +422,7 @@ Deno.serve(async (req) => {
                 synced_at: new Date().toISOString(),
                 contact_id: contactId,
               },
-              { onConflict: "linkedin_id" }
+              { onConflict: "user_id,linkedin_id" }
             );
             
             if (connError) {
@@ -509,7 +509,7 @@ Deno.serve(async (req) => {
                   status: "New",
                   notes: personData.headline ? `Headline: ${personData.headline}` : null,
                 },
-                { onConflict: "email", ignoreDuplicates: true }
+                { onConflict: "user_id,email", ignoreDuplicates: true }
               );
               
               if (leadError) {
@@ -677,7 +677,7 @@ async function processReplies(
               synced_at: new Date().toISOString(),
               contact_id: contactId,
             },
-            { onConflict: "linkedin_id" }
+            { onConflict: "user_id,linkedin_id" }
           )
           .select("id")
           .single();
@@ -706,7 +706,7 @@ async function processReplies(
           company_name: companyName,
           raw_payload: reply,
         },
-        { onConflict: "sender_linkedin_id,message_timestamp" }
+        { onConflict: "user_id,sender_linkedin_id,message_timestamp" }
       );
       
       if (msgError) {
@@ -752,11 +752,13 @@ async function findOrCreateContact(
   }
 
   try {
-    // Try to find existing contact by email first
+    // Scoped to the owner. The service role bypasses RLS, so an unscoped lookup would
+    // happily return — and then reuse — another owner's contact with the same address.
     if (email) {
       const { data: emailContact } = await supabase
         .from("contacts")
         .select("id")
+        .eq("user_id", OWNER_ID)
         .eq("email", email)
         .single();
       
@@ -771,6 +773,7 @@ async function findOrCreateContact(
       const { data: linkedinContact } = await supabase
         .from("contacts")
         .select("id")
+        .eq("user_id", OWNER_ID)
         .eq("linkedin_url", linkedinUrl)
         .single();
       
