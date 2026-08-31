@@ -46,16 +46,28 @@ function SelectSequencePrompt() {
 export default function Analytics() {
   const [searchParams] = useSearchParams();
   const [selectedSequenceId, setSelectedSequenceId] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<string>("list");
   const [recipientFilter, setRecipientFilter] = useState<string>("delivered");
   const [timeGranularity, setTimeGranularity] = useState<"hourly" | "daily">("hourly");
 
   const { data: sequences } = useSequences();
 
+  // Picking a sequence — from the header picker, the List tab's Analytics button, or a
+  // ?sequence= link — is a request to see that sequence's charts, so move to Overview.
+  // Someone already reading Overview or Recipients stays put: swapping the sequence
+  // under them should not throw them back a tab.
+  const showSequence = (sequenceId: string) => {
+    setSelectedSequenceId(sequenceId);
+    setActiveTab((current) =>
+      current === "overview" || current === "recipients" ? current : "overview",
+    );
+  };
+
   // Set initial sequence from URL params
   useEffect(() => {
     const sequenceFromUrl = searchParams.get("sequence");
     if (sequenceFromUrl && !selectedSequenceId) {
-      setSelectedSequenceId(sequenceFromUrl);
+      showSequence(sequenceFromUrl);
     }
   }, [searchParams, selectedSequenceId]);
 
@@ -99,7 +111,7 @@ export default function Analytics() {
             Track engagement and delivery metrics for your email sequences.
           </p>
         </div>
-        <Select value={selectedSequenceId} onValueChange={setSelectedSequenceId}>
+        <Select value={selectedSequenceId} onValueChange={showSequence}>
           <SelectTrigger className="w-full sm:w-[280px]">
             <SelectValue placeholder="Select a sequence" />
           </SelectTrigger>
@@ -175,7 +187,9 @@ export default function Analytics() {
           are always rendered. Only the two sequence-specific panels below need a selection;
           gating the whole block on one made Newsletters unreachable until a sequence was
           picked, which is not a relationship those two views have. */}
-      <Tabs defaultValue={selectedSequenceId ? "overview" : "list"} className="w-full">
+      {/* Controlled: Radix reads defaultValue once on mount, when nothing is selected yet,
+          so an uncontrolled strip would sit on List however the sequence arrived. */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="recipients">Recipients</TabsTrigger>
@@ -186,7 +200,7 @@ export default function Analytics() {
           {/* Every sequence grouped by category — the single-sequence picker above cannot
               show two runs of the same category side by side. */}
           <TabsContent value="list" className="space-y-6 mt-6">
-            <SequenceListTab onSelectSequence={setSelectedSequenceId} />
+            <SequenceListTab onSelectSequence={showSequence} />
           </TabsContent>
 
           {/* Newsletters come from Content Lab and carry no per-recipient events, so they
