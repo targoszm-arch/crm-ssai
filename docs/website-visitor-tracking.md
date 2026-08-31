@@ -7,7 +7,7 @@ Supabase project, with no per-lead billing and no third-party script on the site
 ## How it works
 
 ```
-Framer page  ──▶  public/visitor-tracking.js  ──▶  track-website-visit (edge fn)
+Framer page  ──▶  public/ssai-widget.js        ──▶  track-website-visit (edge fn)
                                                           │
                                        reverse-IP provider ─┤
                                                           ▼
@@ -64,7 +64,7 @@ In the CRM, open **Visitors → Setup** and copy the snippet. In Framer:
 
 ```html
 <script async
-  src="https://your-crm-domain/visitor-tracking.js"
+  src="https://your-crm-domain/ssai-widget.js"
   data-site-key="YOUR_SITE_KEY"></script>
 ```
 
