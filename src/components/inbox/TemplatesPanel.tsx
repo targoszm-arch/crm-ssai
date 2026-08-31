@@ -73,7 +73,11 @@ export function TemplatesPanel({ onUseTemplate, limit = 3 }: TemplatesPanelProps
         </div>
       )}
 
-      <TemplateListModal open={manageOpen} onOpenChange={setManageOpen} />
+      <TemplateListModal
+        open={manageOpen}
+        onOpenChange={setManageOpen}
+        onSelectTemplate={onUseTemplate}
+      />
     </div>
   );
 }

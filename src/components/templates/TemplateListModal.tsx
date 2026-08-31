@@ -26,6 +26,7 @@ import {
   Copy,
   Trash2,
   Mail,
+  SendHorizonal,
 } from "lucide-react";
 import {
   useEmailTemplates,
@@ -112,11 +113,10 @@ export function TemplateListModal({
     setTemplateToDelete(null);
   };
 
-  const handleSelect = (template: EmailTemplate) => {
-    if (selectionMode && onSelectTemplate) {
-      onSelectTemplate(template);
-      onOpenChange(false);
-    }
+  const handleUseTemplate = (template: EmailTemplate) => {
+    if (!onSelectTemplate) return;
+    onSelectTemplate(template);
+    onOpenChange(false);
   };
 
   return (
@@ -190,10 +190,10 @@ export function TemplateListModal({
                     className={`hover:border-primary/50 transition-colors ${
                       selectionMode ? "cursor-pointer" : ""
                     }`}
-                    onClick={() => selectionMode && handleSelect(template)}
+                    onClick={() => selectionMode && handleUseTemplate(template)}
                   >
                     <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between gap-2">
                         <div className="space-y-1 flex-1 min-w-0">
                           <CardTitle className="text-base truncate">
                             {template.name}
@@ -203,35 +203,51 @@ export function TemplateListModal({
                           </p>
                         </div>
                         {!selectionMode && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {onSelectTemplate && (
                               <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => e.stopPropagation()}
+                                variant="outline"
+                                size="sm"
+                                className="h-8"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUseTemplate(template);
+                                }}
                               >
-                                <MoreHorizontal className="h-4 w-4" />
+                                <SendHorizonal className="mr-1.5 h-3.5 w-3.5" />
+                                Use
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEdit(template)}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDuplicate(template)}>
-                                <Copy className="mr-2 h-4 w-4" />
-                                Duplicate
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => handleDeleteClick(template)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleEdit(template)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDuplicate(template)}>
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Duplicate
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => handleDeleteClick(template)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         )}
                       </div>
                     </CardHeader>

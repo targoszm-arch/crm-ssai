@@ -23,7 +23,7 @@ export function InboxSidebar({
   folderCounts = { inbox: 0, drafts: 0, outbox: 0, sent: 0, archive: 0 },
 }: InboxSidebarProps) {
   return (
-    <div className="w-48 shrink-0 border-r bg-muted/30 p-2">
+    <div className="p-2">
       <div className="space-y-1">
         {folders.map((folder) => (
           <button

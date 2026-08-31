@@ -279,7 +279,7 @@ export default function Inbox() {
         <div className="flex-1 flex overflow-hidden">
           {/* Desktop InboxSidebar */}
           {!isMobile && activeTab === "email" && (
-            <div className="flex flex-col shrink-0 border-r bg-muted/30 overflow-y-auto">
+            <div className="w-48 flex flex-col shrink-0 border-r bg-muted/30 overflow-y-auto">
               <InboxSidebar currentFolder={currentFolder} onFolderChange={(f) => { setCurrentFolder(f); setSelectedItem(null); }} />
               <TemplatesPanel
                 onUseTemplate={(template) => {
