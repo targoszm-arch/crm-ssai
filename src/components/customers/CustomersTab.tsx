@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { DataTable } from "@/components/ui/data-table";
 import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
@@ -256,13 +257,12 @@ export function CustomersTab() {
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
               {initials}
             </div>
-            <button
-              type="button"
-              onClick={() => handleViewContact(contact)}
+            <Link
+              to={`/people/${contact.id}`}
               className="font-medium text-left hover:text-primary hover:underline transition-colors"
             >
               {fullName}
-            </button>
+            </Link>
           </div>
         );
       },

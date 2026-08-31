@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,8 +10,13 @@ import { ExternalLMSLeadsTab } from "@/components/customers/ExternalLMSLeadsTab"
 import { ImportDataButton } from "@/components/customers/ImportDataButton";
 import { AddContactModal } from "@/components/customers/AddContactModal";
 
+const VALID_TABS = ["customers", "organisations", "lms-leads"];
+
 export default function Customers() {
   const [addContactOpen, setAddContactOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const initialTab = tabParam && VALID_TABS.includes(tabParam) ? tabParam : "organisations";
 
   return (
     <div className="w-full px-4 py-6 space-y-6 animate-fade-in">
@@ -32,7 +38,11 @@ export default function Customers() {
 
       <Card>
         <CardContent className="p-6">
-          <Tabs defaultValue="organisations" className="w-full">
+          <Tabs
+            defaultValue={initialTab}
+            onValueChange={(value) => setSearchParams({ tab: value }, { replace: true })}
+            className="w-full"
+          >
             <TabsList className="grid w-full max-w-lg grid-cols-3">
               <TabsTrigger value="customers" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />

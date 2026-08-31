@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Send, Sparkles, Loader2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
@@ -47,6 +47,8 @@ interface ComposeEmailProps {
   account: EmailAccount | null;
   defaultTo?: string;
   defaultContactId?: string;
+  /** Prefills subject + body when the composer opens, e.g. from a "Use template" quick action. */
+  initialTemplate?: Pick<EmailTemplate, "subject" | "body_html" | "body_text"> | null;
 }
 
 export function ComposeEmail({
@@ -55,12 +57,21 @@ export function ComposeEmail({
   account,
   defaultTo = "",
   defaultContactId,
+  initialTemplate,
 }: ComposeEmailProps) {
   const [to, setTo] = useState(defaultTo);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [selectedContactId, setSelectedContactId] = useState(defaultContactId || "");
   const [isTracked, setIsTracked] = useState(true); // Default to tracking enabled
+
+  useEffect(() => {
+    if (open && initialTemplate) {
+      setSubject(initialTemplate.subject || "");
+      setBody(initialTemplate.body_html || initialTemplate.body_text || "");
+    }
+    // Only re-apply when a fresh open happens with a template selected, so typing afterwards isn't clobbered.
+  }, [open, initialTemplate]);
 
   const sendEmail = useSendEmail();
   const { data: contacts } = useContacts({});
