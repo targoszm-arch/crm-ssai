@@ -28,19 +28,46 @@ import { SequenceListTab } from "@/components/analytics/SequenceListTab";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 
+function SelectSequencePrompt() {
+  return (
+    <Card>
+      <CardContent className="py-12 text-center">
+        <Mail className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+        <h3 className="font-semibold mb-2">Select a sequence to view detailed analytics</h3>
+        <p className="text-muted-foreground">
+          Use the dropdown above to choose a sequence and see engagement metrics, delivery
+          stats and recipient activity. The List and Newsletters tabs do not need one.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Analytics() {
   const [searchParams] = useSearchParams();
   const [selectedSequenceId, setSelectedSequenceId] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<string>("list");
   const [recipientFilter, setRecipientFilter] = useState<string>("delivered");
   const [timeGranularity, setTimeGranularity] = useState<"hourly" | "daily">("hourly");
 
   const { data: sequences } = useSequences();
 
+  // Picking a sequence — from the header picker, the List tab's Analytics button, or a
+  // ?sequence= link — is a request to see that sequence's charts, so move to Overview.
+  // Someone already reading Overview or Recipients stays put: swapping the sequence
+  // under them should not throw them back a tab.
+  const showSequence = (sequenceId: string) => {
+    setSelectedSequenceId(sequenceId);
+    setActiveTab((current) =>
+      current === "overview" || current === "recipients" ? current : "overview",
+    );
+  };
+
   // Set initial sequence from URL params
   useEffect(() => {
     const sequenceFromUrl = searchParams.get("sequence");
     if (sequenceFromUrl && !selectedSequenceId) {
-      setSelectedSequenceId(sequenceFromUrl);
+      showSequence(sequenceFromUrl);
     }
   }, [searchParams, selectedSequenceId]);
 
@@ -84,7 +111,7 @@ export default function Analytics() {
             Track engagement and delivery metrics for your email sequences.
           </p>
         </div>
-        <Select value={selectedSequenceId} onValueChange={setSelectedSequenceId}>
+        <Select value={selectedSequenceId} onValueChange={showSequence}>
           <SelectTrigger className="w-full sm:w-[280px]">
             <SelectValue placeholder="Select a sequence" />
           </SelectTrigger>
@@ -156,20 +183,24 @@ export default function Analytics() {
         </div>
       )}
 
-      {/* Sequence-specific analytics */}
-      {selectedSequenceId && (
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="recipients">Recipients</TabsTrigger>
-            <TabsTrigger value="list">List</TabsTrigger>
-            <TabsTrigger value="newsletters">Newsletters</TabsTrigger>
-          </TabsList>
+      {/* List and Newsletters do not depend on a selected sequence, so the tabs themselves
+          are always rendered. Only the two sequence-specific panels below need a selection;
+          gating the whole block on one made Newsletters unreachable until a sequence was
+          picked, which is not a relationship those two views have. */}
+      {/* Controlled: Radix reads defaultValue once on mount, when nothing is selected yet,
+          so an uncontrolled strip would sit on List however the sequence arrived. */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="recipients">Recipients</TabsTrigger>
+          <TabsTrigger value="list">List</TabsTrigger>
+          <TabsTrigger value="newsletters">Newsletters</TabsTrigger>
+        </TabsList>
 
           {/* Every sequence grouped by category — the single-sequence picker above cannot
               show two runs of the same category side by side. */}
           <TabsContent value="list" className="space-y-6 mt-6">
-            <SequenceListTab onSelectSequence={setSelectedSequenceId} />
+            <SequenceListTab onSelectSequence={showSequence} />
           </TabsContent>
 
           {/* Newsletters come from Content Lab and carry no per-recipient events, so they
@@ -179,7 +210,9 @@ export default function Analytics() {
           </TabsContent>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
-            {isLoadingAnalytics ? (
+            {!selectedSequenceId ? (
+              <SelectSequencePrompt />
+            ) : isLoadingAnalytics ? (
               <div className="space-y-4">
                 <Skeleton className="h-32 w-full" />
                 <Skeleton className="h-64 w-full" />
@@ -350,135 +383,127 @@ export default function Analytics() {
           </TabsContent>
 
           <TabsContent value="recipients" className="space-y-6 mt-6">
-            {/* Filter Tabs */}
-            <div className="flex gap-2 flex-wrap">
-              {[
-                { key: "delivered", label: "Delivered", count: recipientCounts.delivered },
-                { key: "opened", label: "Opened", count: recipientCounts.opened },
-                { key: "clicked", label: "Clicked", count: recipientCounts.clicked },
-                { key: "bounced", label: "Bounced", count: recipientCounts.bounced },
-                { key: "unsubscribed", label: "Unsubscribed", count: recipientCounts.unsubscribed },
-                { key: "unopened", label: "Unopened", count: recipientCounts.unopened },
-              ].map((filter) => (
-                <Button
-                  key={filter.key}
-                  variant={recipientFilter === filter.key ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setRecipientFilter(filter.key)}
-                >
-                  {filter.label} ({filter.count})
-                </Button>
-              ))}
-            </div>
-
-            {/* Bounce breakdown (shown when bounced filter active) */}
-            {recipientFilter === "bounced" && analytics && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="pt-4 text-center">
-                    <p className="text-2xl font-bold">{analytics.hardBounces}</p>
-                    <p className="text-sm text-muted-foreground">Hard bounces</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4 text-center">
-                    <p className="text-2xl font-bold">{analytics.softBounces}</p>
-                    <p className="text-sm text-muted-foreground">Soft bounces</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4 text-center">
-                    <p className="text-2xl font-bold">{analytics.temporaryBounces}</p>
-                    <p className="text-sm text-muted-foreground">Temporary</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4 text-center">
-                    <p className="text-2xl font-bold">{analytics.blockedBounces}</p>
-                    <p className="text-sm text-muted-foreground">Blocked</p>
-                  </CardContent>
-                </Card>
+            {!selectedSequenceId ? (
+              <SelectSequencePrompt />
+            ) : (
+              <>
+              {/* Filter Tabs */}
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { key: "delivered", label: "Delivered", count: recipientCounts.delivered },
+                  { key: "opened", label: "Opened", count: recipientCounts.opened },
+                  { key: "clicked", label: "Clicked", count: recipientCounts.clicked },
+                  { key: "bounced", label: "Bounced", count: recipientCounts.bounced },
+                  { key: "unsubscribed", label: "Unsubscribed", count: recipientCounts.unsubscribed },
+                  { key: "unopened", label: "Unopened", count: recipientCounts.unopened },
+                ].map((filter) => (
+                  <Button
+                    key={filter.key}
+                    variant={recipientFilter === filter.key ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setRecipientFilter(filter.key)}
+                  >
+                    {filter.label} ({filter.count})
+                  </Button>
+                ))}
               </div>
-            )}
 
-            {/* Recipients Table */}
-            <Card>
-              <CardContent className="pt-6">
-                {isLoadingAnalytics ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map((i) => (
-                      <Skeleton key={i} className="h-12 w-full" />
-                    ))}
-                  </div>
-                ) : filteredRecipients.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        {(recipientFilter === "opened" || recipientFilter === "clicked" || recipientFilter === "delivered") && (
-                          <>
-                            <TableHead className="text-right">Opens</TableHead>
-                            <TableHead className="text-right">Clicks</TableHead>
-                          </>
-                        )}
-                        {recipientFilter === "bounced" && <TableHead>Bounce Type</TableHead>}
-                        <TableHead className="text-right">Last Activity</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredRecipients.map((recipient: RecipientData) => (
-                        <TableRow key={recipient.id}>
-                          <TableCell className="font-medium">{recipient.name}</TableCell>
-                          <TableCell className="text-muted-foreground">{recipient.email}</TableCell>
+              {/* Bounce breakdown (shown when bounced filter active) */}
+              {recipientFilter === "bounced" && analytics && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardContent className="pt-4 text-center">
+                      <p className="text-2xl font-bold">{analytics.hardBounces}</p>
+                      <p className="text-sm text-muted-foreground">Hard bounces</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-4 text-center">
+                      <p className="text-2xl font-bold">{analytics.softBounces}</p>
+                      <p className="text-sm text-muted-foreground">Soft bounces</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-4 text-center">
+                      <p className="text-2xl font-bold">{analytics.temporaryBounces}</p>
+                      <p className="text-sm text-muted-foreground">Temporary</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-4 text-center">
+                      <p className="text-2xl font-bold">{analytics.blockedBounces}</p>
+                      <p className="text-sm text-muted-foreground">Blocked</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Recipients Table */}
+              <Card>
+                <CardContent className="pt-6">
+                  {isLoadingAnalytics ? (
+                    <div className="space-y-2">
+                      {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-12 w-full" />
+                      ))}
+                    </div>
+                  ) : filteredRecipients.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
                           {(recipientFilter === "opened" || recipientFilter === "clicked" || recipientFilter === "delivered") && (
                             <>
-                              <TableCell className="text-right">{recipient.opens}</TableCell>
-                              <TableCell className="text-right">{recipient.clicks}</TableCell>
+                              <TableHead className="text-right">Opens</TableHead>
+                              <TableHead className="text-right">Clicks</TableHead>
                             </>
                           )}
-                          {recipientFilter === "bounced" && (
-                            <TableCell>
-                              <Badge variant="outline" className="capitalize">
-                                {recipient.bounceType || "unknown"}
-                              </Badge>
-                            </TableCell>
-                          )}
-                          <TableCell className="text-right text-muted-foreground">
-                            {recipient.lastOpened || recipient.lastClicked ? (
-                              <span className="flex items-center justify-end gap-1">
-                                <Clock className="h-3 w-3" />
-                                {formatDistanceToNow(new Date(recipient.lastOpened || recipient.lastClicked!), { addSuffix: true })}
-                              </span>
-                            ) : (
-                              "-"
-                            )}
-                          </TableCell>
+                          {recipientFilter === "bounced" && <TableHead>Bounce Type</TableHead>}
+                          <TableHead className="text-right">Last Activity</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <p className="text-muted-foreground text-center py-8">No recipients found</p>
-                )}
-              </CardContent>
-            </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredRecipients.map((recipient: RecipientData) => (
+                          <TableRow key={recipient.id}>
+                            <TableCell className="font-medium">{recipient.name}</TableCell>
+                            <TableCell className="text-muted-foreground">{recipient.email}</TableCell>
+                            {(recipientFilter === "opened" || recipientFilter === "clicked" || recipientFilter === "delivered") && (
+                              <>
+                                <TableCell className="text-right">{recipient.opens}</TableCell>
+                                <TableCell className="text-right">{recipient.clicks}</TableCell>
+                              </>
+                            )}
+                            {recipientFilter === "bounced" && (
+                              <TableCell>
+                                <Badge variant="outline" className="capitalize">
+                                  {recipient.bounceType || "unknown"}
+                                </Badge>
+                              </TableCell>
+                            )}
+                            <TableCell className="text-right text-muted-foreground">
+                              {recipient.lastOpened || recipient.lastClicked ? (
+                                <span className="flex items-center justify-end gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {formatDistanceToNow(new Date(recipient.lastOpened || recipient.lastClicked!), { addSuffix: true })}
+                                </span>
+                              ) : (
+                                "-"
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-8">No recipients found</p>
+                  )}
+                </CardContent>
+              </Card>
+              </>
+            )}
           </TabsContent>
-        </Tabs>
-      )}
-
-      {/* No sequence selected message */}
-      {!selectedSequenceId && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Mail className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="font-semibold mb-2">Select a sequence to view detailed analytics</h3>
-            <p className="text-muted-foreground">
-              Use the dropdown above to choose a sequence and see engagement metrics, delivery stats, and recipient activity.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      </Tabs>
     </div>
   );
 }
