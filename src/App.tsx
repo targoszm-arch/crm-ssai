@@ -8,6 +8,8 @@ import AppShell from "./components/layout/AppShell";
 import { AuthGuard } from "./components/auth/AuthGuard";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
+import PersonDetail from "./pages/PersonDetail";
+import CompanyDetail from "./pages/CompanyDetail";
 import Orders from "./pages/Orders";
 import CartAbandonment from "./pages/CartAbandonment";
 import Campaigns from "./pages/Campaigns";
@@ -53,6 +55,26 @@ const App = () => (
               <AuthGuard>
                 <AppShell>
                   <Customers />
+                </AppShell>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/people/:id"
+            element={
+              <AuthGuard>
+                <AppShell>
+                  <PersonDetail />
+                </AppShell>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/companies/:id"
+            element={
+              <AuthGuard>
+                <AppShell>
+                  <CompanyDetail />
                 </AppShell>
               </AuthGuard>
             }

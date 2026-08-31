@@ -15,14 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Tooltip,
   TooltipContent,
@@ -247,45 +240,22 @@ export function ExternalLMSLeadsTab() {
           <p className="text-sm">Try adjusting your filters</p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[40px]">
-                  <Checkbox
-                    checked={selectedIds.size === filteredCustomers.length && filteredCustomers.length > 0}
-                    onCheckedChange={(checked) => handleSelectAll(checked === true)}
-                  />
-                </TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>LMS Status</TableHead>
-                <TableHead>Signup Type</TableHead>
-                <TableHead>Company Size</TableHead>
-                <TableHead>Use Case</TableHead>
-                <TableHead>Learning Objectives</TableHead>
-                <TableHead>Marketing</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Credits</TableHead>
-                <TableHead>Plan</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredCustomers.map((customer) => (
-                <LMSCustomerRow 
-                  key={customer.email} 
-                  customer={customer}
-                  selected={selectedIds.has(customer.email)}
-                  onSelect={(checked) => handleSelectOne(customer.email, checked)}
-                  onEnroll={() => {
-                    setSelectedIds(new Set([customer.email]));
-                    setEnrollModalOpen(true);
-                  }}
-                />
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <TooltipProvider>
+          <DataTable
+            columns={buildLmsColumns({
+              allSelected: selectedIds.size === filteredCustomers.length && filteredCustomers.length > 0,
+              onSelectAll: handleSelectAll,
+              isSelected: (email) => selectedIds.has(email),
+              onSelectOne: handleSelectOne,
+              onEnroll: (email) => {
+                setSelectedIds(new Set([email]));
+                setEnrollModalOpen(true);
+              },
+            })}
+            data={filteredCustomers}
+            emptyMessage="No LMS customers found"
+          />
+        </TooltipProvider>
       )}
 
       {/* Results count */}
@@ -309,13 +279,6 @@ export function ExternalLMSLeadsTab() {
   );
 }
 
-interface LMSCustomerRowProps {
-  customer: ExternalLMSCustomer;
-  selected: boolean;
-  onSelect: (checked: boolean) => void;
-  onEnroll: () => void;
-}
-
 // LMS profiles often have no full_name, so derive a readable name from the email
 // local part (e.g. "ursula.wcnutrition@gmail.com" -> "Ursula Wcnutrition").
 function nameFromEmail(email?: string | null): string {
@@ -329,147 +292,198 @@ function nameFromEmail(email?: string | null): string {
   return derived || email;
 }
 
-function LMSCustomerRow({ customer, selected, onSelect, onEnroll }: LMSCustomerRowProps) {
-  const creditsAvailable = (customer.credits_total || 0) - (customer.credits_used || 0);
-  const creditsPercentage = customer.credits_total && customer.credits_total > 0 
-    ? Math.round((creditsAvailable / customer.credits_total) * 100)
-    : 0;
+function getStatusVariant(status?: string) {
+  switch (status) {
+    case "Active": return "default" as const;
+    case "Verified":
+    case "Instructor Trial": return "secondary" as const;
+    case "At Risk":
+    case "Churned": return "destructive" as const;
+    default: return "outline" as const; // Inactive, Not Verified, unknown
+  }
+}
 
-  const getStatusVariant = (status?: string) => {
-    switch (status) {
-      case "Active": return "default";
-      case "Verified":
-      case "Instructor Trial": return "secondary";
-      case "At Risk":
-      case "Churned": return "destructive";
-      default: return "outline"; // Inactive, Not Verified, unknown
-    }
-  };
+interface BuildLmsColumnsArgs {
+  allSelected: boolean;
+  onSelectAll: (checked: boolean) => void;
+  isSelected: (email: string) => boolean;
+  onSelectOne: (email: string, checked: boolean) => void;
+  onEnroll: (email: string) => void;
+}
 
-  return (
-    <TooltipProvider>
-      <TableRow>
-        <TableCell onClick={(e) => e.stopPropagation()}>
+// Renders each column exactly as the previous hand-rolled <table> did — this
+// is a markup swap onto the shared DataTable, not a behavior change.
+function buildLmsColumns({ allSelected, onSelectAll, isSelected, onSelectOne, onEnroll }: BuildLmsColumnsArgs) {
+  return [
+    {
+      accessorKey: "select",
+      header: (
+        <Checkbox
+          checked={allSelected}
+          onCheckedChange={(checked) => onSelectAll(checked === true)}
+        />
+      ),
+      cell: (customer: ExternalLMSCustomer) => (
+        <div onClick={(e) => e.stopPropagation()}>
           <Checkbox
-            checked={selected}
-            onCheckedChange={(checked) => onSelect(checked === true)}
+            checked={isSelected(customer.email)}
+            onCheckedChange={(checked) => onSelectOne(customer.email, checked === true)}
           />
-        </TableCell>
-        <TableCell className="font-medium">
-          <div className="flex items-center gap-2">
-            <GraduationCap className="h-4 w-4 text-primary shrink-0" />
-            <div className="min-w-0">
-              <div className="truncate">{customer.full_name?.trim() || nameFromEmail(customer.email)}</div>
-              <div className="text-xs text-muted-foreground truncate">{customer.email || "—"}</div>
-            </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: (customer: ExternalLMSCustomer) => (
+        <div className="flex items-center gap-2 font-medium">
+          <GraduationCap className="h-4 w-4 text-primary shrink-0" />
+          <div className="min-w-0">
+            <div className="truncate">{customer.full_name?.trim() || nameFromEmail(customer.email)}</div>
+            <div className="text-xs text-muted-foreground truncate">{customer.email || "—"}</div>
           </div>
-        </TableCell>
-        <TableCell>
-          <Badge variant={getStatusVariant(customer.status)} className="capitalize">
-            {customer.status || "unknown"}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "LMS Status",
+      cell: (customer: ExternalLMSCustomer) => (
+        <Badge variant={getStatusVariant(customer.status)} className="capitalize">
+          {customer.status || "unknown"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "signup_type",
+      header: "Signup Type",
+      cell: (customer: ExternalLMSCustomer) =>
+        customer.signup_type ? (
+          <Badge variant="outline" className="capitalize">
+            {customer.signup_type}
           </Badge>
-        </TableCell>
-        <TableCell>
-          {customer.signup_type ? (
-            <Badge variant="outline" className="capitalize">
-              {customer.signup_type}
-            </Badge>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </TableCell>
-        <TableCell>
-          {customer.company_size ? (
-            <div className="flex items-center gap-1">
-              <Building2 className="h-3 w-3 text-muted-foreground" />
-              <span className="text-sm">{customer.company_size}</span>
-            </div>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </TableCell>
-        <TableCell>
-          {customer.use_case ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="text-sm truncate max-w-[120px] block cursor-help">
-                  {customer.use_case}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-[300px]">
-                <p>{customer.use_case}</p>
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </TableCell>
-        <TableCell>
-          {customer.learning_objectives ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="text-sm truncate max-w-[120px] block cursor-help">
-                  {customer.learning_objectives}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-[300px]">
-                <p>{customer.learning_objectives}</p>
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </TableCell>
-        <TableCell>
-          {customer.marketing_consent ? (
-            <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100">
-              <CheckCircle2 className="h-3 w-3 mr-1" />
-              Opted In
-            </Badge>
-          ) : (
-            <Badge variant="secondary">
-              <XCircle className="h-3 w-3 mr-1" />
-              No
-            </Badge>
-          )}
-        </TableCell>
-        <TableCell>
-          {customer.created_at ? (
-            <span className="text-sm text-muted-foreground whitespace-nowrap">
-              {format(new Date(customer.created_at), "MMM d, yyyy")}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </TableCell>
-        <TableCell>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      accessorKey: "company_size",
+      header: "Company Size",
+      cell: (customer: ExternalLMSCustomer) =>
+        customer.company_size ? (
+          <div className="flex items-center gap-1">
+            <Building2 className="h-3 w-3 text-muted-foreground" />
+            <span className="text-sm">{customer.company_size}</span>
+          </div>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      accessorKey: "use_case",
+      header: "Use Case",
+      cell: (customer: ExternalLMSCustomer) =>
+        customer.use_case ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-sm truncate max-w-[120px] block cursor-help">
+                {customer.use_case}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[300px]">
+              <p>{customer.use_case}</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      accessorKey: "learning_objectives",
+      header: "Learning Objectives",
+      cell: (customer: ExternalLMSCustomer) =>
+        customer.learning_objectives ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-sm truncate max-w-[120px] block cursor-help">
+                {customer.learning_objectives}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[300px]">
+              <p>{customer.learning_objectives}</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      accessorKey: "marketing_consent",
+      header: "Marketing",
+      cell: (customer: ExternalLMSCustomer) =>
+        customer.marketing_consent ? (
+          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100">
+            <CheckCircle2 className="h-3 w-3 mr-1" />
+            Opted In
+          </Badge>
+        ) : (
+          <Badge variant="secondary">
+            <XCircle className="h-3 w-3 mr-1" />
+            No
+          </Badge>
+        ),
+    },
+    {
+      accessorKey: "created_at",
+      header: "Created",
+      cell: (customer: ExternalLMSCustomer) =>
+        customer.created_at ? (
+          <span className="text-sm text-muted-foreground whitespace-nowrap">
+            {format(new Date(customer.created_at), "MMM d, yyyy")}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      accessorKey: "credits",
+      header: "Credits",
+      cell: (customer: ExternalLMSCustomer) => {
+        const creditsAvailable = (customer.credits_total || 0) - (customer.credits_used || 0);
+        const creditsPercentage = customer.credits_total && customer.credits_total > 0
+          ? Math.round((creditsAvailable / customer.credits_total) * 100)
+          : 0;
+        return (
           <div className="flex items-center gap-2 min-w-[100px]">
             <Progress value={creditsPercentage} className="h-2 flex-1" />
             <span className="text-xs text-muted-foreground whitespace-nowrap">
               {creditsAvailable}/{customer.credits_total || 0}
             </span>
           </div>
-        </TableCell>
-        <TableCell>
-          {customer.plan ? (
-            <Badge variant="secondary" className="bg-primary/10 text-primary">
-              {customer.plan}
-            </Badge>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </TableCell>
-        <TableCell>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onEnroll}
-          >
-            <Mail className="h-4 w-4 mr-1" />
-            Enroll
-          </Button>
-        </TableCell>
-      </TableRow>
-    </TooltipProvider>
-  );
+        );
+      },
+    },
+    {
+      accessorKey: "plan",
+      header: "Plan",
+      cell: (customer: ExternalLMSCustomer) =>
+        customer.plan ? (
+          <Badge variant="secondary" className="bg-primary/10 text-primary">
+            {customer.plan}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      accessorKey: "actions",
+      header: "Actions",
+      cell: (customer: ExternalLMSCustomer) => (
+        <Button variant="ghost" size="sm" onClick={() => onEnroll(customer.email)}>
+          <Mail className="h-4 w-4 mr-1" />
+          Enroll
+        </Button>
+      ),
+    },
+  ];
 }

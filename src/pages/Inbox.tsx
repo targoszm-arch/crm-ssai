@@ -21,6 +21,8 @@ import { LinkedInMessageList } from "@/components/inbox/LinkedInMessageList";
 import { LinkedInMessageView } from "@/components/inbox/LinkedInMessageView";
 import { SignatureSettings } from "@/components/inbox/SignatureSettings";
 import { InboxSidebar, type EmailFolder } from "@/components/inbox/InboxSidebar";
+import { TemplatesPanel } from "@/components/inbox/TemplatesPanel";
+import { EmailTemplate } from "@/hooks/useEmailTemplates";
 import { InboxFilters } from "@/components/inbox/InboxFilters";
 import { BulkActionBar } from "@/components/inbox/BulkActionBar";
 import {
@@ -51,6 +53,7 @@ export default function Inbox() {
   const isMobile = useIsMobile();
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeTemplate, setComposeTemplate] = useState<EmailTemplate | null>(null);
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<InboxTab>("email");
   const [isSyncingMeetAlfred, setIsSyncingMeetAlfred] = useState(false);
@@ -276,7 +279,15 @@ export default function Inbox() {
         <div className="flex-1 flex overflow-hidden">
           {/* Desktop InboxSidebar */}
           {!isMobile && activeTab === "email" && (
-            <InboxSidebar currentFolder={currentFolder} onFolderChange={(f) => { setCurrentFolder(f); setSelectedItem(null); }} />
+            <div className="flex flex-col shrink-0 border-r bg-muted/30 overflow-y-auto">
+              <InboxSidebar currentFolder={currentFolder} onFolderChange={(f) => { setCurrentFolder(f); setSelectedItem(null); }} />
+              <TemplatesPanel
+                onUseTemplate={(template) => {
+                  setComposeTemplate(template);
+                  setComposeOpen(true);
+                }}
+              />
+            </div>
           )}
           
           {/* Email/LinkedIn list - constrained width */}
@@ -337,7 +348,15 @@ export default function Inbox() {
         </Sheet>
       )}
 
-      <ComposeEmail open={composeOpen} onOpenChange={setComposeOpen} account={currentAccount} />
+      <ComposeEmail
+        open={composeOpen}
+        onOpenChange={(next) => {
+          setComposeOpen(next);
+          if (!next) setComposeTemplate(null);
+        }}
+        account={currentAccount}
+        initialTemplate={composeTemplate}
+      />
       <SignatureSettings open={signatureOpen} onOpenChange={setSignatureOpen} />
     </div>
   );
