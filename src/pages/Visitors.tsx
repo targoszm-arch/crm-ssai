@@ -25,6 +25,16 @@ const RANGES = [
   { value: "90", label: "Last 90 days" },
 ];
 
+/** A readable traffic source from a raw referrer URL. */
+function trafficSource(referrer: string | null): string {
+  if (!referrer) return "Direct";
+  try {
+    return new URL(referrer).hostname.replace(/^www\./, "");
+  } catch {
+    return referrer;
+  }
+}
+
 function relative(iso: string | null): string {
   if (!iso) return "—";
   try {
@@ -254,6 +264,7 @@ export default function Visitors() {
                     <TableRow>
                       <TableHead>Company</TableHead>
                       <TableHead>Location</TableHead>
+                      <TableHead>Traffic source</TableHead>
                       <TableHead className="text-right">Visits</TableHead>
                       <TableHead className="text-right">Pages</TableHead>
                       <TableHead>Last seen</TableHead>
@@ -284,6 +295,9 @@ export default function Visitors() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {[visitor.city, visitor.country].filter(Boolean).join(", ") || "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[10rem] truncate">
+                          {trafficSource(visitor.last_referrer)}
                         </TableCell>
                         <TableCell className="text-right">{visitor.visit_count}</TableCell>
                         <TableCell className="text-right">{visitor.unique_pages}</TableCell>

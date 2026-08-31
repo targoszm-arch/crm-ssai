@@ -8,9 +8,13 @@ import { Check, Copy, Globe, Loader2, ShieldCheck, TriangleAlert } from "lucide-
 import { toast } from "sonner";
 import { useCreateVisitorSite, useVisitorSites, VisitorSite } from "./useWebsiteVisitors";
 
-/** Where visitor-tracking.js is served from — the CRM's own origin. */
+// Deliberately not called "visitor-tracking.js" or "*-analytics.js": ad-block
+// and privacy-extension lists (EasyPrivacy et al.) block scripts by filename
+// pattern, so a name that says what it does gets silently dropped in Safari
+// and Chrome extensions like AdGuard/1Blocker/uBlock — before it ever reaches
+// our own edge function.
 function scriptSrc(): string {
-  return `${window.location.origin}/visitor-tracking.js`;
+  return `${window.location.origin}/ssai-widget.js`;
 }
 
 function snippetFor(site: VisitorSite): string {
