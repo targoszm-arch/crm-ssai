@@ -16,7 +16,7 @@ import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { renderLabels } from "@/lib/labelColors";
 import { toast } from "sonner";
-import { enrichContacts } from "@/lib/api/enrichment";
+import { enrichContacts, type EnrichProvider } from "@/lib/api/enrichment";
 import { useQueryClient } from "@tanstack/react-query";
 
 type ContactWithCompany = Contact & {
@@ -123,14 +123,14 @@ export function CustomersTab() {
     toast.success(`Exported ${selected.length} contact${selected.length !== 1 ? "s" : ""}`);
   };
 
-  const handleBulkEnrich = async () => {
+  const handleBulkEnrich = async (provider: EnrichProvider) => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     setIsEnriching(true);
     try {
       const result = await enrichContacts(ids, (current, total) => {
         toast.loading(`Enriching ${current} of ${total}...`, { id: "bulk-enrich-contacts" });
-      });
+      }, provider);
       toast.dismiss("bulk-enrich-contacts");
       toast.success(`Enriched ${result.succeeded} contact${result.succeeded !== 1 ? "s" : ""}${result.failed > 0 ? `, ${result.failed} failed` : ""}`);
       queryClient.invalidateQueries({ queryKey: ["contacts"] });

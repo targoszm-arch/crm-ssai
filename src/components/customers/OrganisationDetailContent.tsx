@@ -7,7 +7,8 @@ import { format } from "date-fns";
 import { useContactsByCompany, Contact } from "@/hooks/useContacts";
 import { Company, useUpdateCompany } from "@/hooks/useCompanies";
 import { Skeleton } from "@/components/ui/skeleton";
-import { enrichCompany } from "@/lib/api/enrichment";
+import { enrichCompany, type EnrichProvider } from "@/lib/api/enrichment";
+import { EnrichProviderMenu } from "./EnrichProviderMenu";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { EditableLabels } from "./EditableLabels";
@@ -56,12 +57,12 @@ export function OrganisationDetailContent({ company, onAddContact }: Organisatio
     setContactDetailOpen(true);
   };
 
-  const handleEnrich = async () => {
+  const handleEnrich = async (provider: EnrichProvider) => {
     if (!company) return;
 
     setIsEnriching(true);
     try {
-      const result = await enrichCompany(company.id);
+      const result = await enrichCompany(company.id, provider);
       queryClient.invalidateQueries({ queryKey: ["companies"] });
       queryClient.invalidateQueries({ queryKey: ["company-filter-options"] });
       toast({
@@ -106,19 +107,20 @@ export function OrganisationDetailContent({ company, onAddContact }: Organisatio
             >
               <DollarSign className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleEnrich}
-              disabled={isEnriching}
-              title="Enrich with AI"
-            >
-              {isEnriching ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-            </Button>
+            <EnrichProviderMenu onEnrich={handleEnrich} disabled={isEnriching}>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isEnriching}
+                title="Enrich from Apollo, Hunter.io or AI"
+              >
+                {isEnriching ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+              </Button>
+            </EnrichProviderMenu>
           </div>
         </div>
       </div>

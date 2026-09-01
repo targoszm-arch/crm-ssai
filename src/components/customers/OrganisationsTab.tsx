@@ -17,7 +17,7 @@ import { AddContactModal } from "./AddContactModal";
 import { OrganisationsBulkActionBar } from "./OrganisationsBulkActionBar";
 import { renderLabels } from "@/lib/labelColors";
 import { toast } from "sonner";
-import { enrichCompanies } from "@/lib/api/enrichment";
+import { enrichCompanies, type EnrichProvider } from "@/lib/api/enrichment";
 import { useQueryClient } from "@tanstack/react-query";
 
 function getConnectionStrengthBadge(strength: string | null) {
@@ -204,14 +204,14 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
     toast.success(`Exported ${selectedCompanies.length} organisations`);
   };
 
-  const handleBulkEnrich = async () => {
+  const handleBulkEnrich = async (provider: EnrichProvider) => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     setIsEnriching(true);
     try {
       const result = await enrichCompanies(ids, (current, total) => {
         toast.loading(`Enriching ${current} of ${total}...`, { id: "bulk-enrich" });
-      });
+      }, provider);
       toast.dismiss("bulk-enrich");
       toast.success(`Enriched ${result.succeeded} organisation${result.succeeded !== 1 ? "s" : ""}${result.failed > 0 ? `, ${result.failed} failed` : ""}`);
       queryClient.invalidateQueries({ queryKey: ["companies"] });

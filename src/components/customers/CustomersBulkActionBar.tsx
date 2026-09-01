@@ -1,5 +1,7 @@
 import { Trash2, X, Download, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EnrichProviderMenu } from "./EnrichProviderMenu";
+import type { EnrichProvider } from "@/lib/api/enrichment";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   AlertDialog,
@@ -18,7 +20,7 @@ interface CustomersBulkActionBarProps {
   onDelete: () => void;
   onClearSelection: () => void;
   onExport: () => void;
-  onEnrich?: () => void;
+  onEnrich?: (provider: EnrichProvider) => void;
   isDeleting?: boolean;
   isEnriching?: boolean;
 }
@@ -49,15 +51,16 @@ export function CustomersBulkActionBar({
             <Download className="h-4 w-4 mr-1" />
             Export CSV
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onEnrich}
+          <EnrichProviderMenu
+            onEnrich={(provider) => onEnrich?.(provider)}
             disabled={isEnriching}
+            align="start"
           >
-            {isEnriching ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
-            Enrich Selected
-          </Button>
+            <Button variant="outline" size="sm" disabled={isEnriching}>
+              {isEnriching ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+              Enrich Selected
+            </Button>
+          </EnrichProviderMenu>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm" disabled={isDeleting}>
