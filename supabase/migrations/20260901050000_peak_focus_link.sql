@@ -25,6 +25,17 @@ create extension if not exists postgres_fdw with schema extensions;
 create schema if not exists peak_focus;
 revoke all on schema peak_focus from public, anon, authenticated;
 
+create table if not exists public.peak_focus_config (
+  singleton      boolean primary key default true check (singleton),
+  owner_user_id  uuid not null,
+  connected_at   timestamptz not null default now()
+);
+alter table public.peak_focus_config enable row level security;
+revoke all on table public.peak_focus_config from public, anon, authenticated;
+
+comment on table public.peak_focus_config is
+  'The Peak Focus auth user that owns tasks created from the CRM. Discovered at connect time; not the CRM user id, which belongs to a different auth system.';
+
 create server if not exists peak_focus
   foreign data wrapper postgres_fdw
   options (host 'db.filtmcykamccfikuxehy.supabase.co', port '5432', dbname 'postgres');
@@ -42,6 +53,7 @@ set search_path = public, peak_focus, extensions
 as $$
 declare
   v_count integer;
+  v_owner uuid;
 begin
   if coalesce(p_password, '') = '' then
     raise exception 'Password required';
@@ -58,8 +70,28 @@ begin
     limit to (tasks, projects, clients)
     from server peak_focus into peak_focus;
 
+  -- Whoever owns the most tasks over there is the account this CRM writes as. Derived
+  -- rather than hardcoded so it survives a Peak Focus account change. This is NOT the CRM
+  -- user id: the two projects have separate auth (CRM 72242162-…, Peak Focus c0ad9404-…),
+  -- and writing the CRM's id would produce tasks owned by a user that does not exist
+  -- there, which Peak Focus's RLS would then hide.
+  select t.user_id into v_owner
+  from peak_focus.tasks t
+  group by t.user_id
+  order by count(*) desc
+  limit 1;
+
+  if v_owner is null then
+    raise exception 'Connected, but Peak Focus has no tasks to identify an owner from. Create one task there first.';
+  end if;
+
+  insert into public.peak_focus_config (singleton, owner_user_id, connected_at)
+  values (true, v_owner, now())
+  on conflict (singleton) do update
+    set owner_user_id = excluded.owner_user_id, connected_at = excluded.connected_at;
+
   select count(*) into v_count from peak_focus.tasks;
-  return format('Connected. %s Peak Focus tasks visible.', v_count);
+  return format('Connected. %s Peak Focus tasks visible, writing as owner %s.', v_count, v_owner);
 end;
 $$;
 

@@ -88,25 +88,31 @@ security definer
 set search_path = public, peak_focus
 as $$
 declare
-  v_owner uuid := auth.uid();
+  v_caller uuid := auth.uid();
+  v_pf_owner uuid;
   v_task uuid;
   v_links jsonb := '{}'::jsonb;
 begin
   if coalesce(btrim(p_title), '') = '' then
     raise exception 'Task title required';
   end if;
-  if v_owner is null then
+  if v_caller is null then
     raise exception 'Not authenticated';
+  end if;
+
+  select owner_user_id into v_pf_owner from public.peak_focus_config;
+  if v_pf_owner is null then
+    raise exception 'Peak Focus is not connected yet. Run select peak_focus_connect(''<password>'') first.';
   end if;
 
   -- Only link records the caller owns, so a guessed id cannot attach a task to someone
   -- else's contact.
   if p_contact_id is not null and exists (
-       select 1 from public.contacts where id = p_contact_id and user_id = v_owner) then
+       select 1 from public.contacts where id = p_contact_id and user_id = v_caller) then
     v_links := v_links || jsonb_build_object('crm_contact_id', p_contact_id);
   end if;
   if p_company_id is not null and exists (
-       select 1 from public.companies where id = p_company_id and user_id = v_owner) then
+       select 1 from public.companies where id = p_company_id and user_id = v_caller) then
     v_links := v_links || jsonb_build_object('crm_company_id', p_company_id);
   end if;
 
@@ -114,9 +120,19 @@ begin
     raise exception 'A task must link to a contact or company you own';
   end if;
 
-  insert into peak_focus.tasks (title, notes, priority, ends_at, custom_fields, created_by)
-  values (btrim(p_title), p_notes, p_priority, p_ends_at,
-          v_links || jsonb_build_object('source', 'crm'), 'crm')
+  -- Peak Focus column reality, checked rather than assumed: user_id is uuid NOT NULL with
+  -- no default, created_by is uuid (not text), and priority is NOT NULL. Getting any of
+  -- the three wrong throws on insert.
+  insert into peak_focus.tasks
+    (user_id, created_by, title, notes, priority, ends_at, custom_fields)
+  values
+    (v_pf_owner,                     -- NOT auth.uid(): separate auth system
+     v_pf_owner,                     -- uuid, not the string 'crm'
+     btrim(p_title),
+     coalesce(p_notes, ''),
+     coalesce(p_priority, 'none'),   -- NOT NULL over there
+     p_ends_at,
+     v_links || jsonb_build_object('source', 'crm', 'crm_created_by', v_caller))
   returning id into v_task;
 
   return v_task;
