@@ -181,6 +181,9 @@ export function ComposeEmail({
           setSubject("");
           setBody("");
           setSelectedContactId("");
+          // Clear the template too, or the picker keeps showing the last one over an empty
+          // body — and re-picking it would not re-apply, since the value never changed.
+          setSelectedTemplateId("");
           onOpenChange(false);
         },
         onError: (error) => {
