@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Settings, Mail, Linkedin, RefreshCw, Loader2, FileSignature, LayoutGrid, List } from "lucide-react";
+import { Plus, Settings, Mail, Linkedin, RefreshCw, Loader2, FileSignature, LayoutGrid, List, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -53,6 +53,13 @@ export default function Inbox() {
   const isMobile = useIsMobile();
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
   const [composeOpen, setComposeOpen] = useState(false);
+  // Collapsed sidebar is a per-browser preference, not account state.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("inbox-sidebar-collapsed") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("inbox-sidebar-collapsed", sidebarCollapsed ? "1" : "0"); } catch { /* private mode */ }
+  }, [sidebarCollapsed]);
   const [composeTemplate, setComposeTemplate] = useState<EmailTemplate | null>(null);
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<InboxTab>("email");
@@ -279,14 +286,41 @@ export default function Inbox() {
         <div className="flex-1 flex overflow-hidden">
           {/* Desktop InboxSidebar */}
           {!isMobile && activeTab === "email" && (
-            <div className="flex flex-col shrink-0 border-r bg-muted/30 overflow-y-auto">
-              <InboxSidebar currentFolder={currentFolder} onFolderChange={(f) => { setCurrentFolder(f); setSelectedItem(null); }} />
-              <TemplatesPanel
-                onUseTemplate={(template) => {
-                  setComposeTemplate(template);
-                  setComposeOpen(true);
-                }}
+            <div
+              className={cn(
+                "flex flex-col shrink-0 border-r bg-muted/30 overflow-y-auto transition-[width] duration-200",
+                sidebarCollapsed ? "w-12" : "w-56"
+              )}
+            >
+              <div className="flex justify-end p-2 pb-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setSidebarCollapsed((v) => !v)}
+                  aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                >
+                  {sidebarCollapsed ? (
+                    <PanelLeftOpen className="h-4 w-4" />
+                  ) : (
+                    <PanelLeftClose className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <InboxSidebar
+                currentFolder={currentFolder}
+                onFolderChange={(f) => { setCurrentFolder(f); setSelectedItem(null); }}
+                collapsed={sidebarCollapsed}
               />
+              {!sidebarCollapsed && (
+                <TemplatesPanel
+                  onUseTemplate={(template) => {
+                    setComposeTemplate(template);
+                    setComposeOpen(true);
+                  }}
+                />
+              )}
             </div>
           )}
           

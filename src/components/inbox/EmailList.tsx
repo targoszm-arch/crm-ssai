@@ -247,8 +247,11 @@ export function EmailList({
                 key={email.id}
                 className={cn(
                   "w-full text-left p-4 hover:bg-accent transition-colors cursor-pointer relative group",
+                  // Always a 2px left border, so marking read recolours it rather than
+                  // removing it — removing it reflowed the whole list on every click.
+                  "border-l-2 border-l-transparent",
                   selectedEmail?.id === email.id && "bg-accent",
-                  !email.is_read && "bg-primary/5 border-l-2 border-l-primary"
+                  !email.is_read && "bg-primary/5 border-l-primary"
                 )}
                 onClick={() => onSelectEmail(email)}
               >
@@ -263,10 +266,14 @@ export function EmailList({
                     </div>
                   )}
                   
-                  {/* Unread Indicator */}
-                  {!email.is_read && (
-                    <div className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-                  )}
+                  {/* Unread indicator. Always rendered so the row's flex layout is identical
+                      read or unread; only its visibility changes. */}
+                  <div
+                    className={cn(
+                      "w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0",
+                      email.is_read && "invisible"
+                    )}
+                  />
                   
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                     {email.contacts ? (
