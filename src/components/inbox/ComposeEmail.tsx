@@ -33,6 +33,7 @@ import {
 import { useSendEmail } from "@/hooks/useEmails";
 import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { useContacts, Contact } from "@/hooks/useContacts";
+import { useEmailTemplates } from "@/hooks/useEmailTemplates";
 import { useEmailSignature } from "@/hooks/useEmailSignature";
 import { useGenerateEmailDraft, DraftTone } from "@/hooks/useGenerateEmailDraft";
 import { RichTextComposer } from "@/components/shared/RichTextComposer";
@@ -75,8 +76,22 @@ export function ComposeEmail({
 
   const sendEmail = useSendEmail();
   const { data: contacts } = useContacts({});
+  const { data: templates } = useEmailTemplates();
   const { data: signature } = useEmailSignature();
   const generateDraft = useGenerateEmailDraft();
+
+  // Picking a template after the composer is already open. The initialTemplate effect only
+  // fires on open, so without this the picker would appear to do nothing.
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    const template = templates?.find((t) => t.id === templateId);
+    if (!template) return;
+    if (template.subject) setSubject(template.subject);
+    const nextBody = template.body_html || template.body_text || "";
+    if (nextBody) setBody(nextBody);
+  };
 
   const handleSelectContact = (contactId: string) => {
     setSelectedContactId(contactId);
@@ -166,6 +181,9 @@ export function ComposeEmail({
           setSubject("");
           setBody("");
           setSelectedContactId("");
+          // Clear the template too, or the picker keeps showing the last one over an empty
+          // body — and re-picking it would not re-apply, since the value never changed.
+          setSelectedTemplateId("");
           onOpenChange(false);
         },
         onError: (error) => {
@@ -220,6 +238,21 @@ export function ComposeEmail({
                 placeholder="Choose contact"
                 searchPlaceholder="Search by name or email..."
                 emptyText="No contact found."
+              />
+            </div>
+            <div className="w-[200px]">
+              <Label className="text-xs text-muted-foreground">Template</Label>
+              <SearchableSelect
+                options={(templates ?? []).map((template) => ({
+                  value: template.id,
+                  label: template.name,
+                  hint: template.subject ?? undefined,
+                }))}
+                value={selectedTemplateId}
+                onChange={handleSelectTemplate}
+                placeholder="Choose template"
+                searchPlaceholder="Search templates..."
+                emptyText="No template found."
               />
             </div>
           </div>

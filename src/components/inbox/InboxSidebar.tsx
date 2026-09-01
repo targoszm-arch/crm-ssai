@@ -7,6 +7,8 @@ interface InboxSidebarProps {
   currentFolder: EmailFolder;
   onFolderChange: (folder: EmailFolder) => void;
   folderCounts?: Record<EmailFolder, number>;
+  /** Icons only, labels moved to the title attribute. */
+  collapsed?: boolean;
 }
 
 const folders: { id: EmailFolder; label: string; icon: React.ReactNode }[] = [
@@ -21,16 +23,19 @@ export function InboxSidebar({
   currentFolder,
   onFolderChange,
   folderCounts = { inbox: 0, drafts: 0, outbox: 0, sent: 0, archive: 0 },
+  collapsed = false,
 }: InboxSidebarProps) {
   return (
-    <div className="w-48 shrink-0 border-r bg-muted/30 p-2">
+    <div className="w-full p-2">
       <div className="space-y-1">
         {folders.map((folder) => (
           <button
             key={folder.id}
             onClick={() => onFolderChange(folder.id)}
+            title={collapsed ? folder.label : undefined}
             className={cn(
-              "flex w-full items-center justify-between rounded-md px-3 py-2 text-sm transition-colors",
+              "flex w-full items-center rounded-md py-2 text-sm transition-colors",
+              collapsed ? "justify-center px-0" : "justify-between px-3",
               currentFolder === folder.id
                 ? "bg-primary text-primary-foreground"
                 : "hover:bg-accent hover:text-accent-foreground"
@@ -38,9 +43,9 @@ export function InboxSidebar({
           >
             <div className="flex items-center gap-2">
               {folder.icon}
-              <span>{folder.label}</span>
+              {!collapsed && <span>{folder.label}</span>}
             </div>
-            {folderCounts[folder.id] > 0 && (
+            {!collapsed && folderCounts[folder.id] > 0 && (
               <span
                 className={cn(
                   "rounded-full px-2 py-0.5 text-xs font-medium",
