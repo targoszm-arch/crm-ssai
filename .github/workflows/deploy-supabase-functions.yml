@@ -34,6 +34,7 @@ jobs:
         id: pick
         run: |
           set -euo pipefail
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             if [ "${{ inputs.functions }}" = "all" ]; then
               names=$(ls supabase/functions)
@@ -41,10 +42,33 @@ jobs:
               names=$(echo "${{ inputs.functions }}" | tr ',' '\n' | tr -d ' ')
             fi
           else
-            # Any function directory touched by this push.
-            names=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} -- 'supabase/functions/**' \
-                    | cut -d/ -f3 | sort -u)
+            changed=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} -- 'supabase/functions/**')
+            names=$(echo "$changed" | cut -d/ -f3 | sort -u)
+
+            # A change to shared code deploys nothing on its own, because no function
+            # directory was touched — and the deployed functions would quietly keep the
+            # old copy, since the CLI bundles the import at deploy time. So when shared
+            # code moves, redeploy every function that imports it.
+            shared=$(echo "$changed" | cut -d/ -f3 | sort -u | grep '^_' || true)
+            for s in $shared; do
+              importers=$(grep -rl "\.\./$s/" supabase/functions --include='*.ts' \
+                          | cut -d/ -f3 | sort -u || true)
+              names=$(printf '%s\n%s\n' "$names" "$importers" | sort -u)
+            done
           fi
+
+          # Drop the shared directories themselves. The CLI treats a leading underscore as
+          # "shared code, not a function", and so must we: carrying `_shared` through as a
+          # name fails the verify_jwt gate below on a config block that can never exist,
+          # which would take the real functions in the same push down with it.
+          filtered=""
+          for n in $names; do
+            case "$n" in
+              _*) echo "Skipping shared directory: $n" ;;
+              *)  filtered="$filtered $n" ;;
+            esac
+          done
+          names=$(echo $filtered | tr ' ' '\n' | sort -u)
 
           missing=""
           for n in $names; do
