@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  contactFieldsFromApollo,
+  matchPerson,
+  toDomain,
+  type ApolloPerson,
+} from "../_shared/apollo.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,8 +13,24 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Which data source to spend on.
+//   auto   — Apollo first, Hunter only if Apollo missed. The default, and the cheapest
+//            way to get the best answer: two providers are only worth two credits when
+//            the first one came back empty.
+//   apollo — Apollo only. Skips Hunter even on a miss.
+//   hunter — Hunter only. The behaviour this function had before Apollo existed, kept
+//            so a bulk run can be pinned to one provider's billing.
+// OpenAI runs in every mode; it is what turns facts into buying_signals and pain_point,
+// and it is asked for less the more the providers already answered.
+type EnrichProvider = "auto" | "apollo" | "hunter";
+
 interface EnrichRequest {
   contactId: string;
+  provider?: EnrichProvider;
+}
+
+function parseProvider(value: unknown): EnrichProvider {
+  return value === "apollo" || value === "hunter" ? value : "auto";
 }
 
 function inferSeniorityFromTitle(title: string | null): string | null {
@@ -68,16 +90,26 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     const hunterApiKey = Deno.env.get("HUNTER_API_KEY");
+    const apolloApiKey = Deno.env.get("APOLLO_API_KEY");
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!hunterApiKey) throw new Error("HUNTER_API_KEY not configured");
     if (!openaiApiKey) throw new Error("OPENAI_API_KEY not configured");
+
+    const body: EnrichRequest = await req.json();
+    const { contactId } = body;
+    const provider = parseProvider(body.provider);
+    if (!contactId) throw new Error("contactId is required");
+
+    // Only the provider actually being asked for has to be configured. Requiring both
+    // keys up front is what would make an Apollo-only account unable to enrich at all.
+    if (provider === "hunter" && !hunterApiKey) throw new Error("HUNTER_API_KEY not configured");
+    if (provider === "apollo" && !apolloApiKey) throw new Error("APOLLO_API_KEY not configured");
+    if (provider === "auto" && !hunterApiKey && !apolloApiKey) {
+      throw new Error("No enrichment provider configured — set APOLLO_API_KEY or HUNTER_API_KEY");
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const { contactId }: EnrichRequest = await req.json();
-    if (!contactId) throw new Error("contactId is required");
 
     console.log(`Enriching contact: ${contactId}`);
 
@@ -96,9 +128,41 @@ serve(async (req: Request): Promise<Response> => {
     const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(" ");
     console.log(`Found contact: ${fullName}`);
 
+    const companyDomain = toDomain(contact.companies?.website || contact.companies?.domains);
+
+    // Step 0: Apollo. Runs first because it returns facts where OpenAI would return a
+    // confident inference — title, seniority, department, phone, location. Everything it
+    // answers is one less thing the model is asked to guess.
+    let apolloPerson: ApolloPerson | null = null;
+    let apolloError: string | null = null;
+    if (apolloApiKey && (provider === "apollo" || provider === "auto")) {
+      try {
+        apolloPerson = await matchPerson(apolloApiKey, {
+          email: contact.email,
+          firstName: contact.first_name,
+          lastName: contact.last_name,
+          domain: companyDomain,
+          organizationName: contact.companies?.company_name ?? null,
+          linkedinUrl: contact.linkedin_url,
+        });
+        console.log(apolloPerson ? `Apollo matched ${fullName}` : `Apollo had no match for ${fullName}`);
+      } catch (err) {
+        // A provider being out of credits should degrade the result, not fail the call —
+        // Hunter and OpenAI can still say something useful. Surfaced in the response so
+        // a bulk run reports "3 of 40 hit the Apollo limit" rather than silently thinning.
+        apolloError = err instanceof Error ? err.message : String(err);
+        console.warn("Apollo lookup failed:", apolloError);
+      }
+    }
+
+    // Hunter is the fallback, not a second opinion: in auto mode a successful Apollo
+    // match skips it, so the common case costs one credit rather than two.
+    const useHunter = Boolean(hunterApiKey) &&
+      (provider === "hunter" || (provider === "auto" && !apolloPerson));
+
     // Step 1: Call Hunter.io Email Enrichment if email available
     let hunterPersonData: Record<string, unknown> | null = null;
-    if (contact.email) {
+    if (useHunter && contact.email) {
       console.log(`Calling Hunter.io for email: ${contact.email}`);
       const hunterUrl = `https://api.hunter.io/v2/people/find?email=${encodeURIComponent(contact.email)}&api_key=${hunterApiKey}`;
       const hunterRes = await fetch(hunterUrl);
@@ -114,14 +178,8 @@ serve(async (req: Request): Promise<Response> => {
 
     // Step 2: Try Combined Enrichment if we have both first/last name and domain
     let hunterCombinedData: Record<string, unknown> | null = null;
-    const companyWebsite = contact.companies?.website || contact.companies?.domains;
-    if (!hunterPersonData && contact.first_name && contact.last_name && companyWebsite) {
-      let domain = companyWebsite;
-      try {
-        if (!domain.startsWith("http")) domain = `https://${domain}`;
-        domain = new URL(domain).hostname.replace(/^www\./, "");
-      } catch { /* use as-is */ }
-      
+    if (useHunter && !hunterPersonData && contact.first_name && contact.last_name && companyDomain) {
+      const domain = companyDomain;
       console.log(`Trying Hunter combined enrichment: ${contact.first_name} ${contact.last_name} @ ${domain}`);
       const combUrl = `https://api.hunter.io/v2/combined/find?first_name=${encodeURIComponent(contact.first_name)}&last_name=${encodeURIComponent(contact.last_name)}&domain=${encodeURIComponent(domain)}&api_key=${hunterApiKey}`;
       const combRes = await fetch(combUrl);
@@ -155,7 +213,23 @@ Hunter.io Person Data:
 `
       : "No Hunter.io person data available.";
 
-    const prompt = `You are a sales intelligence assistant. Enrich this contact using the real data from Hunter.io below, combined with your professional knowledge.
+    // Apollo's own view, given to the model as established fact rather than as a hint.
+    const apolloContext = apolloPerson
+      ? `
+Apollo Person Data (VERIFIED — treat as fact, do not contradict):
+- Name: ${apolloPerson.name || `${apolloPerson.first_name ?? ""} ${apolloPerson.last_name ?? ""}`.trim() || "N/A"}
+- Title: ${apolloPerson.title || "N/A"}
+- Seniority: ${apolloPerson.seniority || "N/A"}
+- Departments: ${(apolloPerson.departments ?? []).join(", ") || "N/A"}
+- Company: ${apolloPerson.organization?.name || "N/A"}
+- Industry: ${apolloPerson.organization?.industry || "N/A"}
+- Employees: ${apolloPerson.organization?.estimated_num_employees ?? "N/A"}
+- Location: ${[apolloPerson.city, apolloPerson.state, apolloPerson.country].filter(Boolean).join(", ") || "N/A"}
+- LinkedIn: ${apolloPerson.linkedin_url || "N/A"}
+`
+      : "No Apollo data available.";
+
+    const prompt = `You are a sales intelligence assistant. Enrich this contact using the real data below, combined with your professional knowledge.
 
 ## Contact Information
 - Name: ${fullName || "Unknown"}
@@ -166,10 +240,11 @@ Hunter.io Person Data:
 ${inferredSeniority ? `- Detected Seniority: ${inferredSeniority}` : ""}
 ${inferredFunction ? `- Detected Function: ${inferredFunction}` : ""}
 
+${apolloContext}
 ${hunterContext}
 
 ## Your Task
-Provide a JSON response. Use Hunter.io data as primary source. Fill gaps with reasonable professional inferences.
+Provide a JSON response. Apollo data is verified and outranks Hunter.io; Hunter.io outranks your own knowledge. Fill remaining gaps with reasonable professional inferences.
 
 {
   "seniority_level": "One of: Entry, Mid, Senior, Manager, Director, VP, C-Level, Founder",
@@ -224,20 +299,35 @@ Respond ONLY with valid JSON.`;
     const updateData: Record<string, unknown> = {};
     const enrichedFields: string[] = [];
 
+    // Apollo's stated facts go in first and are then protected below, so a model that
+    // decides a VP is "Senior" cannot overwrite a title Apollo verified. This is the whole
+    // reason for wiring a data provider in ahead of the model rather than beside it.
+    //
+    // These DO overwrite what is already on the row, unlike the AI pass, which only fills
+    // blanks. That is deliberate: nearly every contact here came from a LinkedIn scrape
+    // and the job title on it is however old the scrape is. Correcting a stale title is
+    // what the credit is being spent on.
+    const apolloFields = apolloPerson ? contactFieldsFromApollo(apolloPerson) : {};
+    for (const [key, value] of Object.entries(apolloFields)) {
+      updateData[key] = value;
+      enrichedFields.push(key);
+    }
+    const fromApollo = (field: string) => Object.hasOwn(apolloFields, field);
+
     const finalSeniority = enrichedData.seniority_level || inferredSeniority;
     const finalFunction = enrichedData.function || inferredFunction;
 
-    if (finalSeniority) { updateData.seniority_level = finalSeniority; enrichedFields.push("seniority_level"); }
-    if (finalFunction) { updateData.function = finalFunction; enrichedFields.push("function"); }
+    if (finalSeniority && !fromApollo("seniority_level")) { updateData.seniority_level = finalSeniority; enrichedFields.push("seniority_level"); }
+    if (finalFunction && !fromApollo("function")) { updateData.function = finalFunction; enrichedFields.push("function"); }
     if (enrichedData.buying_signals) { updateData.buying_signals = enrichedData.buying_signals; enrichedFields.push("buying_signals"); }
     if (enrichedData.pain_point) { updateData.pain_point = enrichedData.pain_point; enrichedFields.push("pain_point"); }
     if (enrichedData.interest_level) { updateData.interest_level = enrichedData.interest_level; enrichedFields.push("interest_level"); }
     if (enrichedData.next_recommended_action) { updateData.next_recommended_action = enrichedData.next_recommended_action; enrichedFields.push("next_recommended_action"); }
     
-    // Only fill empty fields for contact details
-    if (enrichedData.linkedin_url && !contact.linkedin_url) { updateData.linkedin_url = enrichedData.linkedin_url; enrichedFields.push("linkedin_url"); }
-    if (enrichedData.phone && !contact.phone) { updateData.phone = enrichedData.phone; enrichedFields.push("phone"); }
-    if (enrichedData.title && !contact.title) { updateData.title = enrichedData.title; enrichedFields.push("title"); }
+    // Only fill empty fields for contact details, and never over an Apollo answer.
+    if (enrichedData.linkedin_url && !contact.linkedin_url && !fromApollo("linkedin_url")) { updateData.linkedin_url = enrichedData.linkedin_url; enrichedFields.push("linkedin_url"); }
+    if (enrichedData.phone && !contact.phone && !fromApollo("phone")) { updateData.phone = enrichedData.phone; enrichedFields.push("phone"); }
+    if (enrichedData.title && !contact.title && !fromApollo("title")) { updateData.title = enrichedData.title; enrichedFields.push("title"); }
 
     console.log("Update data:", updateData);
 
@@ -263,7 +353,9 @@ Respond ONLY with valid JSON.`;
         success: true,
         contact: updatedContact,
         enrichedFields,
-        sources: { hunter: !!hunterPerson, openai: true },
+        provider,
+        sources: { apollo: !!apolloPerson, hunter: !!hunterPerson, openai: true },
+        ...(apolloError ? { apolloError } : {}),
         message: enrichedFields.length > 0 ? `Updated: ${enrichedFields.join(", ")}` : "No new insights",
       }),
       {

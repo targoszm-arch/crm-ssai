@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  companyFieldsFromApollo,
+  enrichOrganization,
+  type ApolloOrganization,
+} from "../_shared/apollo.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,8 +12,16 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// See enrich-contact for what each mode means; they are the same three here.
+type EnrichProvider = "auto" | "apollo" | "hunter";
+
 interface EnrichRequest {
   companyId: string;
+  provider?: EnrichProvider;
+}
+
+function parseProvider(value: unknown): EnrichProvider {
+  return value === "apollo" || value === "hunter" ? value : "auto";
 }
 
 // Extract domain from website URL or domains field
@@ -53,16 +66,24 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     const hunterApiKey = Deno.env.get("HUNTER_API_KEY");
+    const apolloApiKey = Deno.env.get("APOLLO_API_KEY");
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!hunterApiKey) throw new Error("HUNTER_API_KEY not configured");
     if (!openaiApiKey) throw new Error("OPENAI_API_KEY not configured");
+
+    const body: EnrichRequest = await req.json();
+    const { companyId } = body;
+    const provider = parseProvider(body.provider);
+    if (!companyId) throw new Error("companyId is required");
+
+    if (provider === "hunter" && !hunterApiKey) throw new Error("HUNTER_API_KEY not configured");
+    if (provider === "apollo" && !apolloApiKey) throw new Error("APOLLO_API_KEY not configured");
+    if (provider === "auto" && !hunterApiKey && !apolloApiKey) {
+      throw new Error("No enrichment provider configured — set APOLLO_API_KEY or HUNTER_API_KEY");
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const { companyId }: EnrichRequest = await req.json();
-    if (!companyId) throw new Error("companyId is required");
 
     console.log(`Enriching company: ${companyId}`);
 
@@ -82,9 +103,27 @@ serve(async (req: Request): Promise<Response> => {
 
     const domain = extractDomain(company.website, company.domains);
 
+    // Step 0: Apollo. Firmographics — headcount, revenue, funding, founding year — are
+    // the fields where a model's guess is least distinguishable from a fact once it has
+    // been written into a numeric column, so a provider that states them earns its credit.
+    let apolloOrg: ApolloOrganization | null = null;
+    let apolloError: string | null = null;
+    if (apolloApiKey && domain && (provider === "apollo" || provider === "auto")) {
+      try {
+        apolloOrg = await enrichOrganization(apolloApiKey, domain);
+        console.log(apolloOrg ? `Apollo matched ${domain}` : `Apollo had no match for ${domain}`);
+      } catch (err) {
+        apolloError = err instanceof Error ? err.message : String(err);
+        console.warn("Apollo lookup failed:", apolloError);
+      }
+    }
+
+    const useHunter = Boolean(hunterApiKey) &&
+      (provider === "hunter" || (provider === "auto" && !apolloOrg));
+
     // Step 1: Call Hunter.io Company Enrichment API
     let hunterData: Record<string, unknown> | null = null;
-    if (domain) {
+    if (useHunter && domain) {
       console.log(`Calling Hunter.io for domain: ${domain}`);
       const hunterUrl = `https://api.hunter.io/v2/companies/find?domain=${encodeURIComponent(domain)}&api_key=${hunterApiKey}`;
       const hunterRes = await fetch(hunterUrl);
@@ -102,7 +141,7 @@ serve(async (req: Request): Promise<Response> => {
 
     // Step 2: Also call Hunter Domain Search to get email count / patterns
     let domainSearchData: Record<string, unknown> | null = null;
-    if (domain) {
+    if (useHunter && domain) {
       const dsUrl = `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&limit=0&api_key=${hunterApiKey}`;
       const dsRes = await fetch(dsUrl);
       if (dsRes.ok) {
@@ -133,7 +172,23 @@ Hunter.io Company Data:
       ? `Email patterns: ${(domainSearchData as any)?.pattern || "unknown"}, Organization: ${(domainSearchData as any)?.organization || "unknown"}`
       : "";
 
-    const prompt = `You are a business intelligence assistant. Enrich this company using the real data from Hunter.io below, plus your knowledge.
+    const apolloContext = apolloOrg
+      ? `
+Apollo Company Data (VERIFIED — treat as fact, do not contradict):
+- Name: ${apolloOrg.name || "N/A"}
+- Industry: ${apolloOrg.industry || "N/A"}
+- Description: ${apolloOrg.short_description || "N/A"}
+- Employees: ${apolloOrg.estimated_num_employees ?? "N/A"}
+- Annual revenue (USD): ${apolloOrg.annual_revenue ?? "N/A"}
+- Total funding (USD): ${apolloOrg.total_funding ?? "N/A"}
+- Founded: ${apolloOrg.founded_year ?? "N/A"}
+- HQ: ${[apolloOrg.city, apolloOrg.country].filter(Boolean).join(", ") || "N/A"}
+- Keywords: ${(apolloOrg.keywords ?? []).slice(0, 12).join(", ") || "N/A"}
+- Technologies: ${(apolloOrg.technology_names ?? []).slice(0, 12).join(", ") || "N/A"}
+`
+      : "No Apollo data available.";
+
+    const prompt = `You are a business intelligence assistant. Enrich this company using the real data below, plus your knowledge.
 
 Company Name: ${company.company_name}
 Website/Domain: ${domain || "unknown"}
@@ -141,10 +196,11 @@ Current Industry: ${company.industry || "unknown"}
 Current Description: ${company.description || "none"}
 Country: ${company.country || "unknown"}
 
+${apolloContext}
 ${hunterContext}
 ${emailInfo}
 
-Provide a JSON response with the following fields. Use Hunter.io data as the primary source. Only use AI inference where Hunter.io data is missing. Use null for truly unknown fields:
+Provide a JSON response with the following fields. Apollo data is verified and outranks Hunter.io; Hunter.io outranks your own knowledge. Only use AI inference where both are missing. Use null for truly unknown fields:
 {
   "description": "2-3 sentences about what the company does",
   "industry": "Primary industry category",
@@ -201,7 +257,16 @@ Respond ONLY with valid JSON.`;
 
     // Prepare update — only fill empty fields
     const updateData: Record<string, unknown> = {};
-    
+
+    // Apollo's figures go in first. Unlike the AI pass below, these overwrite an existing
+    // value: a stale headcount imported from LinkedIn two years ago is exactly the thing
+    // a firmographic provider is being paid to correct. The AI pass keeps its old rule of
+    // filling blanks only, and is additionally blocked from touching an Apollo answer.
+    const apolloFields = apolloOrg ? companyFieldsFromApollo(apolloOrg) : {};
+    for (const [key, value] of Object.entries(apolloFields)) {
+      updateData[key] = value;
+    }
+
     const fieldMap: Record<string, string> = {
       description: "description",
       industry: "industry",
@@ -218,7 +283,7 @@ Respond ONLY with valid JSON.`;
     };
 
     for (const [aiField, dbField] of Object.entries(fieldMap)) {
-      if (enrichedData[aiField] != null && !company[dbField]) {
+      if (enrichedData[aiField] != null && !company[dbField] && !Object.hasOwn(apolloFields, dbField)) {
         updateData[dbField] = enrichedData[aiField];
       }
     }
@@ -247,7 +312,9 @@ Respond ONLY with valid JSON.`;
         success: true,
         company: updatedCompany,
         enrichedFields: Object.keys(updateData),
-        sources: { hunter: !!hunterData, openai: true },
+        provider,
+        sources: { apollo: !!apolloOrg, hunter: !!hunterData, openai: true },
+        ...(apolloError ? { apolloError } : {}),
       }),
       {
         status: 200,

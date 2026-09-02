@@ -26,7 +26,8 @@ import {
   DollarSign,
 } from "lucide-react";
 import { Contact, useUpdateContact } from "@/hooks/useContacts";
-import { enrichContact } from "@/lib/api/enrichment";
+import { enrichContact, type EnrichProvider } from "@/lib/api/enrichment";
+import { EnrichProviderMenu } from "./EnrichProviderMenu";
 import { toast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -167,12 +168,12 @@ export function ContactDetailContent({ contact: initialContact, onRefetched }: C
     setIsEditing(false);
   };
 
-  const handleEnrich = async () => {
+  const handleEnrich = async (provider: EnrichProvider) => {
     if (!contact) return;
 
     setIsEnriching(true);
     try {
-      const result = await enrichContact(contact.id);
+      const result = await enrichContact(contact.id, provider);
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       queryClient.invalidateQueries({ queryKey: ["company-contacts"] });
 
@@ -271,19 +272,20 @@ export function ContactDetailContent({ contact: initialContact, onRefetched }: C
               >
                 <DollarSign className="h-4 w-4" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleEnrich}
-                disabled={isEnriching}
-                title="Enrich with AI"
-              >
-                {isEnriching ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-              </Button>
+              <EnrichProviderMenu onEnrich={handleEnrich} disabled={isEnriching}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={isEnriching}
+                  title="Enrich from Apollo, Hunter.io or AI"
+                >
+                  {isEnriching ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                </Button>
+              </EnrichProviderMenu>
               <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
                 <Pencil className="h-4 w-4" />
               </Button>
