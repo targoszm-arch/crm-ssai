@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { DataTable } from "@/components/ui/data-table";
 import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
 import { FilterableTableHeader } from "./FilterableTableHeader";
@@ -11,7 +10,8 @@ import { useColumnPreferences, ColumnDefinition } from "@/hooks/useColumnPrefere
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ExternalLink, Eye } from "lucide-react";
+import { Building2, ExternalLink, Eye, Mail, MapPin, Phone, UserRound } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { renderLabels } from "@/lib/labelColors";
@@ -593,11 +593,75 @@ export function CustomersTab() {
         Showing {contacts?.length || 0} customers
       </div>
 
-      <DataTable
-        columns={columns}
-        data={contacts || []}
-        emptyMessage="No customers found"
-      />
+      {contacts?.length ? (
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <div className="hidden items-center gap-4 border-b bg-muted/30 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[auto_minmax(240px,1.6fr)_minmax(180px,1fr)_minmax(220px,1.2fr)_minmax(130px,0.7fr)_auto]">
+            <span className="sr-only">Select</span>
+            <span>Person</span>
+            <span>Company</span>
+            <span>Contact</span>
+            <span>Activity</span>
+            <span className="sr-only">Actions</span>
+          </div>
+          <div className="divide-y">
+            {(contacts as ContactWithCompany[]).map((contact) => {
+              const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || contact.name || "Unnamed contact";
+              const initials = fullName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+              return (
+                <div
+                  key={contact.id}
+                  className="group grid gap-4 px-4 py-4 transition-colors hover:bg-muted/20 lg:grid-cols-[auto_minmax(240px,1.6fr)_minmax(180px,1fr)_minmax(220px,1.2fr)_minmax(130px,0.7fr)_auto] lg:items-center"
+                >
+                  <div onClick={(event) => event.stopPropagation()}>
+                    <Checkbox
+                      aria-label={`Select ${fullName}`}
+                      checked={selectedIds.has(contact.id)}
+                      onCheckedChange={(checked) => handleSelectOne(contact.id, checked === true)}
+                    />
+                  </div>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar className="size-10 shrink-0">
+                      <AvatarFallback className="bg-primary/10 font-semibold text-primary">{initials || <UserRound className="size-4" />}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <Link to={`/people/${contact.id}`} className="block truncate font-medium hover:text-primary hover:underline">
+                        {fullName}
+                      </Link>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {contact.title && <span className="truncate">{contact.title}</span>}
+                        {contact.connection_strength && <Badge variant="secondary" className="text-[11px]">{contact.connection_strength}</Badge>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+                    <Building2 className="size-4 shrink-0" />
+                    <span className="truncate">{contact.companies?.company_name || "No company"}</span>
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-1 text-sm">
+                    {contact.email ? <a href={`mailto:${contact.email}`} className="flex min-w-0 items-center gap-2 truncate text-muted-foreground hover:text-primary"><Mail className="size-4 shrink-0" />{contact.email}</a> : <span className="text-muted-foreground">No email</span>}
+                    {contact.phone && <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-primary"><Phone className="size-3.5 shrink-0" />{contact.phone}</a>}
+                    {contact.work_location && <span className="flex items-center gap-2 text-xs text-muted-foreground"><MapPin className="size-3.5 shrink-0" />{contact.work_location}</span>}
+                  </div>
+                  <div className="flex flex-col gap-1 text-sm">
+                    <span>{contact.last_contacted ? format(new Date(contact.last_contacted), "MMM d, yyyy") : "Never contacted"}</span>
+                    {typeof contact.email_messages_count === "number" && <span className="text-xs text-muted-foreground">{contact.email_messages_count} email{contact.email_messages_count === 1 ? "" : "s"}</span>}
+                  </div>
+                  <Button variant="ghost" size="sm" className="justify-self-start lg:justify-self-end" onClick={() => handleViewContact(contact)}>
+                    <Eye data-icon="inline-start" />
+                    View
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed px-6 py-14 text-center">
+          <UserRound className="mx-auto size-10 text-muted-foreground/60" />
+          <h3 className="mt-4 font-semibold">No people found</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Try adjusting your search or filters to find contacts.</p>
+        </div>
+      )}
 
       <ContactDetail
         contact={selectedContact}
