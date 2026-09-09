@@ -37,7 +37,7 @@ export function InboxSidebar({
               "flex w-full items-center rounded-md py-2 text-sm transition-colors",
               collapsed ? "justify-center px-0" : "justify-between px-3",
               currentFolder === folder.id
-                ? "bg-primary text-primary-foreground"
+                ? "bg-[#89a6f4] text-foreground"
                 : "hover:bg-accent hover:text-accent-foreground"
             )}
           >

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -13,7 +14,6 @@ import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { EditableLabels } from "./EditableLabels";
 import { AddDealModal } from "@/components/deals/AddDealModal";
-import { ContactDetail } from "./ContactDetail";
 
 interface OrganisationDetailContentProps {
   company: Company;
@@ -46,15 +46,12 @@ function getConnectionStrengthBadge(strength: string | null) {
 export function OrganisationDetailContent({ company, onAddContact }: OrganisationDetailContentProps) {
   const [isEnriching, setIsEnriching] = useState(false);
   const [showAddDeal, setShowAddDeal] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
-  const [contactDetailOpen, setContactDetailOpen] = useState(false);
   const { data: contacts, isLoading: contactsLoading } = useContactsByCompany(company?.id || null);
   const queryClient = useQueryClient();
   const updateCompany = useUpdateCompany();
 
   const handleContactClick = (contact: Contact) => {
-    setSelectedContact(contact);
-    setContactDetailOpen(true);
+    window.location.assign(`/people/${contact.id}?from=organisations&company=${company.id}`);
   };
 
   const handleEnrich = async (provider: EnrichProvider) => {
@@ -226,10 +223,10 @@ export function OrganisationDetailContent({ company, onAddContact }: Organisatio
                 const initials = fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
 
                 return (
-                  <div
+                  <Link
                     key={contact.id}
+                    to={`/people/${contact.id}?from=organisations&company=${company.id}`}
                     className="flex items-start gap-3 p-3 rounded-lg border bg-card cursor-pointer hover:bg-accent/50 transition-colors group"
-                    onClick={() => handleContactClick(contact)}
                   >
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm flex-shrink-0">
                       {initials}
@@ -267,9 +264,9 @@ export function OrganisationDetailContent({ company, onAddContact }: Organisatio
                       </div>
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity self-center" />
-                  </div>
-                );
-              })}
+                    </Link>
+                  );
+                })}
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
@@ -295,11 +292,6 @@ export function OrganisationDetailContent({ company, onAddContact }: Organisatio
         initialData={{ company_id: company.id }}
       />
 
-      <ContactDetail
-        contact={selectedContact}
-        open={contactDetailOpen}
-        onOpenChange={setContactDetailOpen}
-      />
     </>
   );
 }

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Settings, Mail, Linkedin, RefreshCw, Loader2, FileSignature, LayoutGrid, List, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Plus, Settings, Mail, RefreshCw, Loader2, FileSignature, LayoutGrid, List, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   Select,
@@ -23,7 +22,6 @@ import { SignatureSettings } from "@/components/inbox/SignatureSettings";
 import { InboxSidebar, type EmailFolder } from "@/components/inbox/InboxSidebar";
 import { TemplatesPanel } from "@/components/inbox/TemplatesPanel";
 import { EmailTemplate } from "@/hooks/useEmailTemplates";
-import { InboxFilters } from "@/components/inbox/InboxFilters";
 import { BulkActionBar } from "@/components/inbox/BulkActionBar";
 import {
   DropdownMenu,
@@ -180,63 +178,14 @@ export default function Inbox() {
   const showConnectPrompt = activeTab === "email" && !hasConnectedAccount;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-h-0 flex-col bg-background">
       {/* Header - responsive stacking */}
-      <div className="flex flex-col gap-3 p-4 border-b md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 border-b border-border/70 px-6 py-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 flex-wrap">
-          <Mail className="h-5 w-5" />
-          <h1 className="text-lg font-semibold">Inbox</h1>
-          {isSyncing && (
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span>Syncing...</span>
-            </div>
-          )}
-          <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as InboxTab); setSelectedItem(null); setSelectedEmails([]); }}>
-            <TabsList>
-              <TabsTrigger value="email" className="flex items-center gap-1.5">
-                <Mail className="h-4 w-4" />
-                <span className="hidden sm:inline">Email</span>
-              </TabsTrigger>
-              <TabsTrigger value="linkedin" className="flex items-center gap-1.5">
-                <Linkedin className="h-4 w-4" />
-                <span className="hidden sm:inline">LinkedIn</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {activeTab === "email" && hasConnectedAccount && !isMobile && (
-            <div className="hidden md:flex items-center border rounded-md">
-              <Button variant={viewMode === "split" ? "secondary" : "ghost"} size="icon" className="h-8 w-8 rounded-r-none" onClick={() => setViewMode("split")}><LayoutGrid className="h-4 w-4" /></Button>
-              <Button variant={viewMode === "full" ? "secondary" : "ghost"} size="icon" className="h-8 w-8 rounded-l-none" onClick={() => setViewMode("full")}><List className="h-4 w-4" /></Button>
-            </div>
-          )}
-          {activeTab === "email" && hasConnectedAccount && (
-            <Button onClick={() => setComposeOpen(true)} size={isMobile ? "sm" : "default"}>
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline ml-1">Compose</span>
-            </Button>
-          )}
-          {activeTab === "linkedin" && (
-            <Button variant="outline" onClick={handleSyncMeetAlfred} disabled={isSyncingMeetAlfred} size={isMobile ? "sm" : "default"}>
-              {isSyncingMeetAlfred ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              <span className="hidden sm:inline ml-1.5">Sync Meet Alfred</span>
-            </Button>
-          )}
-          {activeTab === "email" && hasConnectedAccount && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button variant="outline" size="icon"><Settings className="h-4 w-4" /></Button></DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setSignatureOpen(true)}><FileSignature className="h-4 w-4 mr-2" />Email Signature</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {accounts?.map((account) => (
-                  <DropdownMenuItem key={account.id} onClick={() => handleDisconnect(account.id)} className="text-destructive">Disconnect {account.email_address}</DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {currentAccount && activeTab === "email" && !isMobile && <span className="text-sm text-muted-foreground">{currentAccount.email_address}</span>}
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight">Emails</h1>
+            <p className="hidden text-xs text-muted-foreground md:block">Mailbox-style email workspace with folders, drafts, syncing, and full thread reading.</p>
+          </div>
         </div>
       </div>
 
@@ -255,13 +204,6 @@ export default function Inbox() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-      )}
-
-      {/* Filters Bar */}
-      {activeTab === "email" && hasConnectedAccount && (
-        <div className="px-4 py-2 border-b bg-muted/30">
-          <InboxFilters filters={filters} onChange={setFilters} />
         </div>
       )}
 
@@ -288,26 +230,17 @@ export default function Inbox() {
           {!isMobile && activeTab === "email" && (
             <div
               className={cn(
-                "flex flex-col shrink-0 border-r bg-muted/30 overflow-y-auto transition-[width] duration-200",
-                sidebarCollapsed ? "w-12" : "w-56"
+                "m-4 mr-0 flex shrink-0 flex-col overflow-y-auto rounded-xl border bg-card transition-[width] duration-200",
+                sidebarCollapsed ? "w-12" : "w-[220px]"
               )}
             >
-              <div className="flex justify-end p-2 pb-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setSidebarCollapsed((v) => !v)}
-                  aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                  title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                >
-                  {sidebarCollapsed ? (
-                    <PanelLeftOpen className="h-4 w-4" />
-                  ) : (
-                    <PanelLeftClose className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
+              {!sidebarCollapsed && (
+                <div className="px-3 pt-3">
+                  <Button className="w-full" onClick={() => setComposeOpen(true)}>
+                    <Plus data-icon="inline-start" /> New message
+                  </Button>
+                </div>
+              )}
               <InboxSidebar
                 currentFolder={currentFolder}
                 onFolderChange={(f) => { setCurrentFolder(f); setSelectedItem(null); }}
@@ -327,7 +260,7 @@ export default function Inbox() {
           {/* Email/LinkedIn list - constrained width */}
           <div className={cn(
             "border-r flex-shrink-0 overflow-hidden flex flex-col min-w-0",
-            effectiveViewMode === "split" ? "w-96" : "flex-1 max-w-2xl"
+            effectiveViewMode === "split" ? "m-4 w-[292px] rounded-xl border bg-card" : "flex-1 max-w-2xl"
           )}>
             {activeTab === "email" ? (
               <EmailList 
@@ -349,7 +282,7 @@ export default function Inbox() {
           
           {/* Split view detail panel */}
           {effectiveViewMode === "split" && (
-            <div className="flex-1 overflow-hidden">
+            <div className="m-4 ml-0 flex-1 overflow-hidden rounded-xl border bg-card">
               {selectedItem?.type === "email" ? (
                 <EmailThread email={selectedItem.item} account={currentAccount} onClose={handleCloseDetail} />
               ) : selectedItem?.type === "linkedin" ? (
