@@ -32,6 +32,7 @@ export default function Deals() {
   const [addDealOpen, setAddDealOpen] = useState(false);
   const [addDealInitialStage, setAddDealInitialStage] = useState<string | undefined>();
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
 
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();
   const activePipelineId = selectedPipelineId || pipelines?.find(p => p.is_default)?.id || pipelines?.[0]?.id;
@@ -41,6 +42,7 @@ export default function Deals() {
   const activePipeline = pipelines?.find(p => p.id === activePipelineId);
 
   const handleAddDeal = (stage?: string) => {
+    setEditingDeal(null);
     setAddDealInitialStage(stage);
     setAddDealOpen(true);
   };
@@ -201,9 +203,15 @@ export default function Deals() {
       {/* Add Deal Modal */}
       <AddDealModal
         open={addDealOpen}
-        onOpenChange={setAddDealOpen}
+        onOpenChange={(open) => {
+          setAddDealOpen(open);
+          if (!open) setEditingDeal(null);
+        }}
         initialStage={addDealInitialStage}
-        initialData={{ pipeline_id: activePipelineId }}
+        // Without the deal itself the modal has no id to branch on, so it opened
+        // in create mode however you got there — titled "Add Deal", submitting
+        // through the insert path, and failing on the deals INSERT policy.
+        initialData={editingDeal ?? { pipeline_id: activePipelineId }}
       />
 
       {/* Deal Detail Sheet */}
@@ -256,6 +264,10 @@ export default function Deals() {
                   <Button
                     variant="outline"
                     onClick={() => {
+                      setEditingDeal(selectedDeal);
+                      // A stage left over from "add in this column" would be
+                      // reapplied on top of the deal's own stage.
+                      setAddDealInitialStage(undefined);
                       setSelectedDeal(null);
                       setAddDealOpen(true);
                     }}

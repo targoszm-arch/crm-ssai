@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -90,28 +90,51 @@ export function AddDealModal({
   
   const { data: stages } = usePipelineStages(selectedPipelineId);
 
+  // Built fresh rather than inlined, because the dialog stays mounted between
+  // openings: `defaultValues` is read once, so without an explicit reset the
+  // second deal you opened would show the first one's values.
+  const buildDefaults = useCallback((): FormData => ({
+    deal_name: initialData?.deal_name || "",
+    contact_id: initialData?.contact_id || undefined,
+    company_id: initialData?.company_id || undefined,
+    deal_value: initialData?.deal_value || undefined,
+    pipeline_id: initialData?.pipeline_id || defaultPipeline?.id,
+    stage: initialData?.stage || initialStage || stages?.[0]?.name,
+    probability: initialData?.probability || 0,
+    expected_close_date: initialData?.expected_close_date
+      ? new Date(initialData.expected_close_date)
+      : undefined,
+    source_channel: initialData?.source_channel || undefined,
+    source_channel_id: initialData?.source_channel_id || undefined,
+    lead_source: initialData?.lead_source || undefined,
+    labels: initialData?.labels || "",
+    notes: initialData?.notes || "",
+    industry: initialData?.industry || undefined,
+    type: initialData?.type || undefined,
+  }), [initialData, initialStage, defaultPipeline?.id, stages]);
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      deal_name: initialData?.deal_name || "",
-      contact_id: initialData?.contact_id || undefined,
-      company_id: initialData?.company_id || undefined,
-      deal_value: initialData?.deal_value || undefined,
-      pipeline_id: initialData?.pipeline_id || defaultPipeline?.id,
-      stage: initialData?.stage || initialStage || stages?.[0]?.name,
-      probability: initialData?.probability || 0,
-      expected_close_date: initialData?.expected_close_date 
-        ? new Date(initialData.expected_close_date) 
-        : undefined,
-      source_channel: initialData?.source_channel || undefined,
-      source_channel_id: initialData?.source_channel_id || undefined,
-      lead_source: initialData?.lead_source || undefined,
-      labels: initialData?.labels || "",
-      notes: initialData?.notes || "",
-      industry: initialData?.industry || undefined,
-      type: initialData?.type || undefined,
-    },
+    defaultValues: buildDefaults(),
   });
+
+  // Guarded by a ref, not by the dependency array. Several of these deps change
+  // while the modal is open — `stages` arrives after the pipeline resolves, and
+  // `initialData` is a fresh object on every parent render — so the effect will
+  // re-run mid-edit, and a reset then would discard whatever has been typed. The
+  // ref states the actual rule: load once per deal opened, and never again.
+  const loadedDealKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) {
+      loadedDealKey.current = null;
+      return;
+    }
+    const key = initialData?.id ?? "new";
+    if (loadedDealKey.current === key) return;
+    loadedDealKey.current = key;
+    form.reset(buildDefaults());
+    setSelectedPipelineId(initialData?.pipeline_id || defaultPipeline?.id);
+  }, [open, initialData?.id, initialData?.pipeline_id, form, buildDefaults, defaultPipeline?.id]);
 
   useEffect(() => {
     if (defaultPipeline && !selectedPipelineId) {
@@ -123,10 +146,12 @@ export function AddDealModal({
   useEffect(() => {
     if (stages?.[0] && !form.getValues("stage") && !initialStage) {
       form.setValue("stage", stages[0].name);
-    } else if (initialStage) {
+    } else if (initialStage && !initialData?.id) {
+      // Only when adding. On an edit this would drag the deal into whichever
+      // column the last "add deal" click came from.
       form.setValue("stage", initialStage);
     }
-  }, [stages, form, initialStage]);
+  }, [stages, form, initialStage, initialData?.id]);
 
   const onSubmit = async (data: FormData) => {
     const dealData = {
