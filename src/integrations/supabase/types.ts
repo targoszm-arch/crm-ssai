@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -239,6 +239,8 @@ export type Database = {
           last_interaction: string | null
           linkedin_url: string | null
           next_activity_date: string | null
+          peak_focus_client_id: string | null
+          peak_focus_url: string | null
           people_count: number | null
           size: string | null
           stage: string | null
@@ -271,6 +273,8 @@ export type Database = {
           last_interaction?: string | null
           linkedin_url?: string | null
           next_activity_date?: string | null
+          peak_focus_client_id?: string | null
+          peak_focus_url?: string | null
           people_count?: number | null
           size?: string | null
           stage?: string | null
@@ -303,6 +307,8 @@ export type Database = {
           last_interaction?: string | null
           linkedin_url?: string | null
           next_activity_date?: string | null
+          peak_focus_client_id?: string | null
+          peak_focus_url?: string | null
           people_count?: number | null
           size?: string | null
           stage?: string | null
@@ -317,23 +323,19 @@ export type Database = {
         Row: {
           avatar: string | null
           buying_signals: string | null
+          city: string | null
           company_id: string | null
           connection_strength: string | null
-          created_at: string
-          city: string | null
           country: string | null
+          created_at: string
           current_job_start_date: string | null
           department: string | null
-          email_last_verified_at: string | null
-          email_status: string | null
-          region: string | null
-          source: string | null
-          time_zone: string | null
-          twitter_url: string | null
           do_not_contact: boolean
           done_activities: number | null
           email: string | null
+          email_last_verified_at: string | null
           email_messages_count: number | null
+          email_status: string | null
           facebook_url: string | null
           first_name: string
           function: string | null
@@ -353,12 +355,16 @@ export type Database = {
           notes: string | null
           pain_point: string | null
           phone: string | null
+          region: string | null
           seniority_level: string | null
+          source: string | null
           talent_partner_name: string | null
+          time_zone: string | null
           title: string | null
           total_clicks: number | null
           total_emails_sent: number | null
           total_opens: number | null
+          twitter_url: string | null
           updated_at: string
           user_id: string | null
           video_link: string | null
@@ -367,23 +373,19 @@ export type Database = {
         Insert: {
           avatar?: string | null
           buying_signals?: string | null
+          city?: string | null
           company_id?: string | null
           connection_strength?: string | null
-          created_at?: string
-          city?: string | null
           country?: string | null
+          created_at?: string
           current_job_start_date?: string | null
           department?: string | null
-          email_last_verified_at?: string | null
-          email_status?: string | null
-          region?: string | null
-          source?: string | null
-          time_zone?: string | null
-          twitter_url?: string | null
           do_not_contact?: boolean
           done_activities?: number | null
           email?: string | null
+          email_last_verified_at?: string | null
           email_messages_count?: number | null
+          email_status?: string | null
           facebook_url?: string | null
           first_name: string
           function?: string | null
@@ -403,12 +405,16 @@ export type Database = {
           notes?: string | null
           pain_point?: string | null
           phone?: string | null
+          region?: string | null
           seniority_level?: string | null
+          source?: string | null
           talent_partner_name?: string | null
+          time_zone?: string | null
           title?: string | null
           total_clicks?: number | null
           total_emails_sent?: number | null
           total_opens?: number | null
+          twitter_url?: string | null
           updated_at?: string
           user_id?: string | null
           video_link?: string | null
@@ -417,23 +423,19 @@ export type Database = {
         Update: {
           avatar?: string | null
           buying_signals?: string | null
+          city?: string | null
           company_id?: string | null
           connection_strength?: string | null
-          created_at?: string
-          city?: string | null
           country?: string | null
+          created_at?: string
           current_job_start_date?: string | null
           department?: string | null
-          email_last_verified_at?: string | null
-          email_status?: string | null
-          region?: string | null
-          source?: string | null
-          time_zone?: string | null
-          twitter_url?: string | null
           do_not_contact?: boolean
           done_activities?: number | null
           email?: string | null
+          email_last_verified_at?: string | null
           email_messages_count?: number | null
+          email_status?: string | null
           facebook_url?: string | null
           first_name?: string
           function?: string | null
@@ -453,12 +455,16 @@ export type Database = {
           notes?: string | null
           pain_point?: string | null
           phone?: string | null
+          region?: string | null
           seniority_level?: string | null
+          source?: string | null
           talent_partner_name?: string | null
+          time_zone?: string | null
           title?: string | null
           total_clicks?: number | null
           total_emails_sent?: number | null
           total_opens?: number | null
+          twitter_url?: string | null
           updated_at?: string
           user_id?: string | null
           video_link?: string | null
@@ -477,6 +483,57 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_files: {
+        Row: {
+          company_id: string | null
+          contact_id: string | null
+          created_at: string
+          id: string
+          mime_type: string | null
+          name: string
+          path: string
+          size_bytes: number | null
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          name: string
+          path: string
+          size_bytes?: number | null
+          user_id?: string
+        }
+        Update: {
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          name?: string
+          path?: string
+          size_bytes?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_files_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_files_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
         ]
@@ -614,6 +671,183 @@ export type Database = {
           },
         ]
       }
+      dedupe_backup_contacts_20260907: {
+        Row: {
+          avatar: string | null
+          buying_signals: string | null
+          city: string | null
+          company_id: string | null
+          connection_strength: string | null
+          country: string | null
+          created_at: string | null
+          current_job_start_date: string | null
+          department: string | null
+          do_not_contact: boolean | null
+          done_activities: number | null
+          email: string | null
+          email_last_verified_at: string | null
+          email_messages_count: number | null
+          email_status: string | null
+          facebook_url: string | null
+          first_name: string | null
+          function: string | null
+          id: string | null
+          instagram_url: string | null
+          interest_level: string | null
+          labels: string | null
+          last_contacted: string | null
+          last_email_received: string | null
+          last_name: string | null
+          linkedin_url: string | null
+          lqs: number | null
+          marketing_status: string | null
+          name: string | null
+          next_recommended_action: string | null
+          next_to_contact: string | null
+          notes: string | null
+          pain_point: string | null
+          phone: string | null
+          region: string | null
+          seniority_level: string | null
+          source: string | null
+          talent_partner_name: string | null
+          time_zone: string | null
+          title: string | null
+          total_clicks: number | null
+          total_emails_sent: number | null
+          total_opens: number | null
+          twitter_url: string | null
+          updated_at: string | null
+          user_id: string | null
+          video_link: string | null
+          work_location: string | null
+        }
+        Insert: {
+          avatar?: string | null
+          buying_signals?: string | null
+          city?: string | null
+          company_id?: string | null
+          connection_strength?: string | null
+          country?: string | null
+          created_at?: string | null
+          current_job_start_date?: string | null
+          department?: string | null
+          do_not_contact?: boolean | null
+          done_activities?: number | null
+          email?: string | null
+          email_last_verified_at?: string | null
+          email_messages_count?: number | null
+          email_status?: string | null
+          facebook_url?: string | null
+          first_name?: string | null
+          function?: string | null
+          id?: string | null
+          instagram_url?: string | null
+          interest_level?: string | null
+          labels?: string | null
+          last_contacted?: string | null
+          last_email_received?: string | null
+          last_name?: string | null
+          linkedin_url?: string | null
+          lqs?: number | null
+          marketing_status?: string | null
+          name?: string | null
+          next_recommended_action?: string | null
+          next_to_contact?: string | null
+          notes?: string | null
+          pain_point?: string | null
+          phone?: string | null
+          region?: string | null
+          seniority_level?: string | null
+          source?: string | null
+          talent_partner_name?: string | null
+          time_zone?: string | null
+          title?: string | null
+          total_clicks?: number | null
+          total_emails_sent?: number | null
+          total_opens?: number | null
+          twitter_url?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          video_link?: string | null
+          work_location?: string | null
+        }
+        Update: {
+          avatar?: string | null
+          buying_signals?: string | null
+          city?: string | null
+          company_id?: string | null
+          connection_strength?: string | null
+          country?: string | null
+          created_at?: string | null
+          current_job_start_date?: string | null
+          department?: string | null
+          do_not_contact?: boolean | null
+          done_activities?: number | null
+          email?: string | null
+          email_last_verified_at?: string | null
+          email_messages_count?: number | null
+          email_status?: string | null
+          facebook_url?: string | null
+          first_name?: string | null
+          function?: string | null
+          id?: string | null
+          instagram_url?: string | null
+          interest_level?: string | null
+          labels?: string | null
+          last_contacted?: string | null
+          last_email_received?: string | null
+          last_name?: string | null
+          linkedin_url?: string | null
+          lqs?: number | null
+          marketing_status?: string | null
+          name?: string | null
+          next_recommended_action?: string | null
+          next_to_contact?: string | null
+          notes?: string | null
+          pain_point?: string | null
+          phone?: string | null
+          region?: string | null
+          seniority_level?: string | null
+          source?: string | null
+          talent_partner_name?: string | null
+          time_zone?: string | null
+          title?: string | null
+          total_clicks?: number | null
+          total_emails_sent?: number | null
+          total_opens?: number | null
+          twitter_url?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          video_link?: string | null
+          work_location?: string | null
+        }
+        Relationships: []
+      }
+      dedupe_map_20260907: {
+        Row: {
+          ckey: string | null
+          created_at: string | null
+          loser_id: string
+          nkey: string | null
+          survivor_id: string
+        }
+        Insert: {
+          ckey?: string | null
+          created_at?: string | null
+          loser_id: string
+          nkey?: string | null
+          survivor_id: string
+        }
+        Update: {
+          ckey?: string | null
+          created_at?: string | null
+          loser_id?: string
+          nkey?: string | null
+          survivor_id?: string
+        }
+        Relationships: []
+      }
       discovery_responses: {
         Row: {
           created_at: string
@@ -729,8 +963,12 @@ export type Database = {
           created_at: string
           id: string
           is_default: boolean | null
+          kit_email_id: number | null
           name: string
+          preview_text: string | null
+          source: string | null
           subject: string | null
+          template_code: string | null
           updated_at: string
           user_id: string | null
         }
@@ -741,8 +979,12 @@ export type Database = {
           created_at?: string
           id?: string
           is_default?: boolean | null
+          kit_email_id?: number | null
           name: string
+          preview_text?: string | null
+          source?: string | null
           subject?: string | null
+          template_code?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -753,8 +995,12 @@ export type Database = {
           created_at?: string
           id?: string
           is_default?: boolean | null
+          kit_email_id?: number | null
           name?: string
+          preview_text?: string | null
+          source?: string | null
           subject?: string | null
+          template_code?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -1479,14 +1725,73 @@ export type Database = {
           },
         ]
       }
+      newsletter_recipients: {
+        Row: {
+          contact_id: string | null
+          email: string
+          id: string
+          newsletter_send_id: string
+          recipient_name: string | null
+          resend_email_id: string
+          sent_at: string | null
+          status: string | null
+          synced_at: string
+          user_id: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          email: string
+          id?: string
+          newsletter_send_id: string
+          recipient_name?: string | null
+          resend_email_id: string
+          sent_at?: string | null
+          status?: string | null
+          synced_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          email?: string
+          id?: string
+          newsletter_send_id?: string
+          recipient_name?: string | null
+          resend_email_id?: string
+          sent_at?: string | null
+          status?: string | null
+          synced_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_recipients_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "newsletter_recipients_newsletter_send_id_fkey"
+            columns: ["newsletter_send_id"]
+            isOneToOne: false
+            referencedRelation: "newsletter_sends"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       newsletter_sends: {
         Row: {
           audience_id: string | null
           audience_type: string | null
+          bounced_count: number | null
+          clicked_count: number | null
           content_lab_article_id: string | null
           created_at: string | null
+          delivered_count: number | null
           error_message: string | null
           id: string
+          metrics_synced_at: string | null
+          opened_count: number | null
           preview_text: string | null
           raw: Json | null
           recipient_count: number | null
@@ -1494,6 +1799,7 @@ export type Database = {
           sent_at: string | null
           status: string | null
           subject_line: string | null
+          suppressed_count: number | null
           synced_at: string
           updated_at: string | null
           user_id: string | null
@@ -1501,10 +1807,15 @@ export type Database = {
         Insert: {
           audience_id?: string | null
           audience_type?: string | null
+          bounced_count?: number | null
+          clicked_count?: number | null
           content_lab_article_id?: string | null
           created_at?: string | null
+          delivered_count?: number | null
           error_message?: string | null
           id: string
+          metrics_synced_at?: string | null
+          opened_count?: number | null
           preview_text?: string | null
           raw?: Json | null
           recipient_count?: number | null
@@ -1512,6 +1823,7 @@ export type Database = {
           sent_at?: string | null
           status?: string | null
           subject_line?: string | null
+          suppressed_count?: number | null
           synced_at?: string
           updated_at?: string | null
           user_id?: string | null
@@ -1519,10 +1831,15 @@ export type Database = {
         Update: {
           audience_id?: string | null
           audience_type?: string | null
+          bounced_count?: number | null
+          clicked_count?: number | null
           content_lab_article_id?: string | null
           created_at?: string | null
+          delivered_count?: number | null
           error_message?: string | null
           id?: string
+          metrics_synced_at?: string | null
+          opened_count?: number | null
           preview_text?: string | null
           raw?: Json | null
           recipient_count?: number | null
@@ -1530,9 +1847,55 @@ export type Database = {
           sent_at?: string | null
           status?: string | null
           subject_line?: string | null
+          suppressed_count?: number | null
           synced_at?: string
           updated_at?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      peak_focus_config: {
+        Row: {
+          connected_at: string
+          owner_user_id: string
+          singleton: boolean
+        }
+        Insert: {
+          connected_at?: string
+          owner_user_id: string
+          singleton?: boolean
+        }
+        Update: {
+          connected_at?: string
+          owner_user_id?: string
+          singleton?: boolean
+        }
+        Relationships: []
+      }
+      peak_focus_sync_runs: {
+        Row: {
+          companies_upserted: number
+          detail: string | null
+          id: string
+          ok: boolean
+          projects_upserted: number
+          ran_at: string
+        }
+        Insert: {
+          companies_upserted?: number
+          detail?: string | null
+          id?: string
+          ok: boolean
+          projects_upserted?: number
+          ran_at?: string
+        }
+        Update: {
+          companies_upserted?: number
+          detail?: string | null
+          id?: string
+          ok?: boolean
+          projects_upserted?: number
+          ran_at?: string
         }
         Relationships: []
       }
@@ -1663,6 +2026,8 @@ export type Database = {
           end_date: string | null
           id: string
           manager: string | null
+          peak_focus_project_id: string | null
+          peak_focus_url: string | null
           priority: string | null
           progress: number | null
           project_id: string | null
@@ -1681,6 +2046,8 @@ export type Database = {
           end_date?: string | null
           id?: string
           manager?: string | null
+          peak_focus_project_id?: string | null
+          peak_focus_url?: string | null
           priority?: string | null
           progress?: number | null
           project_id?: string | null
@@ -1699,6 +2066,8 @@ export type Database = {
           end_date?: string | null
           id?: string
           manager?: string | null
+          peak_focus_project_id?: string | null
+          peak_focus_url?: string | null
           priority?: string | null
           progress?: number | null
           project_id?: string | null
@@ -2077,7 +2446,10 @@ export type Database = {
           from_email: string | null
           from_name: string | null
           id: string
+          kit_sequence_id: number | null
           name: string
+          source: string | null
+          source_note: string | null
           status: string | null
           steps: Json
           trigger_type: string
@@ -2091,7 +2463,10 @@ export type Database = {
           from_email?: string | null
           from_name?: string | null
           id?: string
+          kit_sequence_id?: number | null
           name: string
+          source?: string | null
+          source_note?: string | null
           status?: string | null
           steps?: Json
           trigger_type: string
@@ -2105,7 +2480,10 @@ export type Database = {
           from_email?: string | null
           from_name?: string | null
           id?: string
+          kit_sequence_id?: number | null
           name?: string
+          source?: string | null
+          source_note?: string | null
           status?: string | null
           steps?: Json
           trigger_type?: string
@@ -2506,25 +2884,6 @@ export type Database = {
       }
     }
     Views: {
-      website_visitor_companies: {
-        Row: {
-          city: string | null
-          company_domain: string | null
-          company_name: string | null
-          country: string | null
-          first_seen: string | null
-          last_path: string | null
-          last_referrer: string | null
-          last_seen: string | null
-          matched_company_id: string | null
-          page_views: number | null
-          site_id: string | null
-          unique_pages: number | null
-          user_id: string | null
-          visit_count: number | null
-        }
-        Relationships: []
-      }
       email_accounts_safe: {
         Row: {
           created_at: string | null
@@ -2555,20 +2914,86 @@ export type Database = {
         }
         Relationships: []
       }
+      website_visitor_companies: {
+        Row: {
+          city: string | null
+          company_domain: string | null
+          company_key: string | null
+          company_name: string | null
+          country: string | null
+          first_seen: string | null
+          last_path: string | null
+          last_referrer: string | null
+          last_seen: string | null
+          matched_company_id: string | null
+          page_views: number | null
+          site_id: string | null
+          unique_pages: number | null
+          user_id: string | null
+          visit_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "website_visits_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "visitor_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       increment_contact_clicks: {
+        Args: { contact_id_param: string }
+        Returns: undefined
+      }
+      link_newsletter_recipients_to_contacts: { Args: never; Returns: number }
+      peak_focus_connect: { Args: { p_password: string }; Returns: string }
+      peak_focus_create_task: {
         Args: {
-          contact_id_param: string
+          p_company_id?: string
+          p_contact_id?: string
+          p_ends_at?: string
+          p_notes?: string
+          p_priority?: string
+          p_title: string
         }
+        Returns: string
+      }
+      peak_focus_tasks_for_company: {
+        Args: { p_company_id: string }
+        Returns: {
+          client_name: string
+          completed: boolean
+          ends_at: string
+          match_type: string
+          priority: string
+          project_name: string
+          starts_at: string
+          status: string
+          task_id: string
+          title: string
+        }[]
+      }
+      peak_focus_tasks_for_contact: {
+        Args: { p_contact_id: string }
+        Returns: {
+          completed: boolean
+          ends_at: string
+          priority: string
+          starts_at: string
+          status: string
+          task_id: string
+          title: string
+        }[]
+      }
+      refresh_newsletter_metrics: {
+        Args: { p_newsletter_send_id: string }
         Returns: undefined
       }
       route_sequence_click: {
-        Args: {
-          p_contact_id: string
-          p_link_url: string
-          p_user_id?: string
-        }
+        Args: { p_contact_id: string; p_link_url: string; p_user_id?: string }
         Returns: Json
       }
       update_user_consent: {
@@ -2598,12 +3023,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2627,11 +3052,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2652,11 +3077,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2677,11 +3102,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2694,11 +3119,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
