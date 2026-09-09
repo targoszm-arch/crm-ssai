@@ -148,11 +148,12 @@ export function AddDealModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {initialData?.id ? "Edit Deal" : "Add Deal"}
+      <DialogContent className="max-w-4xl gap-0 overflow-hidden rounded-2xl border-border/80 p-0 shadow-2xl">
+        <DialogHeader className="border-b bg-background px-6 py-5 text-left">
+          <DialogTitle className="text-xl">
+            {initialData?.id ? "Edit Deal" : "Create new deal"}
           </DialogTitle>
+          <p className="text-sm text-muted-foreground">Update the pipeline record and keep the next action current.</p>
         </DialogHeader>
 
         <Form {...form}>

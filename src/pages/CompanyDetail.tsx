@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,13 +31,24 @@ export default function CompanyDetail() {
   });
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <Button variant="ghost" size="sm" asChild className="mb-4 -ml-2">
-        <Link to={`/customers?tab=${returnTab}`}>
-          <ArrowLeft className="h-4 w-4 mr-1.5" />
-          Back to Organisations
-        </Link>
-      </Button>
+    <div className="min-h-full bg-muted/20 p-4 md:p-6">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+          <div className="flex items-center gap-3 text-sm">
+            <Button variant="outline" size="icon" asChild aria-label="Back to organisations">
+              <Link to={`/customers?tab=${returnTab}`}><ArrowLeft className="h-4 w-4" /></Link>
+            </Button>
+            <Link className="text-muted-foreground hover:text-foreground" to={`/customers?tab=${returnTab}`}>Organisations</Link>
+            <span className="text-muted-foreground">›</span>
+            <span className="font-semibold">{company?.company_name || "Organisation"}</span>
+          </div>
+          {company && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setAddContactOpen(true)}><Plus className="mr-2 h-4 w-4" />Add person</Button>
+              <Button variant="outline" size="sm"><Pencil className="mr-2 h-4 w-4" />Edit company</Button>
+            </div>
+          )}
+        </div>
 
       {isLoading && (
         <div className="space-y-4">
@@ -57,13 +68,14 @@ export default function CompanyDetail() {
         />
       )}
 
-      {company && (
-        <AddContactModal
-          open={addContactOpen}
-          onOpenChange={setAddContactOpen}
-          preselectedCompanyId={company.id}
-        />
-      )}
+        {company && (
+          <AddContactModal
+            open={addContactOpen}
+            onOpenChange={setAddContactOpen}
+            preselectedCompanyId={company.id}
+          />
+        )}
+      </div>
     </div>
   );
 }

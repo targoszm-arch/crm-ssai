@@ -185,7 +185,10 @@ export default function Inbox() {
       <div className="flex flex-col gap-3 p-4 border-b md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 flex-wrap">
           <Mail className="h-5 w-5" />
-          <h1 className="text-lg font-semibold">Inbox</h1>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Emails</h1>
+            <p className="hidden text-sm text-muted-foreground md:block">Mailbox-style email workspace with folders, drafts, syncing, and full thread reading.</p>
+          </div>
           {isSyncing && (
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
