@@ -1,65 +1,43 @@
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Mail, Building2, Sparkles } from "lucide-react";
+import { ArrowLeft, Building2, Mail, Phone, MapPin, BriefcaseBusiness, CalendarDays, Linkedin, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ContactDetailContent, ContactWithCompany } from "@/components/customers/ContactDetailContent";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ContactWithCompany } from "@/components/customers/ContactDetailContent";
 
 export default function PersonDetail() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const returnTab = searchParams.get("from") === "organisations" ? "organisations" : "customers";
-
   const { data: contact, isLoading, error } = useQuery({
     queryKey: ["contact-detail", id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("contacts")
-        .select("*, companies!contacts_company_id_fkey(company_name)")
-        .eq("id", id)
-        .single();
-
+      const { data, error } = await supabase.from("contacts").select("*, companies!contacts_company_id_fkey(company_name)").eq("id", id).single();
       if (error) throw error;
       return data as ContactWithCompany;
     },
     enabled: !!id,
   });
 
-  return (
-    <div className="min-h-full bg-muted/20 p-4 md:p-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-          <div className="flex items-center gap-3 text-sm">
-            <Button variant="outline" size="icon" asChild aria-label="Back to people">
-              <Link to={`/customers?tab=${returnTab}`}><ArrowLeft className="h-4 w-4" /></Link>
-            </Button>
-            <Link className="text-muted-foreground hover:text-foreground" to={`/customers?tab=${returnTab}`}>People</Link>
-            <span className="text-muted-foreground">›</span>
-            <span className="font-semibold">{contact ? [contact.first_name, contact.last_name].filter(Boolean).join(" ") || contact.name : "Person"}</span>
-          </div>
-          {contact && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm"><Mail className="mr-2 h-4 w-4" />Send email</Button>
-              {contact.company_id && <Button variant="outline" size="sm"><Building2 className="mr-2 h-4 w-4" />Open company</Button>}
-              <Button size="sm"><Sparkles className="mr-2 h-4 w-4" />Add to pipeline</Button>
-            </div>
-          )}
-        </div>
+  if (isLoading) return <div className="min-h-full bg-muted/20 p-6"><Skeleton className="mx-auto h-12 max-w-7xl" /><Skeleton className="mx-auto mt-6 h-96 max-w-7xl" /></div>;
+  if (error || !contact) return <div className="p-8 text-sm text-destructive">Couldn&apos;t load this person.</div>;
+  const name = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || contact.name || "Unknown person";
+  const initials = name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const companyName = contact.companies?.company_name;
 
-      {isLoading && (
-        <div className="space-y-4">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-40 w-full" />
-        </div>
-      )}
-
-      {error && (
-        <p className="text-sm text-destructive">Couldn't load this contact.</p>
-      )}
-
-        {contact && <ContactDetailContent contact={contact} />}
-      </div>
+  return <div className="min-h-full bg-muted/20 p-5 md:p-7">
+    <div className="mx-auto max-w-[1600px]">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+        <div className="flex items-center gap-3 text-sm"><Button variant="outline" size="icon" asChild><Link to={`/customers?tab=${returnTab}`} aria-label="Back to people"><ArrowLeft className="h-4 w-4" /></Link></Button><Link className="text-muted-foreground hover:text-foreground" to={`/customers?tab=${returnTab}`}>People</Link><span className="text-muted-foreground">›</span><strong>{name}</strong></div>
+        <div className="flex gap-2"><Button variant="outline" size="sm" asChild><a href={contact.email ? `mailto:${contact.email}` : undefined}><Mail className="mr-2 h-4 w-4" />Send email</a></Button>{companyName && contact.company_id && <Button variant="outline" size="sm" asChild><Link to={`/companies/${contact.company_id}?from=customers`}><Building2 className="mr-2 h-4 w-4" />Open company</Link></Button>}<Button size="sm"><Sparkles className="mr-2 h-4 w-4" />Add to pipeline</Button></div>
+      </header>
+      <div className="mb-4 rounded-2xl border bg-gradient-to-r from-primary/10 via-background to-background p-6"><div className="flex items-start gap-4"><div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-lg font-semibold text-primary">{initials}</div><div><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold">{name}</h1>{contact.connection_strength && <Badge variant="outline">{contact.connection_strength}</Badge>}{companyName && <Badge variant="secondary">{companyName}</Badge>}</div><p className="mt-1 text-sm text-muted-foreground">Contact profile · {companyName || "Company not set"} · {contact.work_location || "Location not set"}</p><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Contact linked to {companyName || "the CRM"}. Keep account details current here so the company record, people list, and pipeline stay aligned.</p></div></div></div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,.9fr)]"><div className="space-y-4"><Card><CardHeader className="border-b"><CardTitle className="text-base">Contact information</CardTitle></CardHeader><CardContent className="grid gap-3 p-5 sm:grid-cols-2"><Info icon={Mail} label="Primary email" value={contact.email} /><Info icon={Phone} label="Phone number" value={contact.phone} /><Info icon={BriefcaseBusiness} label="Job title" value={contact.title} /><Info icon={MapPin} label="Location" value={contact.work_location} /><Info icon={CalendarDays} label="Stage" value={contact.interest_level || contact.marketing_status} /><Info icon={Linkedin} label="LinkedIn" value={contact.linkedin_url ? "Attached" : "Not attached"} /></CardContent></Card><Card><CardHeader className="border-b"><CardTitle className="text-base">Company overview</CardTitle></CardHeader><CardContent className="p-5"><div className="rounded-2xl border bg-muted/20 p-5"><div className="flex items-center justify-between"><div><p className="font-semibold">{companyName || "No company linked"}</p><p className="mt-1 text-sm text-muted-foreground">{companyName ? "Linked account for this contact." : "Link a company to keep CRM records aligned."}</p></div>{contact.company_id && <Button variant="outline" size="sm" asChild><Link to={`/companies/${contact.company_id}?from=customers`}>Open account</Link></Button>}</div></div></CardContent></Card></div><div className="space-y-4"><Card><CardHeader><CardTitle className="text-base">Quick actions</CardTitle></CardHeader><CardContent className="flex flex-col gap-2"><Button variant="outline" className="justify-between" asChild><a href={contact.email ? `mailto:${contact.email}` : undefined}>Send email <Mail className="h-4 w-4" /></a></Button><Button variant="outline" className="justify-between">Open email history <Mail className="h-4 w-4" /></Button><Button variant="outline" className="justify-between"><Sparkles className="h-4 w-4" /> Add or update pipeline record</Button></CardContent></Card><Card><CardHeader><CardTitle className="text-base">CRM overview</CardTitle></CardHeader><CardContent className="grid gap-3"><Metric label="Contact stage" value={contact.interest_level || contact.marketing_status || "Lead"} /><Metric label="Time zone" value="Not set" /><Metric label="Linked deals" value="0" /></CardContent></Card></div></div>
     </div>
-  );
+  </div>;
 }
+function Info({ icon: Icon, label, value }: { icon: typeof Mail; label: string; value?: string | null }) { return <div className="rounded-xl border p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Icon className="h-4 w-4" />{label}</div><p className="mt-2 text-sm font-medium">{value || "Not available"}</p></div>; }
+function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border bg-muted/20 p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value}</p></div>; }
