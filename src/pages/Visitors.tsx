@@ -65,15 +65,15 @@ function MetricCard({
 function CompanyDetailDialog({
   visitor, days, onClose,
 }: { visitor: VisitorCompany | null; days: number; onClose: () => void }) {
-  const { data: visits, isLoading } = useCompanyVisits(visitor?.company_domain ?? null, days);
+  const { data: visits, isLoading } = useCompanyVisits(visitor ?? null, days);
 
   return (
     <Dialog open={!!visitor} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{visitor?.company_name || visitor?.company_domain}</DialogTitle>
+          <DialogTitle>{visitor?.company_name || visitor?.company_key}</DialogTitle>
           <DialogDescription>
-            {visitor?.company_domain}
+            {visitor?.company_domain ?? "no domain — identified by name"}
             {visitor?.city ? ` · ${visitor.city}` : ""}
             {visitor?.country ? `, ${visitor.country}` : ""}
           </DialogDescription>
@@ -143,7 +143,7 @@ export default function Visitors() {
     if (!term) return rows;
     return rows.filter((c) =>
       (c.company_name ?? "").toLowerCase().includes(term) ||
-      c.company_domain.toLowerCase().includes(term),
+      c.company_key.toLowerCase().includes(term),
     );
   }, [companies, search]);
 
@@ -152,14 +152,19 @@ export default function Visitors() {
   // broadband, which resolves to their ISP and nothing more.
   const stats = useMemo(() => {
     const all = visits ?? [];
-    const identified = all.filter((v) => v.classification === "company").length;
-    const rate = all.length > 0 ? Math.round((identified / all.length) * 100) : 0;
+    // Crawlers are excluded from the denominator. They are the majority of the
+    // traffic — 382 of the first 397 page views — and counting them made the
+    // identification rate read 1%, which measures how much of the internet is
+    // robots, not how well reverse-IP is working.
+    const human = all.filter((v) => v.classification !== "bot");
+    const identified = human.filter((v) => v.classification === "company").length;
+    const rate = human.length > 0 ? Math.round((identified / human.length) * 100) : 0;
 
     const weekAgo = Date.now() - 7 * 86_400_000;
     const newThisWeek = (companies ?? [])
       .filter((c) => new Date(c.first_seen).getTime() > weekAgo).length;
 
-    return { pageViews: all.length, rate, newThisWeek };
+    return { pageViews: all.length, humanViews: human.length, rate, newThisWeek };
   }, [visits, companies]);
 
   return (
@@ -205,14 +210,14 @@ export default function Visitors() {
         />
         <MetricCard
           title="Page views"
-          value={String(stats.pageViews)}
-          sub="all visitors, identified or not"
+          value={String(stats.humanViews)}
+          sub={`excluding ${stats.pageViews - stats.humanViews} crawler hits`}
           icon={<Eye className="h-4 w-4" />}
         />
         <MetricCard
           title="Identification rate"
           value={`${stats.rate}%`}
-          sub="5–20% is normal for reverse-IP"
+          sub="of non-crawler views; 5–20% is normal"
           icon={<Globe className="h-4 w-4" />}
         />
       </div>
@@ -274,24 +279,30 @@ export default function Visitors() {
                   <TableBody>
                     {filtered.map((visitor) => (
                       <TableRow
-                        key={visitor.company_domain}
+                        key={visitor.company_key}
                         className="cursor-pointer"
                         onClick={() => setSelected(visitor)}
                       >
                         <TableCell>
                           <div className="font-medium">
-                            {visitor.company_name || visitor.company_domain}
+                            {visitor.company_name || visitor.company_key}
                           </div>
-                          <a
-                            href={`https://${visitor.company_domain}`}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-xs text-muted-foreground hover:underline inline-flex items-center gap-1"
-                          >
-                            {visitor.company_domain}
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
+                          {visitor.company_domain ? (
+                            <a
+                              href={`https://${visitor.company_domain}`}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-xs text-muted-foreground hover:underline inline-flex items-center gap-1"
+                            >
+                              {visitor.company_domain}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              matched by name
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {[visitor.city, visitor.country].filter(Boolean).join(", ") || "—"}
@@ -317,7 +328,7 @@ export default function Visitors() {
                                 addToCrm.mutate(visitor, {
                                   onSuccess: () =>
                                     toast.success(
-                                      `${visitor.company_name || visitor.company_domain} added to the CRM`,
+                                      `${visitor.company_name || visitor.company_key} added to the CRM`,
                                     ),
                                   onError: (error) =>
                                     toast.error(
