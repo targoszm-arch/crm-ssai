@@ -57,6 +57,54 @@ const BOT_UA =
 const ISP_NAME_HINTS =
   /\b(telecom|telekom|broadband|cable|mobile|wireless|cellular|comcast|verizon|vodafone|orange|telefonica|t-mobile|at&t|charter|spectrum|virgin media|sky broadband|bt group|british telecom|eir|three|deutsche telekom|swisscom|telenor|telia|kpn|proximus|liberty global|altice|free sas|sfr|bouygues|jio|airtel|claro|telstra|optus|rogers|bell canada|shaw|cox communications|centurylink|frontier|windstream|starlink|isp)\b/i;
 
+// The name-only fallback above is Anglocentric, and the first week of real data
+// showed exactly where it leaks: "Entelvias provedor de internet ltda" counted
+// as an identified company, as did Starlink (which resolves as SpaceX Services)
+// and Cisco OpenDNS, a public resolver rather than a visitor. These are all
+// connectivity, not leads.
+const CONNECTIVITY_NAME_HINTS =
+  /(provedor|proveedor|provider|fibra|fibre|banda larga|banda ancha|internet ltda|internet s\.?a|net ltda|opendns|open dns|cloudflare|quad9|google public dns|spacex|starlink|hotspot|wifi|wi-fi|satellite)/i;
+
+// The crawlers that actually show up, in the order they need matching: the
+// Ahrefs site auditor announces itself as Chrome first and only names itself at
+// the end of the string, so a plain "first token" reading gets it wrong.
+const BOT_NAMES: Array<[RegExp, string]> = [
+  [/ahrefssiteaudit/i, "Ahrefs Site Audit"],
+  [/ahrefsbot/i, "AhrefsBot"],
+  [/bingbot|bingpreview/i, "Bingbot"],
+  [/googlebot/i, "Googlebot"],
+  [/google-inspectiontool/i, "Google Inspection Tool"],
+  [/gptbot|oai-searchbot|chatgpt-user/i, "OpenAI"],
+  [/claudebot|claude-web|anthropic/i, "ClaudeBot"],
+  [/perplexitybot/i, "PerplexityBot"],
+  [/applebot/i, "Applebot"],
+  [/yandex/i, "YandexBot"],
+  [/baiduspider/i, "Baiduspider"],
+  [/duckduckbot/i, "DuckDuckBot"],
+  [/sogou/i, "Sogou Spider"],
+  [/semrush/i, "SemrushBot"],
+  [/mj12bot|majestic/i, "MJ12bot"],
+  [/dotbot/i, "DotBot"],
+  [/facebookexternalhit|facebookcatalog/i, "Facebook"],
+  [/linkedinbot/i, "LinkedInBot"],
+  [/slackbot/i, "Slackbot"],
+  [/twitterbot/i, "Twitterbot"],
+  [/whatsapp/i, "WhatsApp"],
+  [/telegram/i, "Telegram"],
+  [/lighthouse|pagespeed/i, "Lighthouse"],
+  [/gtmetrix/i, "GTmetrix"],
+  [/pingdom|uptime|monitor/i, "Uptime monitor"],
+  [/headless/i, "Headless browser"],
+  [/curl|wget|python-requests|axios|scrapy/i, "Script"],
+];
+
+function botName(userAgent: string): string {
+  for (const [pattern, name] of BOT_NAMES) {
+    if (pattern.test(userAgent)) return name;
+  }
+  return "Crawler";
+}
+
 function extractIp(req: Request): string | null {
   const forwarded = req.headers.get("x-forwarded-for");
   if (forwarded) {
@@ -156,7 +204,11 @@ async function resolveViaIpapiIs(ip: string): Promise<Resolved | null> {
     // Free tier gives no `type` at all — fall back to name-based ISP
     // detection so a Comcast/Vodafone/etc. connection isn't counted as an
     // identified company just because a name came back.
-    classification = ISP_NAME_HINTS.test(nameForIspCheck) ? "isp" : "company";
+    classification =
+      ISP_NAME_HINTS.test(nameForIspCheck) ||
+        CONNECTIVITY_NAME_HINTS.test(nameForIspCheck)
+        ? "isp"
+        : "company";
   }
 
   return {
@@ -199,7 +251,7 @@ async function resolveViaIpinfo(ip: string): Promise<Resolved | null> {
   const domain = cleanDomain(data.as_domain);
 
   let classification: Resolved["classification"] = "unknown";
-  if (name && ISP_NAME_HINTS.test(name)) {
+  if (name && (ISP_NAME_HINTS.test(name) || CONNECTIVITY_NAME_HINTS.test(name))) {
     classification = "isp";
   } else if (name && domain) {
     classification = "company";
@@ -313,7 +365,16 @@ serve(async (req: Request): Promise<Response> => {
     let ipHash: string | null = null;
 
     if (BOT_UA.test(userAgent)) {
-      resolved = { ...EMPTY, classification: "bot", resolver: "user_agent" };
+      // Still no IP lookup — a crawler is not worth an API call. But storing a
+      // row of nulls made every crawler hit read as "Unknown" in the UI, which
+      // is why 382 of the first 397 page views said nothing at all. The UA
+      // already names the thing; keep that much.
+      resolved = {
+        ...EMPTY,
+        company_name: botName(userAgent),
+        classification: "bot",
+        resolver: "user_agent",
+      };
     } else if (ip && !isPrivateIp(ip)) {
       ipHash = await hashIp(ip, salt);
 

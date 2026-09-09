@@ -85,11 +85,21 @@ export function useCreateDeal() {
 
   return useMutation({
     mutationFn: async (deal: Partial<Tables<"deals">>) => {
+      // deals.user_id has no database default and the INSERT policy is
+      // `with_check (auth.uid() = user_id)`, so omitting it does not create an
+      // ownerless row — it fails the policy outright. Every create through this
+      // hook was returning "new row violates row-level security policy".
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       const { data, error } = await supabase
         .from("deals")
         .insert({
-          deal_name: deal.deal_name || "Untitled Deal",
           ...deal,
+          // After the spread, not before: an empty deal_name from the form would
+          // otherwise overwrite the fallback and trip the NOT NULL constraint.
+          deal_name: deal.deal_name || "Untitled Deal",
+          user_id: user.id,
         })
         .select()
         .single();
