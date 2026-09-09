@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
-import { DataTable } from "@/components/ui/data-table";
+import { Link, useNavigate } from "react-router-dom";
 import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
 import { FilterableTableHeader } from "./FilterableTableHeader";
@@ -12,7 +11,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ExternalLink, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OrganisationDetail } from "./OrganisationDetail";
 import { AddContactModal } from "./AddContactModal";
 import { OrganisationsBulkActionBar } from "./OrganisationsBulkActionBar";
 import { renderLabels } from "@/lib/labelColors";
@@ -71,13 +69,12 @@ interface OrganisationsTabProps {
 export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
   const [filters, setFilters] = useState<CompanyFilters>({});
   const [sorting, setSorting] = useState<CompanySorting>({ column: "last_interaction", direction: "desc" });
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [preselectedCompanyId, setPreselectedCompanyId] = useState<string | undefined>();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isEnriching, setIsEnriching] = useState(false);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: companies, isLoading } = useCompanies(filters, sorting);
   const { data: filterOptions } = useCompanyFilterOptions();
@@ -135,13 +132,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
   };
 
   const handleViewCompany = (company: Company) => {
-    setSelectedCompany(company);
-    setDetailOpen(true);
-  };
-
-  const handleAddContactFromDetail = (companyId: string) => {
-    setPreselectedCompanyId(companyId);
-    setAddContactOpen(true);
+    navigate(`/companies/${company.id}?from=organisations`);
   };
 
   // Bulk selection handlers
@@ -262,7 +253,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
             {company.company_name?.substring(0, 2).toUpperCase()}
           </div>
           <Link
-            to={`/companies/${company.id}`}
+            to={`/companies/${company.id}?from=organisations`}
             className="font-medium text-left hover:text-primary hover:underline transition-colors"
           >
             {company.company_name}
@@ -573,18 +564,75 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
         Showing {companies?.length || 0} organisations
       </div>
 
-      <DataTable
-        columns={visibleColumns}
-        data={companies || []}
-        emptyMessage="No organisations found"
-      />
-
-      <OrganisationDetail
-        company={selectedCompany}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-        onAddContact={handleAddContactFromDetail}
-      />
+      {companies && companies.length > 0 ? (
+        <div className="flex min-w-0 flex-col gap-3 overflow-hidden" role="list" aria-label="Organisations">
+          <div className="hidden items-center gap-4 rounded-lg border bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground md:flex">
+            <div className="w-8" />
+            <div className="w-56 min-w-0 xl:w-64">Organisation</div>
+            <div className="hidden w-36 lg:block">Industry</div>
+            <div className="w-24 text-center">Contacts</div>
+            <div className="hidden w-32 xl:block">Connection</div>
+            <div className="hidden w-32 xl:block">Last activity</div>
+            <div className="w-16" />
+          </div>
+          {companies.map((company) => (
+            <div
+              key={company.id}
+              role="listitem"
+              className="group flex min-w-0 flex-col gap-3 overflow-hidden rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/20 md:flex-row md:items-center md:gap-3"
+            >
+              <Checkbox
+                checked={selectedIds.has(company.id)}
+                onCheckedChange={(checked) => handleSelectOne(company.id, checked === true)}
+                aria-label={`Select ${company.company_name}`}
+                className="shrink-0"
+              />
+              <div className="flex w-56 min-w-0 shrink-0 items-start gap-3 xl:w-64">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">
+                  {(company.company_name || "?").slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <Link to={`/companies/${company.id}?from=organisations`} className="block truncate font-medium hover:text-primary hover:underline">
+                    {company.company_name || "Unnamed organisation"}
+                  </Link>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    {company.country && <span>{company.country}</span>}
+                    {company.domains && <span className="truncate">{company.domains}</span>}
+                    {isVisible("website") && company.website && (
+                      <a href={company.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                        Website <ExternalLink data-icon="inline-end" />
+                      </a>
+                    )}
+                  </div>
+                  {isVisible("labels") && company.labels && <div className="mt-2 flex flex-wrap gap-1">{renderLabels(company.labels)}</div>}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pl-14 text-sm md:contents md:pl-0">
+                <div className="hidden min-w-0 md:block md:w-28 lg:block xl:w-32">
+                  <span className="truncate text-muted-foreground">{company.industry || "No industry"}</span>
+                  {isVisible("employee_range") && company.employee_range && <span className="mt-1 block text-xs text-muted-foreground">{company.employee_range} employees</span>}
+                </div>
+                <div className="flex items-center gap-1 text-muted-foreground md:w-24 md:justify-center">
+                  <span className="font-medium text-foreground">{company.people_count ?? 0}</span><span className="md:hidden">contacts</span>
+                </div>
+                <div className="hidden md:w-32 xl:block">{getConnectionStrengthBadge(company.connection_strength) || <span className="text-sm text-muted-foreground">No connection</span>}</div>
+                <div className="hidden text-sm text-muted-foreground md:w-32 xl:block">{company.last_interaction ? format(new Date(company.last_interaction), "MMM d, yyyy") : "No activity"}</div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => handleViewCompany(company)} className="self-end md:self-auto">
+                <Eye data-icon="inline-start" /> View
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed px-6 py-12 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">—</div>
+          <h3 className="mt-4 font-medium">No organisations found</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {hasActiveFilters ? "Try adjusting your filters or search terms." : "Organisations will appear here once they are added."}
+          </p>
+        </div>
+      )}
 
       <AddContactModal
         open={addContactOpen}
