@@ -1,5 +1,11 @@
 # Signup lifecycle webhooks
 
+> **Deployed via the LMS repo, 8 Sep 2026:** targoszm-arch/lms-skill-studio-ai#1233 carries
+> everything here (functions under `supabase/functions/`, the two SQL files as migrations
+> `20260908150000` and `20260908150100`) plus one addition — `track-user-signup` now reads
+> the profile up front and puts `role_type` on the `user_signed_up` PostHog event. That PR is
+> the source of truth from here; this folder is the design record.
+
 Belongs to the **LMS** Supabase project (`oxlujbymtjugefaqmwuy`), not to this repo — same
 arrangement as `01`–`03` next door. Nothing here is deployed.
 
