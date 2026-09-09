@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
 import { FilterableTableHeader } from "./FilterableTableHeader";
@@ -11,7 +11,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ExternalLink, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OrganisationDetail } from "./OrganisationDetail";
 import { AddContactModal } from "./AddContactModal";
 import { OrganisationsBulkActionBar } from "./OrganisationsBulkActionBar";
 import { renderLabels } from "@/lib/labelColors";
@@ -70,13 +69,12 @@ interface OrganisationsTabProps {
 export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
   const [filters, setFilters] = useState<CompanyFilters>({});
   const [sorting, setSorting] = useState<CompanySorting>({ column: "last_interaction", direction: "desc" });
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [preselectedCompanyId, setPreselectedCompanyId] = useState<string | undefined>();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isEnriching, setIsEnriching] = useState(false);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: companies, isLoading } = useCompanies(filters, sorting);
   const { data: filterOptions } = useCompanyFilterOptions();
@@ -134,13 +132,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
   };
 
   const handleViewCompany = (company: Company) => {
-    setSelectedCompany(company);
-    setDetailOpen(true);
-  };
-
-  const handleAddContactFromDetail = (companyId: string) => {
-    setPreselectedCompanyId(companyId);
-    setAddContactOpen(true);
+    navigate(`/companies/${company.id}?from=organisations`);
   };
 
   // Bulk selection handlers
@@ -641,13 +633,6 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
           </p>
         </div>
       )}
-
-      <OrganisationDetail
-        company={selectedCompany}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-        onAddContact={handleAddContactFromDetail}
-      />
 
       <AddContactModal
         open={addContactOpen}

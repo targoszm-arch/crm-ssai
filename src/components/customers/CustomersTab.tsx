@@ -1,9 +1,8 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
 import { FilterableTableHeader } from "./FilterableTableHeader";
-import { ContactDetail } from "./ContactDetail";
 import { CustomersBulkActionBar } from "./CustomersBulkActionBar";
 import { useContacts, useContactFilterOptions, useDeleteContacts, Contact, ContactFilters, ContactSorting } from "@/hooks/useContacts";
 import { useColumnPreferences, ColumnDefinition } from "@/hooks/useColumnPreferences";
@@ -54,15 +53,13 @@ const CUSTOMER_COLUMNS: ColumnDefinition[] = [
 export function CustomersTab() {
   const [filters, setFilters] = useState<ContactFilters>({});
   const [sorting, setSorting] = useState<ContactSorting>({ column: "last_contacted", direction: "desc" });
-  const [selectedContact, setSelectedContact] = useState<ContactWithCompany | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isEnriching, setIsEnriching] = useState(false);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const handleViewContact = (contact: ContactWithCompany) => {
-    setSelectedContact(contact);
-    setDetailOpen(true);
+    navigate(`/people/${contact.id}?from=customers`);
   };
 
   const { data: contacts, isLoading } = useContacts(filters, sorting);
@@ -663,11 +660,6 @@ export function CustomersTab() {
         </div>
       )}
 
-      <ContactDetail
-        contact={selectedContact}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-      />
     </div>
   );
 }
