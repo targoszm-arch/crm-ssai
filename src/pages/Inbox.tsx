@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Settings, Mail, Linkedin, RefreshCw, Loader2, FileSignature, LayoutGrid, List, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Plus, Settings, Mail, RefreshCw, Loader2, FileSignature, LayoutGrid, List, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   Select,
@@ -23,7 +22,6 @@ import { SignatureSettings } from "@/components/inbox/SignatureSettings";
 import { InboxSidebar, type EmailFolder } from "@/components/inbox/InboxSidebar";
 import { TemplatesPanel } from "@/components/inbox/TemplatesPanel";
 import { EmailTemplate } from "@/hooks/useEmailTemplates";
-import { InboxFilters } from "@/components/inbox/InboxFilters";
 import { BulkActionBar } from "@/components/inbox/BulkActionBar";
 import {
   DropdownMenu,
@@ -182,7 +180,7 @@ export default function Inbox() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       {/* Header - responsive stacking */}
-      <div className="flex flex-col gap-3 border-b px-6 py-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 border-b border-border/70 px-6 py-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 flex-wrap">
           <Mail className="h-5 w-5" />
           <div>
@@ -195,18 +193,6 @@ export default function Inbox() {
               <span>Syncing...</span>
             </div>
           )}
-          <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as InboxTab); setSelectedItem(null); setSelectedEmails([]); }}>
-            <TabsList>
-              <TabsTrigger value="email" className="flex items-center gap-1.5">
-                <Mail className="h-4 w-4" />
-                <span className="hidden sm:inline">Email</span>
-              </TabsTrigger>
-              <TabsTrigger value="linkedin" className="flex items-center gap-1.5">
-                <Linkedin className="h-4 w-4" />
-                <span className="hidden sm:inline">LinkedIn</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {activeTab === "email" && hasConnectedAccount && !isMobile && (
@@ -261,13 +247,6 @@ export default function Inbox() {
         </div>
       )}
 
-      {/* Filters Bar */}
-      {activeTab === "email" && hasConnectedAccount && (
-        <div className="border-b bg-muted/20 px-6 py-2">
-          <InboxFilters filters={filters} onChange={setFilters} />
-        </div>
-      )}
-
       {/* Bulk Action Bar */}
       {selectedEmails.length > 0 && (
         <div className="flex justify-center py-2 border-b bg-muted/50">
@@ -291,8 +270,8 @@ export default function Inbox() {
           {!isMobile && activeTab === "email" && (
             <div
               className={cn(
-                "flex flex-col shrink-0 border-r bg-muted/30 overflow-y-auto transition-[width] duration-200",
-                sidebarCollapsed ? "w-12" : "w-52"
+                "m-4 mr-0 flex shrink-0 flex-col overflow-y-auto rounded-xl border bg-card transition-[width] duration-200",
+                sidebarCollapsed ? "w-12" : "w-[220px]"
               )}
             >
               <div className="flex justify-end p-2 pb-0">
@@ -337,7 +316,7 @@ export default function Inbox() {
           {/* Email/LinkedIn list - constrained width */}
           <div className={cn(
             "border-r flex-shrink-0 overflow-hidden flex flex-col min-w-0",
-            effectiveViewMode === "split" ? "w-[18rem] xl:w-[20rem]" : "flex-1 max-w-2xl"
+            effectiveViewMode === "split" ? "m-4 w-[292px] rounded-xl border bg-card" : "flex-1 max-w-2xl"
           )}>
             {activeTab === "email" ? (
               <EmailList 
@@ -359,7 +338,7 @@ export default function Inbox() {
           
           {/* Split view detail panel */}
           {effectiveViewMode === "split" && (
-            <div className="flex-1 overflow-hidden">
+            <div className="m-4 ml-0 flex-1 overflow-hidden rounded-xl border bg-card">
               {selectedItem?.type === "email" ? (
                 <EmailThread email={selectedItem.item} account={currentAccount} onClose={handleCloseDetail} />
               ) : selectedItem?.type === "linkedin" ? (
