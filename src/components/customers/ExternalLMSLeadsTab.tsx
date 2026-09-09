@@ -31,9 +31,25 @@ import {
   Mail,
   Building2,
   Upload,
+  Database,
 } from "lucide-react";
 import { format } from "date-fns";
 import { EnrollAbandonmentModal } from "@/components/recovery/EnrollAbandonmentModal";
+
+/** The shape backfill-lms-leads reports, for both the dry run and the real one. */
+interface BackfillReport {
+  apply: boolean;
+  lms_customers: number;
+  skipped_no_email: number;
+  contacts_created: number;
+  contacts_matched: number;
+  lms_leads_created: number;
+  lms_leads_updated: number;
+  marketing_consented: number;
+  errors: string[];
+  error?: string;
+  detail?: string;
+}
 
 export function ExternalLMSLeadsTab() {
   const [signupType, setSignupType] = useState<string>("");
@@ -44,6 +60,8 @@ export function ExternalLMSLeadsTab() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
   const [isSyncingApollo, setIsSyncingApollo] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "checking" | "saving">("idle");
+  const [preview, setPreview] = useState<BackfillReport | null>(null);
 
   const handleSyncToApollo = async () => {
     setIsSyncingApollo(true);
@@ -55,14 +73,70 @@ export function ExternalLMSLeadsTab() {
       });
       if (error) throw error;
       toast.success(`Apollo sync complete: ${data?.synced || 0} synced, ${data?.errors || 0} errors`);
-    } catch (err: any) {
-      toast.error("Apollo sync failed: " + (err.message || "Unknown error"));
+    } catch (err) {
+      toast.error(
+        "Apollo sync failed: " +
+          (err instanceof Error ? err.message : "Unknown error"),
+      );
     } finally {
       setIsSyncingApollo(false);
     }
   };
 
   // Fetch all leads once; all filtering happens client-side below.
+  /**
+   * Store these people in the CRM.
+   *
+   * Everything on this tab is a live read-through of the LMS: fetched on render,
+   * held in memory, gone on refresh. Nothing here can be labelled, segmented or
+   * enrolled because none of it exists in a table. backfill-lms-leads writes
+   * them into contacts and lms_leads, and is safe to re-run — it matches on
+   * email and only fills gaps.
+   *
+   * Dry run first, always. It reports exactly what it would write, and the
+   * numbers are worth reading before 200-odd rows land in contacts.
+   */
+  const runBackfill = async (apply: boolean) => {
+    setSaveState(apply ? "saving" : "checking");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error: fnError } = await supabase.functions.invoke(
+        `backfill-lms-leads?apply=${apply}`,
+        {
+          method: "GET",
+          headers: session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {},
+        },
+      );
+      if (fnError) throw fnError;
+
+      const report = data as BackfillReport;
+      if (report?.error) throw new Error(report.detail || report.error);
+
+      if (apply) {
+        setPreview(null);
+        toast.success(
+          `Saved to the CRM: ${report.lms_leads_created} new LMS leads, ` +
+          `${report.contacts_created} new contacts, ` +
+          `${report.contacts_matched} matched to existing contacts.`,
+        );
+      } else {
+        setPreview(report);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      toast.error(
+        message.includes("BACKFILL_OWNER_IDS")
+          ? "Set the BACKFILL_OWNER_IDS secret to your auth user id before running this."
+          : `Could not save to the CRM: ${message}`,
+      );
+      setPreview(null);
+    } finally {
+      setSaveState("idle");
+    }
+  };
+
   const { data: customers, isLoading, isError, error, refetch, isFetching } = useExternalLMSCustomers({
     limit: 500,
   });
@@ -205,7 +279,55 @@ export function ExternalLMSLeadsTab() {
           <Upload className={`h-4 w-4 mr-2 ${isSyncingApollo ? 'animate-spin' : ''}`} />
           {isSyncingApollo ? "Syncing..." : "Sync to Apollo"}
         </Button>
+
+        <Button
+          size="sm"
+          onClick={() => runBackfill(false)}
+          disabled={saveState !== "idle"}
+        >
+          <Database className={`h-4 w-4 mr-2 ${saveState !== "idle" ? "animate-pulse" : ""}`} />
+          {saveState === "checking" ? "Checking…" : "Save to CRM"}
+        </Button>
       </div>
+
+      {preview && (
+        <Card className="border-primary bg-primary/5">
+          <CardContent className="p-4 space-y-3">
+            <div>
+              <p className="font-medium">
+                Nothing has been written yet — this is what would happen.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {preview.lms_customers} LMS customers ·{" "}
+                {preview.contacts_created} new contacts ·{" "}
+                {preview.contacts_matched} matched to contacts you already have ·{" "}
+                {preview.lms_leads_created} new LMS leads ·{" "}
+                {preview.marketing_consented} with marketing consent
+                {preview.skipped_no_email > 0
+                  ? ` · ${preview.skipped_no_email} skipped for having no email`
+                  : ""}
+              </p>
+              {preview.errors?.length > 0 && (
+                <p className="mt-1 text-sm text-destructive">
+                  {preview.errors.length} would error — first: {preview.errors[0]}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => runBackfill(true)}
+                disabled={saveState !== "idle"}
+              >
+                {saveState === "saving" ? "Saving…" : "Save them"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setPreview(null)}>
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Bulk Action Bar */}
       {selectedIds.size > 0 && (

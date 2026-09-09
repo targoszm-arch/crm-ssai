@@ -7,6 +7,8 @@ interface MetricCardProps {
   title: string;
   value: string;
   icon: React.ReactNode;
+  /** One line of context under the number — what it counts, or over what window. */
+  sub?: string;
   change?: {
     value: number;
     isPositive: boolean;
@@ -18,6 +20,7 @@ export function MetricCard({
   title, 
   value, 
   icon, 
+  sub,
   change, 
   className 
 }: MetricCardProps) {
@@ -45,6 +48,9 @@ export function MetricCard({
                 </p>
               )}
             </div>
+            {sub && (
+              <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
+            )}
           </div>
           <div className="p-2 rounded-md bg-primary/10 text-primary">
             {icon}
