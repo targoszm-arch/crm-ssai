@@ -16,7 +16,13 @@ export interface VisitorSite {
 export interface VisitorCompany {
   user_id: string;
   site_id: string;
-  company_domain: string;
+  /**
+   * Identity of the visiting company: the reverse-IP domain when the provider
+   * returned one, the normalised name otherwise. Only the paid ipapi.is tier
+   * returns domains, so on the free tier this is a name for every row.
+   */
+  company_key: string;
+  company_domain: string | null;
   company_name: string | null;
   country: string | null;
   city: string | null;
@@ -138,13 +144,19 @@ export function useWebsiteVisits(days: number, limit = 500) {
   });
 }
 
-/** The pages one identified company looked at, newest first. */
-export function useCompanyVisits(domain: string | null, days: number) {
+/**
+ * The pages one identified company looked at, newest first.
+ *
+ * Matched on domain where there is one and on the exact name otherwise, which
+ * mirrors how the view builds company_key — a name-keyed visitor has no domain
+ * to filter on, and filtering on the null would return every unresolved row.
+ */
+export function useCompanyVisits(visitor: VisitorCompany | null, days: number) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ["website_visits_by_domain", domain, days, user?.id],
+    queryKey: ["website_visits_by_company", visitor?.company_key, days, user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("website_visits")
         .select(
           "id, site_id, session_id, visited_at, path, page_title, referrer, " +
@@ -152,14 +164,19 @@ export function useCompanyVisits(domain: string | null, days: number) {
           "company_name, company_domain, asn_name, classification, " +
           "matched_company_id, resolver",
         )
-        .eq("company_domain", domain!)
         .gte("visited_at", sinceDays(days))
         .order("visited_at", { ascending: false })
         .limit(200);
+
+      query = visitor!.company_domain
+        ? query.eq("company_domain", visitor!.company_domain)
+        : query.eq("company_name", visitor!.company_name!);
+
+      const { data, error } = await query;
       if (error) throw error;
       return data as unknown as WebsiteVisit[];
     },
-    enabled: !!user && !!domain,
+    enabled: !!user && !!visitor,
   });
 }
 
@@ -177,8 +194,10 @@ export function useAddVisitorToCrm() {
         .from("companies")
         .insert({
           user_id: user!.id,
-          company_name: visitor.company_name || visitor.company_domain,
-          website: `https://${visitor.company_domain}`,
+          company_name: visitor.company_name || visitor.company_key,
+          // Only when reverse-IP actually returned a domain. Interpolating a
+          // null produced the literal string "https://null" on the free tier.
+          website: visitor.company_domain ? `https://${visitor.company_domain}` : null,
           domains: visitor.company_domain,
           country: visitor.country,
           labels: "Website visitor",
@@ -189,10 +208,12 @@ export function useAddVisitorToCrm() {
       if (error) throw error;
 
       const companyId = (company as { id: string }).id;
-      await supabase
+      const backlink = supabase
         .from("website_visits")
-        .update({ matched_company_id: companyId } as never)
-        .eq("company_domain", visitor.company_domain);
+        .update({ matched_company_id: companyId } as never);
+      await (visitor.company_domain
+        ? backlink.eq("company_domain", visitor.company_domain)
+        : backlink.eq("company_name", visitor.company_name!));
 
       return companyId;
     },
