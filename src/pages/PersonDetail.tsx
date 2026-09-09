@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +8,8 @@ import { ContactDetailContent, ContactWithCompany } from "@/components/customers
 
 export default function PersonDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const returnTab = searchParams.get("from") === "organisations" ? "organisations" : "customers";
 
   const { data: contact, isLoading, error } = useQuery({
     queryKey: ["contact-detail", id],
@@ -27,7 +29,7 @@ export default function PersonDetail() {
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <Button variant="ghost" size="sm" asChild className="mb-4 -ml-2">
-        <Link to="/customers?tab=customers">
+        <Link to={`/customers?tab=${returnTab}`}>
           <ArrowLeft className="h-4 w-4 mr-1.5" />
           Back to Customers
         </Link>

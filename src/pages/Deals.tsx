@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Search, LayoutGrid, List, Table, TrendingUp, Settings, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +29,8 @@ export default function Deals() {
   const [search, setSearch] = useState("");
   const [localSearch, setLocalSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
-  const [selectedPipelineId, setSelectedPipelineId] = useState<string | undefined>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | undefined>(searchParams.get("pipeline") || undefined);
   const [addDealOpen, setAddDealOpen] = useState(false);
   const [addDealInitialStage, setAddDealInitialStage] = useState<string | undefined>();
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -82,7 +84,12 @@ export default function Deals() {
           {/* Pipeline Selector */}
           <Select
             value={activePipelineId}
-            onValueChange={setSelectedPipelineId}
+            onValueChange={(value) => {
+              setSelectedPipelineId(value);
+              const nextParams = new URLSearchParams(searchParams);
+              nextParams.set("pipeline", value);
+              setSearchParams(nextParams, { replace: true });
+            }}
           >
             <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Select pipeline" />

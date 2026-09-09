@@ -16,7 +16,7 @@ export default function Customers() {
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const initialTab = tabParam && VALID_TABS.includes(tabParam) ? tabParam : "organisations";
+  const activeTab = tabParam && VALID_TABS.includes(tabParam) ? tabParam : "organisations";
 
   return (
     <div className="w-full px-4 py-6 space-y-6 animate-fade-in">
@@ -39,8 +39,12 @@ export default function Customers() {
       <Card>
         <CardContent className="p-6">
           <Tabs
-            defaultValue={initialTab}
-            onValueChange={(value) => setSearchParams({ tab: value }, { replace: true })}
+            value={activeTab}
+            onValueChange={(value) => {
+              const nextParams = new URLSearchParams(searchParams);
+              nextParams.set("tab", value);
+              setSearchParams(nextParams, { replace: true });
+            }}
             className="w-full"
           >
             <TabsList className="grid w-full max-w-lg grid-cols-3">

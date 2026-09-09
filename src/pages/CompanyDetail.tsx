@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,8 @@ import { AddContactModal } from "@/components/customers/AddContactModal";
 
 export default function CompanyDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const returnTab = searchParams.get("from") === "customers" ? "customers" : "organisations";
   const [addContactOpen, setAddContactOpen] = useState(false);
 
   const { data: company, isLoading, error } = useQuery({
@@ -31,7 +33,7 @@ export default function CompanyDetail() {
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <Button variant="ghost" size="sm" asChild className="mb-4 -ml-2">
-        <Link to="/customers?tab=organisations">
+        <Link to={`/customers?tab=${returnTab}`}>
           <ArrowLeft className="h-4 w-4 mr-1.5" />
           Back to Organisations
         </Link>

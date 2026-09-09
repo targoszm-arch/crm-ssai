@@ -258,7 +258,7 @@ export function CustomersTab() {
               {initials}
             </div>
             <Link
-              to={`/people/${contact.id}`}
+              to={`/people/${contact.id}?from=customers`}
               className="font-medium text-left hover:text-primary hover:underline transition-colors"
             >
               {fullName}
@@ -624,7 +624,7 @@ export function CustomersTab() {
                       <AvatarFallback className="bg-primary/10 font-semibold text-primary">{initials || <UserRound className="size-4" />}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <Link to={`/people/${contact.id}`} className="block truncate font-medium hover:text-primary hover:underline">
+                      <Link to={`/people/${contact.id}?from=customers`} className="block truncate font-medium hover:text-primary hover:underline">
                         {fullName}
                       </Link>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

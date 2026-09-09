@@ -261,7 +261,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
             {company.company_name?.substring(0, 2).toUpperCase()}
           </div>
           <Link
-            to={`/companies/${company.id}`}
+            to={`/companies/${company.id}?from=organisations`}
             className="font-medium text-left hover:text-primary hover:underline transition-colors"
           >
             {company.company_name}
@@ -600,7 +600,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
                   {(company.company_name || "?").slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0">
-                  <Link to={`/companies/${company.id}`} className="block truncate font-medium hover:text-primary hover:underline">
+                  <Link to={`/companies/${company.id}?from=organisations`} className="block truncate font-medium hover:text-primary hover:underline">
                     {company.company_name || "Unnamed organisation"}
                   </Link>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
