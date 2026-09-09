@@ -121,6 +121,13 @@ export function useVisitorCompanies(days: number) {
   });
 }
 
+/**
+ * Real page views. Crawlers are excluded at the query, not hidden in the table:
+ * they are the overwhelming majority of the rows — Bingbot and Ahrefs alone were
+ * 379 of the first 397 — and scrolling past them to find a person is not a
+ * useful page. The crawler count is still surfaced as a number on the page-views
+ * card, which is all that was ever needed to confirm tracking is alive.
+ */
 export function useWebsiteVisits(days: number, limit = 500) {
   const { user } = useAuth();
   return useQuery({
@@ -135,10 +142,29 @@ export function useWebsiteVisits(days: number, limit = 500) {
           "matched_company_id, resolver",
         )
         .gte("visited_at", sinceDays(days))
+        .neq("classification", "bot")
         .order("visited_at", { ascending: false })
         .limit(limit);
       if (error) throw error;
       return data as unknown as WebsiteVisit[];
+    },
+    enabled: !!user,
+  });
+}
+
+/** How many crawler hits were filtered out, for the page-views card. */
+export function useCrawlerHitCount(days: number) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["website_visits_bots", days, user?.id],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("website_visits")
+        .select("id", { count: "exact", head: true })
+        .gte("visited_at", sinceDays(days))
+        .eq("classification", "bot");
+      if (error) throw error;
+      return count ?? 0;
     },
     enabled: !!user,
   });

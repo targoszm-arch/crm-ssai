@@ -16,7 +16,7 @@ import { TrackingSetup } from "@/components/visitors/TrackingSetup";
 import { ImportLeadfeederCsv } from "@/components/visitors/ImportLeadfeederCsv";
 import {
   useAddVisitorToCrm, useCompanyVisits, useVisitorCompanies, useVisitorSites,
-  useWebsiteVisits, VisitorCompany,
+  useWebsiteVisits, useCrawlerHitCount, VisitorCompany,
 } from "@/components/visitors/useWebsiteVisitors";
 
 const RANGES = [
@@ -125,6 +125,7 @@ export default function Visitors() {
   const { data: sites, isLoading: sitesLoading } = useVisitorSites();
   const { data: companies, isLoading } = useVisitorCompanies(days);
   const { data: visits } = useWebsiteVisits(days);
+  const { data: crawlerHits = 0 } = useCrawlerHitCount(days);
   const addToCrm = useAddVisitorToCrm();
 
   const hasSite = (sites?.length ?? 0) > 0;
@@ -151,12 +152,11 @@ export default function Visitors() {
   // between roughly 5% and 20% is normal — most visitors are on consumer
   // broadband, which resolves to their ISP and nothing more.
   const stats = useMemo(() => {
-    const all = visits ?? [];
-    // Crawlers are excluded from the denominator. They are the majority of the
-    // traffic — 382 of the first 397 page views — and counting them made the
-    // identification rate read 1%, which measures how much of the internet is
-    // robots, not how well reverse-IP is working.
-    const human = all.filter((v) => v.classification !== "bot");
+    // `visits` is already crawler-free — they are excluded at the query, since
+    // they were the majority of the traffic and counting them made the
+    // identification rate read 1%, a measure of how much of the internet is
+    // robots rather than of how well reverse-IP is working.
+    const human = visits ?? [];
     const identified = human.filter((v) => v.classification === "company").length;
     const rate = human.length > 0 ? Math.round((identified / human.length) * 100) : 0;
 
@@ -164,7 +164,7 @@ export default function Visitors() {
     const newThisWeek = (companies ?? [])
       .filter((c) => new Date(c.first_seen).getTime() > weekAgo).length;
 
-    return { pageViews: all.length, humanViews: human.length, rate, newThisWeek };
+    return { humanViews: human.length, rate, newThisWeek };
   }, [visits, companies]);
 
   return (
@@ -211,7 +211,7 @@ export default function Visitors() {
         <MetricCard
           title="Page views"
           value={String(stats.humanViews)}
-          sub={`excluding ${stats.pageViews - stats.humanViews} crawler hits`}
+          sub={`${crawlerHits.toLocaleString()} crawler hits filtered out`}
           icon={<Eye className="h-4 w-4" />}
         />
         <MetricCard
@@ -356,14 +356,15 @@ export default function Visitors() {
             <CardHeader>
               <CardTitle>All page views</CardTitle>
               <CardDescription>
-                Including the traffic that could not be resolved to a company —
-                useful for sanity-checking that tracking is live.
+                Real visitors, including those reverse-IP could not put a name to.
+                Crawlers are excluded — {crawlerHits.toLocaleString()} of them in
+                this window.
               </CardDescription>
             </CardHeader>
             <CardContent>
               {(visits?.length ?? 0) === 0 ? (
                 <p className="text-muted-foreground py-8 text-center">
-                  No page views recorded yet.
+                  No non-crawler page views in this window.
                 </p>
               ) : (
                 <Table>

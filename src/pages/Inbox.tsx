@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Settings, Mail, RefreshCw, Loader2, FileSignature, LayoutGrid, List, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Plus, Settings, Mail, RefreshCw, Loader2, FileSignature, LayoutGrid, List, PanelLeftClose, PanelLeftOpen, Linkedin } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
@@ -23,6 +24,7 @@ import { InboxSidebar, type EmailFolder } from "@/components/inbox/InboxSidebar"
 import { TemplatesPanel } from "@/components/inbox/TemplatesPanel";
 import { EmailTemplate } from "@/hooks/useEmailTemplates";
 import { BulkActionBar } from "@/components/inbox/BulkActionBar";
+import { InboxFilters } from "@/components/inbox/InboxFilters";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -179,13 +181,119 @@ export default function Inbox() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      {/* Header - responsive stacking */}
+      {/* Header - responsive stacking.
+          The three-pane redesign kept the title block and dropped every control
+          that used to sit beside it. The handlers all survived, so the LinkedIn
+          tab, Meet Alfred sync, signature settings, mailbox disconnect and the
+          split/full toggle were still in the file — just unreachable, because
+          nothing called setActiveTab, setViewMode, setSignatureOpen or
+          handleDisconnect any more. They are wired back up here, in the new
+          header's own idiom rather than the old one's. */}
       <div className="flex flex-col gap-3 border-b border-border/70 px-6 py-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Emails</h1>
-            <p className="hidden text-xs text-muted-foreground md:block">Mailbox-style email workspace with folders, drafts, syncing, and full thread reading.</p>
+            <p className="hidden text-xs text-muted-foreground md:block">
+              Mailbox and LinkedIn in one workspace — folders, drafts, syncing and full thread reading.
+            </p>
           </div>
+          {isSyncing && (
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>Syncing…</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => {
+              setActiveTab(v as InboxTab);
+              setSelectedItem(null);
+              setSelectedEmails([]);
+            }}
+          >
+            <TabsList>
+              <TabsTrigger value="email" className="flex items-center gap-1.5">
+                <Mail className="h-4 w-4" />
+                <span className="hidden sm:inline">Email</span>
+              </TabsTrigger>
+              <TabsTrigger value="linkedin" className="flex items-center gap-1.5">
+                <Linkedin className="h-4 w-4" />
+                <span className="hidden sm:inline">LinkedIn</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {activeTab === "email" && hasConnectedAccount && !isMobile && (
+            <div className="hidden md:flex items-center border rounded-md">
+              <Button
+                variant={viewMode === "split" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8 rounded-r-none"
+                onClick={() => setViewMode("split")}
+                aria-label="Split view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "full" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8 rounded-l-none"
+                onClick={() => setViewMode("full")}
+                aria-label="Full view"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+
+          {activeTab === "linkedin" && (
+            <Button
+              variant="outline"
+              onClick={handleSyncMeetAlfred}
+              disabled={isSyncingMeetAlfred}
+              size={isMobile ? "sm" : "default"}
+            >
+              {isSyncingMeetAlfred ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline ml-1.5">Sync Meet Alfred</span>
+            </Button>
+          )}
+
+          {activeTab === "email" && hasConnectedAccount && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" aria-label="Mailbox settings">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setSignatureOpen(true)}>
+                  <FileSignature className="h-4 w-4 mr-2" />
+                  Email Signature
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {accounts?.map((account) => (
+                  <DropdownMenuItem
+                    key={account.id}
+                    onClick={() => handleDisconnect(account.id)}
+                    className="text-destructive"
+                  >
+                    Disconnect {account.email_address}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {currentAccount && activeTab === "email" && !isMobile && (
+            <span className="text-sm text-muted-foreground">{currentAccount.email_address}</span>
+          )}
         </div>
       </div>
 
@@ -204,6 +312,15 @@ export default function Inbox() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+      )}
+
+      {/* Same story as the header controls: the redesign removed this row but
+          kept the `filters` state, so EmailList was still being handed a filter
+          object that nothing could ever change. */}
+      {activeTab === "email" && hasConnectedAccount && (
+        <div className="border-b px-6 py-2">
+          <InboxFilters filters={filters} onChange={setFilters} />
         </div>
       )}
 

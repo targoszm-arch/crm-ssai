@@ -8,7 +8,7 @@ import { useColumnPreferences, ColumnDefinition } from "@/hooks/useColumnPrefere
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ExternalLink, Eye } from "lucide-react";
+import { Building2, ExternalLink, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AddContactModal } from "./AddContactModal";
@@ -565,71 +565,112 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
       </div>
 
       {companies && companies.length > 0 ? (
-        <div className="flex min-w-0 flex-col gap-3 overflow-hidden" role="list" aria-label="Organisations">
-          <div className="hidden items-center gap-4 rounded-lg border bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground md:flex">
-            <div className="w-8" />
-            <div className="w-56 min-w-0 xl:w-64">Organisation</div>
-            <div className="hidden w-36 lg:block">Industry</div>
-            <div className="w-24 text-center">Contacts</div>
-            <div className="hidden w-32 xl:block">Connection</div>
-            <div className="hidden w-32 xl:block">Last activity</div>
-            <div className="w-16" />
+        // Same shape as the people list: one card around the whole thing, a
+        // header that shares the row grid template so the columns actually line
+        // up, and divide-y between rows. The previous version made every row its
+        // own bordered card in a gap-3 stack, and sized the header with fixed
+        // widths (w-56, w-36, w-24) that the rows did not reuse — so nothing
+        // aligned and the rows read as cramped next to Customers.
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm" role="list" aria-label="Organisations">
+          <div className="hidden items-center gap-4 border-b bg-muted/30 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[auto_minmax(240px,1.6fr)_minmax(180px,1fr)_minmax(110px,0.5fr)_minmax(150px,0.8fr)_minmax(150px,0.8fr)_auto]">
+            <span className="sr-only">Select</span>
+            <span>Organisation</span>
+            <span>Industry</span>
+            <span>Contacts</span>
+            <span>Connection</span>
+            <span>Last activity</span>
+            <span className="sr-only">Actions</span>
           </div>
-          {companies.map((company) => (
-            <div
-              key={company.id}
-              role="listitem"
-              className="group flex min-w-0 flex-col gap-3 overflow-hidden rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/20 md:flex-row md:items-center md:gap-3"
-            >
-              <Checkbox
-                checked={selectedIds.has(company.id)}
-                onCheckedChange={(checked) => handleSelectOne(company.id, checked === true)}
-                aria-label={`Select ${company.company_name}`}
-                className="shrink-0"
-              />
-              <div className="flex w-56 min-w-0 shrink-0 items-start gap-3 xl:w-64">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">
-                  {(company.company_name || "?").slice(0, 2).toUpperCase()}
+          <div className="divide-y">
+            {companies.map((company) => (
+              <div
+                key={company.id}
+                role="listitem"
+                className="group grid gap-4 px-4 py-4 transition-colors hover:bg-muted/20 lg:grid-cols-[auto_minmax(240px,1.6fr)_minmax(180px,1fr)_minmax(110px,0.5fr)_minmax(150px,0.8fr)_minmax(150px,0.8fr)_auto] lg:items-center"
+              >
+                <div onClick={(event) => event.stopPropagation()}>
+                  <Checkbox
+                    checked={selectedIds.has(company.id)}
+                    onCheckedChange={(checked) => handleSelectOne(company.id, checked === true)}
+                    aria-label={`Select ${company.company_name}`}
+                  />
                 </div>
-                <div className="min-w-0">
-                  <Link to={`/companies/${company.id}?from=organisations`} className="block truncate font-medium hover:text-primary hover:underline">
-                    {company.company_name || "Unnamed organisation"}
-                  </Link>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    {company.country && <span>{company.country}</span>}
-                    {company.domains && <span className="truncate">{company.domains}</span>}
-                    {isVisible("website") && company.website && (
-                      <a href={company.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-                        Website <ExternalLink data-icon="inline-end" />
-                      </a>
+
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">
+                    {(company.company_name || "?").slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <Link
+                      to={`/companies/${company.id}?from=organisations`}
+                      className="block truncate font-medium hover:text-primary hover:underline"
+                    >
+                      {company.company_name || "Unnamed organisation"}
+                    </Link>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      {company.country && <span>{company.country}</span>}
+                      {company.domains && <span className="truncate">{company.domains}</span>}
+                      {isVisible("website") && company.website && (
+                        <a
+                          href={company.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          Website <ExternalLink data-icon="inline-end" />
+                        </a>
+                      )}
+                    </div>
+                    {isVisible("labels") && company.labels && (
+                      <div className="mt-2 flex flex-wrap gap-1">{renderLabels(company.labels)}</div>
                     )}
                   </div>
-                  {isVisible("labels") && company.labels && <div className="mt-2 flex flex-wrap gap-1">{renderLabels(company.labels)}</div>}
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 pl-14 text-sm md:contents md:pl-0">
-                <div className="hidden min-w-0 md:block md:w-28 lg:block xl:w-32">
+
+                <div className="flex min-w-0 flex-col gap-1 text-sm">
                   <span className="truncate text-muted-foreground">{company.industry || "No industry"}</span>
-                  {isVisible("employee_range") && company.employee_range && <span className="mt-1 block text-xs text-muted-foreground">{company.employee_range} employees</span>}
+                  {isVisible("employee_range") && company.employee_range && (
+                    <span className="text-xs text-muted-foreground">{company.employee_range} employees</span>
+                  )}
                 </div>
-                <div className="flex items-center gap-1 text-muted-foreground md:w-24 md:justify-center">
-                  <span className="font-medium text-foreground">{company.people_count ?? 0}</span><span className="md:hidden">contacts</span>
+
+                <div className="flex items-center gap-1.5 text-sm">
+                  <span className="font-medium">{company.people_count ?? 0}</span>
+                  <span className="text-muted-foreground lg:hidden">contacts</span>
                 </div>
-                <div className="hidden md:w-32 xl:block">{getConnectionStrengthBadge(company.connection_strength) || <span className="text-sm text-muted-foreground">No connection</span>}</div>
-                <div className="hidden text-sm text-muted-foreground md:w-32 xl:block">{company.last_interaction ? format(new Date(company.last_interaction), "MMM d, yyyy") : "No activity"}</div>
+
+                <div className="min-w-0 text-sm">
+                  {getConnectionStrengthBadge(company.connection_strength) || (
+                    <span className="text-muted-foreground">No connection</span>
+                  )}
+                </div>
+
+                <div className="min-w-0 text-sm text-muted-foreground">
+                  {company.last_interaction
+                    ? format(new Date(company.last_interaction), "MMM d, yyyy")
+                    : "No activity"}
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-self-start lg:justify-self-end"
+                  onClick={() => handleViewCompany(company)}
+                >
+                  <Eye data-icon="inline-start" /> View
+                </Button>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => handleViewCompany(company)} className="self-end md:self-auto">
-                <Eye data-icon="inline-start" /> View
-              </Button>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed px-6 py-12 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">—</div>
-          <h3 className="mt-4 font-medium">No organisations found</h3>
+        <div className="rounded-xl border border-dashed px-6 py-14 text-center">
+          <Building2 className="mx-auto size-10 text-muted-foreground/60" />
+          <h3 className="mt-4 font-semibold">No organisations found</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {hasActiveFilters ? "Try adjusting your filters or search terms." : "Organisations will appear here once they are added."}
+            {hasActiveFilters
+              ? "Try adjusting your filters or search terms."
+              : "Organisations will appear here once they are added."}
           </p>
         </div>
       )}
