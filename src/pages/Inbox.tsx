@@ -186,12 +186,6 @@ export default function Inbox() {
             <h1 className="text-lg font-semibold tracking-tight">Emails</h1>
             <p className="hidden text-xs text-muted-foreground md:block">Mailbox-style email workspace with folders, drafts, syncing, and full thread reading.</p>
           </div>
-          {isSyncing && (
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span>Syncing...</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -240,22 +234,6 @@ export default function Inbox() {
                 sidebarCollapsed ? "w-12" : "w-[220px]"
               )}
             >
-              <div className="flex justify-end p-2 pb-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setSidebarCollapsed((v) => !v)}
-                  aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                  title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                >
-                  {sidebarCollapsed ? (
-                    <PanelLeftOpen className="h-4 w-4" />
-                  ) : (
-                    <PanelLeftClose className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
               {!sidebarCollapsed && (
                 <div className="px-3 pt-3">
                   <Button className="w-full" onClick={() => setComposeOpen(true)}>
