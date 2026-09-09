@@ -182,10 +182,9 @@ export default function Inbox() {
       {/* Header - responsive stacking */}
       <div className="flex flex-col gap-3 border-b border-border/70 px-6 py-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 flex-wrap">
-          <Mail className="h-5 w-5" />
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Emails</h1>
-            <p className="hidden text-sm text-muted-foreground md:block">Mailbox-style email workspace with folders, drafts, syncing, and full thread reading.</p>
+            <h1 className="text-lg font-semibold tracking-tight">Emails</h1>
+            <p className="hidden text-xs text-muted-foreground md:block">Mailbox-style email workspace with folders, drafts, syncing, and full thread reading.</p>
           </div>
           {isSyncing && (
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -193,39 +192,6 @@ export default function Inbox() {
               <span>Syncing...</span>
             </div>
           )}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {activeTab === "email" && hasConnectedAccount && !isMobile && (
-            <div className="hidden md:flex items-center border rounded-md">
-              <Button variant={viewMode === "split" ? "secondary" : "ghost"} size="icon" className="h-8 w-8 rounded-r-none" onClick={() => setViewMode("split")}><LayoutGrid className="h-4 w-4" /></Button>
-              <Button variant={viewMode === "full" ? "secondary" : "ghost"} size="icon" className="h-8 w-8 rounded-l-none" onClick={() => setViewMode("full")}><List className="h-4 w-4" /></Button>
-            </div>
-          )}
-          {activeTab === "email" && hasConnectedAccount && (
-            <Button onClick={() => setComposeOpen(true)} size={isMobile ? "sm" : "default"}>
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline ml-1">Compose</span>
-            </Button>
-          )}
-          {activeTab === "linkedin" && (
-            <Button variant="outline" onClick={handleSyncMeetAlfred} disabled={isSyncingMeetAlfred} size={isMobile ? "sm" : "default"}>
-              {isSyncingMeetAlfred ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              <span className="hidden sm:inline ml-1.5">Sync Meet Alfred</span>
-            </Button>
-          )}
-          {activeTab === "email" && hasConnectedAccount && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button variant="outline" size="icon"><Settings className="h-4 w-4" /></Button></DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setSignatureOpen(true)}><FileSignature className="h-4 w-4 mr-2" />Email Signature</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {accounts?.map((account) => (
-                  <DropdownMenuItem key={account.id} onClick={() => handleDisconnect(account.id)} className="text-destructive">Disconnect {account.email_address}</DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {currentAccount && activeTab === "email" && !isMobile && <span className="text-sm text-muted-foreground">{currentAccount.email_address}</span>}
         </div>
       </div>
 
