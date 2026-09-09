@@ -565,10 +565,10 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
       </div>
 
       {companies && companies.length > 0 ? (
-        <div className="flex flex-col gap-3" role="list" aria-label="Organisations">
+        <div className="flex min-w-0 flex-col gap-3 overflow-hidden" role="list" aria-label="Organisations">
           <div className="hidden items-center gap-4 rounded-lg border bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground md:flex">
             <div className="w-8" />
-            <div className="min-w-0 flex-1">Organisation</div>
+            <div className="w-56 min-w-0 xl:w-64">Organisation</div>
             <div className="hidden w-36 lg:block">Industry</div>
             <div className="w-24 text-center">Contacts</div>
             <div className="hidden w-32 xl:block">Connection</div>
@@ -579,7 +579,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
             <div
               key={company.id}
               role="listitem"
-              className="group flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/20 md:flex-row md:items-center md:gap-4"
+              className="group flex min-w-0 flex-col gap-3 overflow-hidden rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/20 md:flex-row md:items-center md:gap-3"
             >
               <Checkbox
                 checked={selectedIds.has(company.id)}
@@ -587,7 +587,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
                 aria-label={`Select ${company.company_name}`}
                 className="shrink-0"
               />
-              <div className="flex min-w-0 flex-1 items-start gap-3">
+              <div className="flex w-56 min-w-0 shrink-0 items-start gap-3 xl:w-64">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">
                   {(company.company_name || "?").slice(0, 2).toUpperCase()}
                 </div>
@@ -608,7 +608,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pl-14 text-sm md:contents md:pl-0">
-                <div className="hidden min-w-0 md:block md:w-36 lg:block">
+                <div className="hidden min-w-0 md:block md:w-28 lg:block xl:w-32">
                   <span className="truncate text-muted-foreground">{company.industry || "No industry"}</span>
                   {isVisible("employee_range") && company.employee_range && <span className="mt-1 block text-xs text-muted-foreground">{company.employee_range} employees</span>}
                 </div>

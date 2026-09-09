@@ -180,9 +180,9 @@ export default function Inbox() {
   const showConnectPrompt = activeTab === "email" && !hasConnectedAccount;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-h-0 flex-col bg-background">
       {/* Header - responsive stacking */}
-      <div className="flex flex-col gap-3 p-4 border-b md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 border-b px-6 py-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 flex-wrap">
           <Mail className="h-5 w-5" />
           <div>
@@ -263,7 +263,7 @@ export default function Inbox() {
 
       {/* Filters Bar */}
       {activeTab === "email" && hasConnectedAccount && (
-        <div className="px-4 py-2 border-b bg-muted/30">
+        <div className="border-b bg-muted/20 px-6 py-2">
           <InboxFilters filters={filters} onChange={setFilters} />
         </div>
       )}
@@ -292,7 +292,7 @@ export default function Inbox() {
             <div
               className={cn(
                 "flex flex-col shrink-0 border-r bg-muted/30 overflow-y-auto transition-[width] duration-200",
-                sidebarCollapsed ? "w-12" : "w-56"
+                sidebarCollapsed ? "w-12" : "w-52"
               )}
             >
               <div className="flex justify-end p-2 pb-0">
@@ -311,6 +311,13 @@ export default function Inbox() {
                   )}
                 </Button>
               </div>
+              {!sidebarCollapsed && (
+                <div className="px-3 pt-3">
+                  <Button className="w-full" onClick={() => setComposeOpen(true)}>
+                    <Plus data-icon="inline-start" /> New message
+                  </Button>
+                </div>
+              )}
               <InboxSidebar
                 currentFolder={currentFolder}
                 onFolderChange={(f) => { setCurrentFolder(f); setSelectedItem(null); }}
@@ -330,7 +337,7 @@ export default function Inbox() {
           {/* Email/LinkedIn list - constrained width */}
           <div className={cn(
             "border-r flex-shrink-0 overflow-hidden flex flex-col min-w-0",
-            effectiveViewMode === "split" ? "w-96" : "flex-1 max-w-2xl"
+            effectiveViewMode === "split" ? "w-[18rem] xl:w-[20rem]" : "flex-1 max-w-2xl"
           )}>
             {activeTab === "email" ? (
               <EmailList 
