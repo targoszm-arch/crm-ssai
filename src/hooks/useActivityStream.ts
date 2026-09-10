@@ -35,6 +35,12 @@ export interface StreamItem {
   personName: string | null;
   /** Meeting notes are not editable here; notes written in the app are. */
   editable: boolean;
+  /**
+   * The email this row describes, when it describes one. The backfill stamps
+   * `metadata.email_id`; without it an email activity is a paragraph of text
+   * about a message you cannot open.
+   */
+  emailId: string | null;
 }
 
 export interface StreamScope {
@@ -51,6 +57,12 @@ function kindOf(activityType: string | null): ActivityKind {
   if (t.includes("linkedin")) return "linkedin";
   if (t.includes("invoice")) return "invoice";
   return "other";
+}
+
+function emailIdOf(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const id = (metadata as Record<string, unknown>).email_id;
+  return typeof id === "string" ? id : null;
 }
 
 function personLabel(row: { first_name?: string | null; last_name?: string | null } | null) {
@@ -101,6 +113,7 @@ export function useActivityStream(scope: StreamScope, includeAutomation = false)
         source: (row.source as string) ?? null,
         personName: personLabel(row.contacts as never),
         editable: (row.source ?? null) === "manual",
+        emailId: emailIdOf(row.metadata),
       }));
 
       // meeting_notes has no company_id on older rows, so a company query can
@@ -117,6 +130,7 @@ export function useActivityStream(scope: StreamScope, includeAutomation = false)
             source: "meeting_notes",
             personName: personLabel(row.contacts as never),
             editable: false,
+            emailId: null,
           });
         }
       }

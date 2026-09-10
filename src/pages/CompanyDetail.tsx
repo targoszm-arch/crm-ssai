@@ -15,6 +15,7 @@ import { AddCompanyModal } from "@/components/customers/AddCompanyModal";
 import { ActivityStreamPanel } from "@/components/customers/ActivityStreamPanel";
 import { FilesPanel } from "@/components/customers/FilesPanel";
 import { LinkedDealsCard } from "@/components/deals/LinkedDealsCard";
+import { HistoryPanel } from "@/components/customers/HistoryPanel";
 
 export default function CompanyDetail() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +24,8 @@ export default function CompanyDetail() {
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyEmailId, setHistoryEmailId] = useState<string | null>(null);
   const { data: company, isLoading, error } = useQuery({ queryKey: ["company-detail", id], queryFn: async () => { const { data, error } = await supabase.from("companies").select("*").eq("id", id).single(); if (error) throw error; return data as Company; }, enabled: !!id });
   const { data: contacts = [], isLoading: contactsLoading } = useContactsByCompany(id || null);
   if (isLoading) return <div className="p-6"><Skeleton className="h-12 w-full" /><Skeleton className="mt-6 h-96 w-full" /></div>;
@@ -33,9 +36,10 @@ export default function CompanyDetail() {
     <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4"><TabsList className="bg-transparent"><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="employees">Employees</TabsTrigger><TabsTrigger value="deals">Deals</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger><TabsTrigger value="files">Files</TabsTrigger></TabsList></Tabs>
     {activeTab === "overview" && <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,.9fr)]"><div className="space-y-4"><Card><CardHeader className="border-b"><CardTitle className="text-base">Company summary</CardTitle></CardHeader><CardContent className="space-y-5 p-5"><p className="text-sm text-muted-foreground">{company.description || "No company summary added yet."}</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Industry" value={company.industry} /><Field label="Stage" value={company.connection_strength || "Engaged"} /><Field label="Location" value={company.country} /><Field label="Employees" value={company.employee_range} /></div><div className="grid gap-4 sm:grid-cols-2"><Field label="Website" value={company.domains} /><Field label="LinkedIn" value={company.linkedin_url ? "Attached" : "Not set"} /></div></CardContent></Card><Card><CardHeader className="border-b"><CardTitle className="text-base">CRM details</CardTitle></CardHeader><CardContent className="grid gap-3 p-5 sm:grid-cols-3"><Metric label="Contacts" value={String(contacts.length)} /><Metric label="Employees added" value={String(contacts.length)} /></CardContent></Card></div><Card className="h-fit"><CardHeader><CardTitle className="text-base">Lists</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">No lists assigned.</CardContent></Card></div>}
     {activeTab === "employees" && <Employees contacts={contacts} loading={contactsLoading} companyId={company.id} />}
-    {activeTab === "activity" && <div className="mt-4 max-w-4xl"><ActivityStreamPanel scope={{ companyId: company.id }} showPerson /></div>}
+    {activeTab === "activity" && <div className="mt-4 max-w-4xl"><ActivityStreamPanel scope={{ companyId: company.id }} showPerson onOpenEmail={(emailId) => { setHistoryEmailId(emailId); setHistoryOpen(true); }} /></div>}
     {activeTab === "files" && <div className="mt-4 max-w-4xl"><FilesPanel scope={{ companyId: company.id }} showPerson /></div>}
     {activeTab === "deals" && <div className="mt-4"><LinkedDealsCard companyId={company.id} contactName={company.company_name} /></div>}
+    <HistoryPanel open={historyOpen} onOpenChange={(next) => { setHistoryOpen(next); if (!next) setHistoryEmailId(null); }} companyId={company.id} name={company.company_name} initialEmailId={historyEmailId} />
     <AddContactModal open={addContactOpen} onOpenChange={setAddContactOpen} preselectedCompanyId={company.id} /><AddCompanyModal open={editOpen} onOpenChange={setEditOpen} company={company} />
   </div></div>;
 }
