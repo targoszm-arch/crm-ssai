@@ -16,9 +16,9 @@ interface AppShellProps {
  * shifted the content sideways and changed the gutter. The width and the
  * padding live here now; a page renders its content and nothing else.
  *
- * The inbox and the deals kanban are capped like everything else. They were
- * exempt for one release on the theory that a sideways-scanned layout wants the
- * whole screen; consistency won, so don't reintroduce a bleed prop.
+ * Every page fills the screen with a 10px side margin. There is no max width:
+ * a centred column was tried for one release and left a screen's worth of
+ * empty margin either side of the content. Don't reintroduce one.
  *
  * The chain from the viewport down is a column with a real height —
  * `h-svh` on the inset, `min-h-0 flex-1` on main and on the container — so a
@@ -34,7 +34,7 @@ export default function AppShell({ children }: AppShellProps) {
         <SidebarInset className="h-svh min-h-svh overflow-hidden">
           <Header />
           <main className="flex min-h-0 flex-1 flex-col overflow-auto">
-            <div className="mx-auto flex w-full min-h-0 max-w-[1200px] flex-1 flex-col px-4 py-6 md:px-6">
+            <div className="flex min-h-0 w-full flex-1 flex-col px-[10px] py-4">
               {children}
             </div>
           </main>

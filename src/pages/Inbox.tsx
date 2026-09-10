@@ -181,7 +181,7 @@ export default function Inbox() {
   const showConnectPrompt = activeTab === "email" && !hasConnectedAccount;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-background">
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       <PageActions>
         {activeTab === "linkedin" && (
           <Button
@@ -214,7 +214,7 @@ export default function Inbox() {
           nothing called setActiveTab, setViewMode, setSignatureOpen or
           handleDisconnect any more. They are wired back up here, in the new
           header's own idiom rather than the old one's. */}
-      <div className="flex flex-col gap-3 border-b border-border/70 px-4 py-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 border-b border-border/70 px-6 py-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3 flex-wrap">
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Emails</h1>

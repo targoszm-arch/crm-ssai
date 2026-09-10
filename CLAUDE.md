@@ -102,9 +102,10 @@ Re-check these with a query before relying on them; they move.
 Established September 2026. They exist because the app had drifted into five different page
 layouts and buttons in five different places.
 
-- **`AppShell` owns page width and padding.** Every page renders inside one centred column,
-  `max-w-[1200px]` with left and right padding — no exceptions, and there is deliberately no
-  bleed prop. The inbox and the deals kanban were briefly exempt; they are not any more. A page
+- **`AppShell` owns page width and padding.** Every page fills the screen with a 10px side
+  margin — no max width, no centred column, no exceptions. A centred `max-w-[1200px]` column
+  was tried and reverted the same day: on a wide screen it left a screen's worth of empty
+  margin either side of the content, which is the opposite of filling the screen. A page
   component renders its content and no outer wrapper of its own.
 - **Routes are a table**, `PROTECTED_ROUTES` in `App.tsx`, so a page cannot quietly opt out of
   the shell by being wrapped differently.
