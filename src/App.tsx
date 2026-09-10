@@ -34,17 +34,12 @@ const queryClient = new QueryClient();
  * Every protected page gets the same shell, so a page can't quietly opt out of
  * the app's width, padding or header by forgetting to wrap itself.
  */
-const PROTECTED_ROUTES: Array<{
-  path: string;
-  element: ReactNode;
-  /** Full-viewport pages — see AppShell. */
-  fullBleed?: boolean;
-}> = [
+const PROTECTED_ROUTES: Array<{ path: string; element: ReactNode }> = [
   { path: "/", element: <Dashboard /> },
   { path: "/customers", element: <Customers /> },
   { path: "/people/:id", element: <PersonDetail /> },
   { path: "/companies/:id", element: <CompanyDetail /> },
-  { path: "/deals", element: <Deals />, fullBleed: true },
+  { path: "/deals", element: <Deals /> },
   { path: "/orders", element: <Orders /> },
   { path: "/abandonment", element: <CartAbandonment /> },
   { path: "/campaigns", element: <Campaigns /> },
@@ -52,7 +47,7 @@ const PROTECTED_ROUTES: Array<{
   { path: "/finances", element: <Finances /> },
   { path: "/payments", element: <Payments /> },
   { path: "/ai-recommendations", element: <AIRecommendations /> },
-  { path: "/inbox", element: <Inbox />, fullBleed: true },
+  { path: "/inbox", element: <Inbox /> },
   { path: "/calendar", element: <Calendar /> },
   { path: "/visitors", element: <Visitors /> },
   { path: "/analytics", element: <Analytics /> },
@@ -69,13 +64,13 @@ const App = () => (
           <Route path="/oauth/callback" element={<OAuthCallback />} />
 
           {/* Protected routes */}
-          {PROTECTED_ROUTES.map(({ path, element, fullBleed }) => (
+          {PROTECTED_ROUTES.map(({ path, element }) => (
             <Route
               key={path}
               path={path}
               element={
                 <AuthGuard>
-                  <AppShell fullBleed={fullBleed}>{element}</AppShell>
+                  <AppShell>{element}</AppShell>
                 </AuthGuard>
               }
             />

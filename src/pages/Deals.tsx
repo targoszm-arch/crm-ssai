@@ -86,9 +86,9 @@ export default function Deals() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-background">
       {/* Header */}
-      <div className="border-b bg-background px-4 md:px-6 py-4">
+      <div className="border-b bg-background px-4 py-4">
         <PageActions>
           <Button size="sm" onClick={() => handleAddDeal()} className="gap-2">
             <Plus className="h-4 w-4" />
