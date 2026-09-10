@@ -80,7 +80,7 @@ export default function Calendar() {
 
   if (accountsLoading) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -88,14 +88,14 @@ export default function Calendar() {
 
   if (!connectedAccount) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         <ConnectCalendar />
       </div>
     );
   }
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
       <PageActions>
         <Button
