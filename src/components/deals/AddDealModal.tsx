@@ -173,8 +173,11 @@ export function AddDealModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl gap-0 overflow-hidden rounded-2xl border-border/80 p-0 shadow-2xl">
-        <DialogHeader className="border-b bg-background px-6 py-5 text-left">
+      {/* Capped and scrollable. The form is taller than a laptop viewport, and
+          with overflow-hidden and no height cap the bottom of the dialog —
+          Create deal included — was simply off the screen with no way to reach it. */}
+      <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden rounded-2xl border-border/80 p-0 shadow-2xl">
+        <DialogHeader className="shrink-0 border-b bg-background px-6 py-5 text-left">
           <DialogTitle className="text-xl">
             {initialData?.id ? "Edit Deal" : "Create new deal"}
           </DialogTitle>
@@ -182,8 +185,9 @@ export function AddDealModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-2 gap-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               {/* Left Column */}
               <div className="space-y-4">
                 <FormField
@@ -555,8 +559,9 @@ export function AddDealModal({
                 />
               </div>
             </div>
+            </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-background px-6 py-4">
               <Button
                 type="button"
                 variant="outline"
