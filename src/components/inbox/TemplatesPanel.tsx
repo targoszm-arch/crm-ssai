@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { FileText, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEmailTemplates, EmailTemplate } from "@/hooks/useEmailTemplates";
 import { TemplateListModal } from "@/components/templates/TemplateListModal";
@@ -46,28 +46,32 @@ export function TemplatesPanel({ onUseTemplate, limit = 3 }: TemplatesPanelProps
         <p className="text-xs text-muted-foreground">No templates saved yet.</p>
       ) : (
         <div className="space-y-1">
+          {/* Stacked rather than name-beside-button: a template name is a
+              sentence, and sharing one line with an icon and a button left it
+              with about a third of the panel and nothing but ellipsis. */}
           {featuredTemplates.map((template) => (
             <div
               key={template.id}
-              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-accent group"
+              className="rounded-md px-2 py-2 hover:bg-accent"
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm truncate">{template.name}</p>
-                  {template.subject && (
-                    <p className="text-xs text-muted-foreground truncate">{template.subject}</p>
-                  )}
-                </div>
+              <p className="text-sm font-medium leading-snug">{template.name}</p>
+              {template.subject && (
+                <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">
+                  {template.subject}
+                </p>
+              )}
+              <div className="mt-1.5 flex justify-end">
+                {/* Always visible. Hidden until hover, this was the only action
+                    on the panel and looked like there wasn't one. */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => onUseTemplate(template)}
+                >
+                  Use
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 px-2 text-xs shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={() => onUseTemplate(template)}
-              >
-                Use
-              </Button>
             </div>
           ))}
         </div>

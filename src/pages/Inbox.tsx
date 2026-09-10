@@ -348,7 +348,7 @@ export default function Inbox() {
             <div
               className={cn(
                 "m-4 mr-0 flex shrink-0 flex-col overflow-y-auto rounded-xl border bg-card transition-[width] duration-200",
-                sidebarCollapsed ? "w-12" : "w-[220px]"
+                sidebarCollapsed ? "w-12" : "w-[350px]"
               )}
             >
               {!sidebarCollapsed && (
@@ -377,7 +377,7 @@ export default function Inbox() {
           {/* Email/LinkedIn list - constrained width */}
           <div className={cn(
             "border-r flex-shrink-0 overflow-hidden flex flex-col min-w-0",
-            effectiveViewMode === "split" ? "m-4 w-[292px] rounded-xl border bg-card" : "flex-1 max-w-2xl"
+            effectiveViewMode === "split" ? "m-4 w-[400px] rounded-xl border bg-card" : "flex-1 max-w-2xl"
           )}>
             {activeTab === "email" ? (
               <EmailList 
