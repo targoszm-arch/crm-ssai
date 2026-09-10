@@ -10,6 +10,7 @@ import { CalendarView } from "@/components/calendar/CalendarView";
 import { CreateEventModal } from "@/components/calendar/CreateEventModal";
 import { EventCard } from "@/components/calendar/EventCard";
 import { toast } from "@/hooks/use-toast";
+import { PageActions } from "@/components/layout/PageActions";
 
 export default function Calendar() {
   const { data: accounts, isLoading: accountsLoading } = useEmailAccounts();
@@ -94,34 +95,33 @@ export default function Calendar() {
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col p-6">
+    <div className="flex h-[calc(100vh-7rem)] flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Calendar</h1>
-          <p className="text-muted-foreground text-sm">
-            Connected: {connectedAccount.email_address}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={syncCalendar.isPending}
-          >
-            {syncCalendar.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Sync
-          </Button>
-          <Button size="sm" onClick={() => setCreateModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Event
-          </Button>
-        </div>
+      <PageActions>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSync}
+          disabled={syncCalendar.isPending}
+        >
+          {syncCalendar.isPending ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-2" />
+          )}
+          Sync
+        </Button>
+        <Button size="sm" onClick={() => setCreateModalOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          New event
+        </Button>
+      </PageActions>
+
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Calendar</h1>
+        <p className="text-muted-foreground text-sm">
+          Connected: {connectedAccount.email_address}
+        </p>
       </div>
 
       {/* Calendar */}

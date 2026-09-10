@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatDistanceToNow, differenceInDays } from "date-fns";
-import { Mail, User, RefreshCw, Search, Link2, Link2Off, MailOpen, MoreVertical, Eye, MousePointerClick } from "lucide-react";
+import { Mail, RefreshCw, Search, Link2, Link2Off, MailOpen, MoreVertical, Eye, MousePointerClick } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -255,7 +255,11 @@ export function EmailList({
                 )}
                 onClick={() => onSelectEmail(email)}
               >
-                <div className="flex items-start gap-3">
+                {/* The leading column is deliberately thin. A checkbox, a dot and
+                    a 32px avatar took most of a narrow list's width, leaving the
+                    sender, subject and snippet to fight over what was left — and
+                    the avatar said nothing the linked-contact badge below doesn't. */}
+                <div className="flex items-start gap-2.5">
                   {/* Checkbox */}
                   {showCheckboxes && (
                     <div className="pt-1" onClick={(e) => e.stopPropagation()}>
@@ -275,15 +279,11 @@ export function EmailList({
                     )}
                   />
                   
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    {email.contacts ? (
-                      <User className="h-4 w-4 text-primary" />
-                    ) : (
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 overflow-hidden pr-8">
-                    <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    {/* Only this line is padded: the hover menu sits at the top
+                        right, so reserving its width down the whole column cost
+                        the subject and snippet 2rem for nothing. */}
+                    <div className="flex items-center justify-between gap-2 pr-7">
                       <span className={cn("text-sm truncate", !email.is_read && "font-semibold")}>
                         {email.direction === "inbound"
                           ? email.from_name || email.from_email

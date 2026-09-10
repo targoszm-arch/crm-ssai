@@ -22,6 +22,7 @@ import { EnrollContactModal } from "@/components/sequences/EnrollContactModal";
 import { SequenceEnrollmentsSheet } from "@/components/sequences/SequenceEnrollmentsSheet";
 import { TemplateListModal } from "@/components/templates/TemplateListModal";
 import { ClickRoutesPanel } from "@/components/sequences/ClickRoutesPanel";
+import { PageActions } from "@/components/layout/PageActions";
 
 const triggerTypeLabels: Record<string, string> = {
   new_customer: "New Customer",
@@ -108,36 +109,36 @@ export default function Sequences() {
   };
 
   return (
-    <div className="container mx-auto py-6 space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Email Sequences</h1>
-          <p className="text-muted-foreground">
-            Automate your email campaigns with pre-built sequences.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            onClick={() => processSequences.mutate()}
-            disabled={processSequences.isPending}
-          >
-            {processSequences.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Zap className="mr-2 h-4 w-4" />
-            )}
-            Process Now
-          </Button>
-          <Button variant="outline" onClick={() => setTemplatesOpen(true)}>
-            <FileText className="mr-2 h-4 w-4" />
-            Templates
-          </Button>
-          <Button onClick={handleCreateNew}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Sequence
-          </Button>
-        </div>
+    <div className="space-y-6 animate-fade-in">
+      <PageActions>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => processSequences.mutate()}
+          disabled={processSequences.isPending}
+        >
+          {processSequences.isPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Zap className="mr-2 h-4 w-4" />
+          )}
+          Process now
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setTemplatesOpen(true)}>
+          <FileText className="mr-2 h-4 w-4" />
+          Templates
+        </Button>
+        <Button size="sm" onClick={handleCreateNew}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create sequence
+        </Button>
+      </PageActions>
+
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Email Sequences</h1>
+        <p className="text-muted-foreground">
+          Automate your email campaigns with pre-built sequences.
+        </p>
       </div>
 
       {/* Quick Stats */}

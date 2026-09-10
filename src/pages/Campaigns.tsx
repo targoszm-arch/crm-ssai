@@ -19,6 +19,7 @@ import {
 import { useCampaigns, useSyncCampaigns, Campaign } from "@/hooks/useCampaigns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CampaignDetailSheet } from "@/components/campaigns/CampaignDetailSheet";
+import { PageActions } from "@/components/layout/PageActions";
 
 export default function Campaigns() {
   const navigate = useNavigate();
@@ -152,21 +153,28 @@ export default function Campaigns() {
   ];
 
   return (
-    <div className="container mx-auto py-6 space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Marketing Campaigns</h1>
-          <p className="text-muted-foreground">
-            View and manage your Meet Alfred LinkedIn campaigns.
-          </p>
-        </div>
-        <Button 
+    <div className="space-y-6 animate-fade-in">
+      <PageActions>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => syncMutation.mutate()}
           disabled={syncMutation.isPending}
         >
           <RefreshCw className={`mr-2 h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
           {syncMutation.isPending ? "Syncing..." : "Sync Meet Alfred"}
         </Button>
+        <Button size="sm">
+          <Plus className="mr-2 h-4 w-4" />
+          New campaign
+        </Button>
+      </PageActions>
+
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Marketing Campaigns</h1>
+        <p className="text-muted-foreground">
+          View and manage your Meet Alfred LinkedIn campaigns.
+        </p>
       </div>
 
       <Tabs defaultValue="all" className="w-full" onValueChange={setStatusFilter}>
@@ -192,10 +200,6 @@ export default function Campaigns() {
                     onKeyDown={(e) => e.key === "Enter" && setSearchQuery(localSearch)}
                   />
                 </div>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Campaign
-                </Button>
               </div>
             </CardContent>
           </Card>

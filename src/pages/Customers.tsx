@@ -9,6 +9,7 @@ import { OrganisationsTab } from "@/components/customers/OrganisationsTab";
 import { ExternalLMSLeadsTab } from "@/components/customers/ExternalLMSLeadsTab";
 import { ImportDataButton } from "@/components/customers/ImportDataButton";
 import { AddContactModal } from "@/components/customers/AddContactModal";
+import { PageActions } from "@/components/layout/PageActions";
 
 const VALID_TABS = ["customers", "organisations", "lms-leads"];
 
@@ -19,21 +20,20 @@ export default function Customers() {
   const activeTab = tabParam && VALID_TABS.includes(tabParam) ? tabParam : "organisations";
 
   return (
-    <div className="w-full px-4 py-6 space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
-          <p className="text-muted-foreground">
-            Manage and view all your customers and organisations.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <ImportDataButton />
-          <Button className="w-full sm:w-auto" onClick={() => setAddContactOpen(true)}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add Contact
-          </Button>
-        </div>
+    <div className="space-y-6 animate-fade-in">
+      <PageActions>
+        <ImportDataButton />
+        <Button size="sm" onClick={() => setAddContactOpen(true)}>
+          <UserPlus className="mr-2 h-4 w-4" />
+          Add contact
+        </Button>
+      </PageActions>
+
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
+        <p className="text-muted-foreground">
+          Manage and view all your customers and organisations.
+        </p>
       </div>
 
       <Card>

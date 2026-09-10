@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus, Search, LayoutGrid, List, Table, TrendingUp, Settings, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePipelines, usePipelineStages } from "@/hooks/usePipelines";
-import { useDealsByStage, Deal } from "@/hooks/useDeals";
+import { useDealsByStage, useDeal, Deal } from "@/hooks/useDeals";
 import { PipelineBoard } from "@/components/deals/PipelineBoard";
 import { AddDealModal } from "@/components/deals/AddDealModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageActions } from "@/components/layout/PageActions";
 
 type ViewMode = "kanban" | "list" | "table" | "forecast";
 
@@ -36,6 +37,11 @@ export default function Deals() {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
 
+  // ?deal=<id> opens that deal, so a "Linked deals" row on a person or a
+  // company can point at the deal itself rather than the top of the board.
+  const deepLinkedDealId = searchParams.get("deal") || undefined;
+  const { data: deepLinkedDeal } = useDeal(deepLinkedDealId);
+
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();
   const activePipelineId = selectedPipelineId || pipelines?.find(p => p.is_default)?.id || pipelines?.[0]?.id;
   const { data: stages } = usePipelineStages(activePipelineId);
@@ -49,8 +55,22 @@ export default function Deals() {
     setAddDealOpen(true);
   };
 
+  useEffect(() => {
+    if (deepLinkedDeal) setSelectedDeal(deepLinkedDeal);
+  }, [deepLinkedDeal]);
+
   const handleDealClick = (deal: Deal) => {
     setSelectedDeal(deal);
+  };
+
+  const closeDealDetail = () => {
+    setSelectedDeal(null);
+    if (!deepLinkedDealId) return;
+    // Leave the param behind, or reopening the sheet after closing it is
+    // impossible without editing the URL.
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("deal");
+    setSearchParams(nextParams, { replace: true });
   };
 
   const totalDeals = Object.values(dealsByStage).reduce((sum, deals) => sum + deals.length, 0);
@@ -69,17 +89,18 @@ export default function Deals() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="border-b bg-background px-4 md:px-6 py-4">
-        <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl md:text-2xl font-semibold">Deals</h1>
-            <p className="text-sm text-muted-foreground">
-              {totalDeals} deals · {formatValue(totalValue)} total value
-            </p>
-          </div>
-          <Button onClick={() => handleAddDeal()} className="gap-2 w-full sm:w-auto">
+        <PageActions>
+          <Button size="sm" onClick={() => handleAddDeal()} className="gap-2">
             <Plus className="h-4 w-4" />
-            Deal
+            New deal
           </Button>
+        </PageActions>
+
+        <div className="mb-4">
+          <h1 className="text-xl md:text-2xl font-semibold">Deals</h1>
+          <p className="text-sm text-muted-foreground">
+            {totalDeals} deals · {formatValue(totalValue)} total value
+          </p>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
@@ -222,7 +243,7 @@ export default function Deals() {
       />
 
       {/* Deal Detail Sheet */}
-      <Sheet open={!!selectedDeal} onOpenChange={(open) => !open && setSelectedDeal(null)}>
+      <Sheet open={!!selectedDeal} onOpenChange={(open) => !open && closeDealDetail()}>
         <SheetContent className="w-[600px] sm:max-w-[600px]">
           <SheetHeader>
             <SheetTitle>{selectedDeal?.deal_name}</SheetTitle>

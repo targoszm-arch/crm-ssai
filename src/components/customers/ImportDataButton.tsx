@@ -114,7 +114,7 @@ export function ImportDataButton() {
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" disabled={isImporting}>
+          <Button variant="outline" size="sm" disabled={isImporting}>
             {isImporting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -125,24 +125,6 @@ export function useEmails(filters: EmailFilters = {}) {
   });
 }
 
-export function useEmailsByContact(contactId: string | null) {
-  return useQuery({
-    queryKey: ["contact-emails", contactId],
-    enabled: !!contactId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("emails")
-        .select("*")
-        .eq("contact_id", contactId!)
-        .order("received_at", { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      return data as Email[];
-    },
-  });
-}
-
 export function useSyncEmails() {
   const queryClient = useQueryClient();
 
@@ -296,6 +278,56 @@ export function useArchiveEmails() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["emails"] });
+    },
+  });
+}
+
+/** One email by id — an activity row carries `metadata.email_id`, not the row itself. */
+export function useEmail(emailId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["email", emailId],
+    enabled: !!emailId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("emails")
+        .select("*")
+        .eq("id", emailId!)
+        .maybeSingle();
+
+      if (error) throw error;
+      return (data as Email | null) ?? null;
+    },
+  });
+}
+
+/**
+ * The mail on one person or one company, newest first — what the history panel
+ * reads. Separate from useEmails because that one opens a realtime channel and
+ * takes the inbox's whole filter set; this is one scoped read.
+ */
+export function useEmailHistory(
+  scope: { contactId?: string | null; companyId?: string | null },
+  limit = 200,
+) {
+  const key = scope.contactId ?? scope.companyId ?? null;
+
+  return useQuery({
+    queryKey: ["email-history", scope.contactId, scope.companyId, limit],
+    enabled: !!key,
+    queryFn: async () => {
+      let query = supabase
+        .from("emails")
+        .select("*")
+        .order("received_at", { ascending: false })
+        .limit(limit);
+
+      query = scope.contactId
+        ? query.eq("contact_id", scope.contactId)
+        : query.eq("company_id", scope.companyId!);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as Email[];
     },
   });
 }

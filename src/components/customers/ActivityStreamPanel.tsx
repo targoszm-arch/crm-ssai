@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   StickyNote, CalendarDays, Mail, Phone, Linkedin, Receipt, Circle,
-  Loader2, Trash2, Send,
+  Loader2, Trash2, Send, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -46,9 +46,16 @@ interface ActivityStreamPanelProps {
   scope: StreamScope;
   /** Company view names the person each row came from; the person view need not. */
   showPerson?: boolean;
+  /**
+   * Opens the email an activity row describes. Without it those rows stay
+   * plain text — which was the complaint.
+   */
+  onOpenEmail?: (emailId: string) => void;
 }
 
-export function ActivityStreamPanel({ scope, showPerson = false }: ActivityStreamPanelProps) {
+export function ActivityStreamPanel({
+  scope, showPerson = false, onOpenEmail,
+}: ActivityStreamPanelProps) {
   const [draft, setDraft] = useState("");
   const [includeAutomation, setIncludeAutomation] = useState(false);
 
@@ -162,7 +169,21 @@ export function ActivityStreamPanel({ scope, showPerson = false }: ActivityStrea
                   )}
                 </div>
                 {item.body && (
-                  <p className="mt-1 whitespace-pre-wrap text-sm">{item.body}</p>
+                  item.emailId && onOpenEmail ? (
+                    <button
+                      className="mt-1 block w-full text-left"
+                      onClick={() => onOpenEmail(item.emailId!)}
+                    >
+                      <span className="whitespace-pre-wrap text-sm group-hover:text-primary group-hover:underline">
+                        {item.body}
+                      </span>
+                      <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <ExternalLink className="size-3" /> Open this email
+                      </span>
+                    </button>
+                  ) : (
+                    <p className="mt-1 whitespace-pre-wrap text-sm">{item.body}</p>
+                  )
                 )}
               </li>
             );

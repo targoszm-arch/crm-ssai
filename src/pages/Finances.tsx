@@ -24,6 +24,7 @@ import {
 } from "@/components/finance/financeUtils";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as ChartTooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
+import { PageActions } from "@/components/layout/PageActions";
 
 const currentYear = new Date().getFullYear();
 const YEARS = [currentYear, currentYear - 1, currentYear - 2];
@@ -467,39 +468,42 @@ export default function FinancePage() {
   };
 
   return (
-    <div className="container max-w-7xl py-8 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <PageActions>
+          <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={syncing || syncingGmail || syncingRevolut}>
+            <RefreshCw className={cn("h-4 w-4 mr-2", (syncing || syncingGmail || syncingRevolut) && "animate-spin")} />
+            {(syncing || syncingGmail || syncingRevolut) ? "Syncing…" : "Refresh all"}
+          </Button>
+          {pendingReceipts.length > 0 && (
+            <Button size="sm" onClick={() => setReceiptReviewOpen(true)}>
+              <Receipt className="h-4 w-4 mr-2" />
+              Review receipts ({pendingReceipts.length})
+            </Button>
+          )}
+          <AddTransactionDialog />
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+        </PageActions>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Finance & Tax</h1>
             <p className="text-muted-foreground mt-1">
               Reconcile income, expenses and VAT for your Irish tax return
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
-              <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={syncing || syncingGmail || syncingRevolut}>
-              <RefreshCw className={cn("h-4 w-4 mr-2", (syncing || syncingGmail || syncingRevolut) && "animate-spin")} />
-              {(syncing || syncingGmail || syncingRevolut) ? "Syncing…" : "Refresh all"}
-            </Button>
-            {pendingReceipts.length > 0 && (
-              <Button size="sm" onClick={() => setReceiptReviewOpen(true)}>
-                <Receipt className="h-4 w-4 mr-2" />
-                Review receipts ({pendingReceipts.length})
-              </Button>
-            )}
-            <AddTransactionDialog />
-            <Button variant="outline" size="sm" onClick={handleExport}>
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
-          </div>
+          {/* The year stays on the page: it filters what you are looking at
+              rather than doing something, and reads as part of the report. */}
+          <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
+            <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Data Sources status bar */}
