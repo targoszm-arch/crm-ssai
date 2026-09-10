@@ -19,7 +19,7 @@ export default function Header() {
   const [showSearch, setShowSearch] = useState(false);
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b bg-background px-4 lg:px-6">
+    <header className="flex min-h-14 flex-wrap items-center gap-4 border-b bg-background px-4 py-2 lg:px-6">
       <SidebarTrigger className="-ml-1" />
 
       <div className={cn("transition-all duration-200 flex items-center", showSearch ? "w-full md:w-auto" : "w-auto")}>

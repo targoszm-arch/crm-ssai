@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { orderData, Order } from "@/data/mockData";
+import { PageActions } from "@/components/layout/PageActions";
 
 export default function Orders() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -106,6 +107,17 @@ export default function Orders() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <PageActions>
+        <Button variant="outline" size="sm">
+          <Download className="mr-2 h-4 w-4" />
+          Export
+        </Button>
+        <Button size="sm">
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Add order
+        </Button>
+      </PageActions>
+
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Orders</h1>
         <p className="text-muted-foreground">
@@ -155,16 +167,6 @@ export default function Orders() {
                   <SelectItem value="refunded">Refunded</SelectItem>
                 </SelectContent>
               </Select>
-              <div className="flex gap-2">
-                <Button variant="outline" className="w-full sm:w-auto">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export
-                </Button>
-                <Button className="w-full sm:w-auto">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add Order
-                </Button>
-              </div>
             </div>
           </div>
         </CardContent>

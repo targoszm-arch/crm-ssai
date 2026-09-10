@@ -37,6 +37,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PageActions } from "@/components/layout/PageActions";
 
 type InboxTab = "email" | "linkedin";
 type SelectedItem = { type: "email"; item: Email } | { type: "linkedin"; item: LinkedInMessage } | null;
@@ -181,6 +182,30 @@ export default function Inbox() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
+      <PageActions>
+        {activeTab === "linkedin" && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSyncMeetAlfred}
+            disabled={isSyncingMeetAlfred}
+          >
+            {isSyncingMeetAlfred ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 h-4 w-4" />
+            )}
+            Sync Meet Alfred
+          </Button>
+        )}
+        {activeTab === "email" && (
+          <Button size="sm" onClick={() => setComposeOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            New message
+          </Button>
+        )}
+      </PageActions>
+
       {/* Header - responsive stacking.
           The three-pane redesign kept the title block and dropped every control
           that used to sit beside it. The handlers all survived, so the LinkedIn
@@ -247,22 +272,6 @@ export default function Inbox() {
                 <List className="h-4 w-4" />
               </Button>
             </div>
-          )}
-
-          {activeTab === "linkedin" && (
-            <Button
-              variant="outline"
-              onClick={handleSyncMeetAlfred}
-              disabled={isSyncingMeetAlfred}
-              size={isMobile ? "sm" : "default"}
-            >
-              {isSyncingMeetAlfred ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline ml-1.5">Sync Meet Alfred</span>
-            </Button>
           )}
 
           {activeTab === "email" && hasConnectedAccount && (
@@ -351,13 +360,6 @@ export default function Inbox() {
                 sidebarCollapsed ? "w-12" : "w-[350px]"
               )}
             >
-              {!sidebarCollapsed && (
-                <div className="px-3 pt-3">
-                  <Button className="w-full" onClick={() => setComposeOpen(true)}>
-                    <Plus data-icon="inline-start" /> New message
-                  </Button>
-                </div>
-              )}
               <InboxSidebar
                 currentFolder={currentFolder}
                 onFolderChange={(f) => { setCurrentFolder(f); setSelectedItem(null); }}
