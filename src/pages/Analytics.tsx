@@ -103,7 +103,7 @@ export default function Analytics() {
   ] : [];
 
   return (
-    <div className="container mx-auto px-4 md:px-6 py-6 space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl md:text-2xl font-bold tracking-tight">Sequence Analytics</h1>

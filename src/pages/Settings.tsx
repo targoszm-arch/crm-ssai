@@ -56,8 +56,8 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight px-[10px] py-[10px]">Settings</h1>
-        <p className="text-muted-foreground px-[10px] py-[10px]">Manage integrations and webhook configuration.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <p className="text-muted-foreground">Manage integrations and webhook configuration.</p>
       </div>
 
       {/* Webhook Configuration */}

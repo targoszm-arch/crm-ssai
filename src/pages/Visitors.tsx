@@ -168,7 +168,7 @@ export default function Visitors() {
   }, [visits, companies]);
 
   return (
-    <div className="py-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">

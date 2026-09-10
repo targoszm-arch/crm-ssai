@@ -27,13 +27,13 @@ export default function PersonDetail() {
     enabled: !!id,
   });
 
-  if (isLoading) return <div className="min-h-full bg-muted/20 p-6"><Skeleton className="h-12 w-full" /><Skeleton className="mt-6 h-96 w-full" /></div>;
+  if (isLoading) return <div><Skeleton className="h-12 w-full" /><Skeleton className="mt-6 h-96 w-full" /></div>;
   if (error || !contact) return <div className="p-8 text-sm text-destructive">Couldn&apos;t load this person.</div>;
   const name = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || contact.name || "Unknown person";
   const initials = name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const companyName = contact.companies?.company_name;
 
-  return <div className="min-h-full bg-muted/20 p-5 md:p-7">
+  return <div>
     <div className="w-full">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
         <div className="flex items-center gap-3 text-sm"><Button variant="outline" size="icon" asChild><Link to={`/customers?tab=${returnTab}`} aria-label="Back to people"><ArrowLeft className="h-4 w-4" /></Link></Button><Link className="text-muted-foreground hover:text-foreground" to={`/customers?tab=${returnTab}`}>People</Link><span className="text-muted-foreground">›</span><strong>{name}</strong></div>

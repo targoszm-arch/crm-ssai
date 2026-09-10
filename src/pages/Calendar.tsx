@@ -94,7 +94,7 @@ export default function Calendar() {
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col p-6">
+    <div className="flex h-[calc(100vh-7rem)] flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

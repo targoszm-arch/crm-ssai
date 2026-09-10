@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PageActionsSlot } from "./PageActions";
 
 export default function Header() {
   const [showSearch, setShowSearch] = useState(false);
@@ -38,7 +39,11 @@ export default function Header() {
         )}
       </div>
 
-      <div className="ml-auto flex items-center gap-2 md:gap-4">
+      {/* Whatever the current page's primary actions are. Empty on pages that
+          have none, which is why there is no separator or spacing of its own. */}
+      <PageActionsSlot className="ml-auto flex flex-wrap items-center justify-end gap-2" />
+
+      <div className="flex items-center gap-2 md:gap-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">

@@ -19,7 +19,7 @@ export default function Customers() {
   const activeTab = tabParam && VALID_TABS.includes(tabParam) ? tabParam : "organisations";
 
   return (
-    <div className="w-full px-4 py-6 space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Customers</h1>

@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppShell from "./components/layout/AppShell";
 import { AuthGuard } from "./components/auth/AuthGuard";
@@ -29,6 +30,35 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+/**
+ * Every protected page gets the same shell, so a page can't quietly opt out of
+ * the app's width, padding or header by forgetting to wrap itself.
+ */
+const PROTECTED_ROUTES: Array<{
+  path: string;
+  element: ReactNode;
+  /** Full-viewport pages — see AppShell. */
+  fullBleed?: boolean;
+}> = [
+  { path: "/", element: <Dashboard /> },
+  { path: "/customers", element: <Customers /> },
+  { path: "/people/:id", element: <PersonDetail /> },
+  { path: "/companies/:id", element: <CompanyDetail /> },
+  { path: "/deals", element: <Deals />, fullBleed: true },
+  { path: "/orders", element: <Orders /> },
+  { path: "/abandonment", element: <CartAbandonment /> },
+  { path: "/campaigns", element: <Campaigns /> },
+  { path: "/sequences", element: <Sequences /> },
+  { path: "/finances", element: <Finances /> },
+  { path: "/payments", element: <Payments /> },
+  { path: "/ai-recommendations", element: <AIRecommendations /> },
+  { path: "/inbox", element: <Inbox />, fullBleed: true },
+  { path: "/calendar", element: <Calendar /> },
+  { path: "/visitors", element: <Visitors /> },
+  { path: "/analytics", element: <Analytics /> },
+  { path: "/settings", element: <Settings /> },
+];
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
@@ -37,178 +67,20 @@ const App = () => (
           {/* Public routes */}
           <Route path="/auth" element={<Auth />} />
           <Route path="/oauth/callback" element={<OAuthCallback />} />
-          
+
           {/* Protected routes */}
-          <Route
-            path="/"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Dashboard />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/customers"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Customers />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/people/:id"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <PersonDetail />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/companies/:id"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <CompanyDetail />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/deals"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Deals />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/orders"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Orders />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/abandonment"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <CartAbandonment />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/campaigns"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Campaigns />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/sequences"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Sequences />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/finances"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Finances />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/payments"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Payments />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/ai-recommendations"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <AIRecommendations />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/inbox"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Inbox />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/calendar"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Calendar />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/visitors"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Visitors />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/analytics"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Analytics />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <AuthGuard>
-                <AppShell>
-                  <Settings />
-                </AppShell>
-              </AuthGuard>
-            }
-          />
+          {PROTECTED_ROUTES.map(({ path, element, fullBleed }) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <AuthGuard>
+                  <AppShell fullBleed={fullBleed}>{element}</AppShell>
+                </AuthGuard>
+              }
+            />
+          ))}
+
           <Route path="*" element={<NotFound />} />
         </Routes>
         <Toaster />
