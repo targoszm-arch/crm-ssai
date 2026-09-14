@@ -16,13 +16,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { usePipelines, usePipelineStages } from "@/hooks/usePipelines";
+import { usePipelines, usePipelineStages, type PipelineStage } from "@/hooks/usePipelines";
 import { useDealsByStage, useDeal, Deal } from "@/hooks/useDeals";
 import { PipelineBoard } from "@/components/deals/PipelineBoard";
 import { AddDealModal } from "@/components/deals/AddDealModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageActions } from "@/components/layout/PageActions";
+import { StageWikiSheet } from "@/components/deals/StageWikiSheet";
 
 type ViewMode = "kanban" | "list" | "table" | "forecast";
 
@@ -36,6 +37,7 @@ export default function Deals() {
   const [addDealInitialStage, setAddDealInitialStage] = useState<string | undefined>();
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const [wikiStage, setWikiStage] = useState<PipelineStage | null>(null);
 
   // ?deal=<id> opens that deal, so a "Linked deals" row on a person or a
   // company can point at the deal itself rather than the top of the board.
@@ -220,6 +222,7 @@ export default function Deals() {
             dealsByStage={dealsByStage}
             onDealClick={handleDealClick}
             onAddDeal={handleAddDeal}
+            onStageClick={setWikiStage}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -240,6 +243,12 @@ export default function Deals() {
         // in create mode however you got there — titled "Add Deal", submitting
         // through the insert path, and failing on the deals INSERT policy.
         initialData={editingDeal ?? { pipeline_id: activePipelineId }}
+      />
+
+      <StageWikiSheet
+        stage={wikiStage}
+        open={!!wikiStage}
+        onOpenChange={(open) => !open && setWikiStage(null)}
       />
 
       {/* Deal Detail Sheet */}

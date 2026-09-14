@@ -1,5 +1,5 @@
 import { useState, DragEvent } from "react";
-import { Plus } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ interface PipelineBoardProps {
   dealsByStage: Record<string, Deal[]>;
   onDealClick: (deal: Deal) => void;
   onAddDeal: (stage?: string) => void;
+  onStageClick: (stage: PipelineStage) => void;
 }
 
 export function PipelineBoard({
@@ -19,6 +20,7 @@ export function PipelineBoard({
   dealsByStage,
   onDealClick,
   onAddDeal,
+  onStageClick,
 }: PipelineBoardProps) {
   const [draggedDealId, setDraggedDealId] = useState<string | null>(null);
   const [dropTargetStage, setDropTargetStage] = useState<string | null>(null);
@@ -88,7 +90,12 @@ export function PipelineBoard({
               onDrop={(e) => handleDrop(e, stage.name)}
             >
               {/* Stage Header */}
-              <div className="p-3 border-b bg-background/50 rounded-t-lg">
+              <button
+                type="button"
+                className="block w-full rounded-t-lg border-b bg-background/50 p-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                onClick={() => onStageClick(stage)}
+                aria-label={`Open notes for ${stage.name}`}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div
@@ -100,13 +107,14 @@ export function PipelineBoard({
                       {stageDeals.length}
                     </span>
                   </div>
+                  <FileText className={cn("h-4 w-4 text-muted-foreground", stage.wiki_content && "text-primary")} />
                 </div>
                 {stageTotal > 0 && (
                   <p className="text-xs text-muted-foreground mt-1">
                     {formatTotal(stageTotal)}
                   </p>
                 )}
-              </div>
+              </button>
 
               {/* Stage Content */}
               <div className="p-2 space-y-2 min-h-[200px] max-h-[calc(100vh-280px)] overflow-y-auto">
