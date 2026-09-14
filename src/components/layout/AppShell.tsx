@@ -16,7 +16,7 @@ interface AppShellProps {
  * shifted the content sideways and changed the gutter. The width and the
  * padding live here now; a page renders its content and nothing else.
  *
- * Every page fills the screen with a 10px side margin. There is no max width:
+ * Every page fills the screen with a 16px gutter. There is no max width:
  * a centred column was tried for one release and left a screen's worth of
  * empty margin either side of the content. Don't reintroduce one.
  *
@@ -34,7 +34,7 @@ export default function AppShell({ children }: AppShellProps) {
         <SidebarInset className="h-svh min-h-svh overflow-hidden">
           <Header />
           <main className="flex min-h-0 flex-1 flex-col overflow-auto">
-            <div className="flex min-h-0 w-full flex-1 flex-col px-[10px] py-4">
+            <div className="flex min-h-0 w-full flex-1 flex-col p-4">
               {children}
             </div>
           </main>

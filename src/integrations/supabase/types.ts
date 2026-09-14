@@ -1910,6 +1910,7 @@ export type Database = {
           pipeline_id: string | null
           position: number
           user_id: string | null
+          wiki_content: string | null
         }
         Insert: {
           color?: string | null
@@ -1921,6 +1922,7 @@ export type Database = {
           pipeline_id?: string | null
           position: number
           user_id?: string | null
+          wiki_content?: string | null
         }
         Update: {
           color?: string | null
@@ -1932,6 +1934,7 @@ export type Database = {
           pipeline_id?: string | null
           position?: number
           user_id?: string | null
+          wiki_content?: string | null
         }
         Relationships: [
           {

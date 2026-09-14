@@ -40,7 +40,7 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
   const [replyBody, setReplyBody] = useState("");
   const [isReplying, setIsReplying] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
-  const markedAsReadRef = useRef(false);
+  const markedEmailIdRef = useRef<string | null>(null);
 
   const sendEmail = useSendEmail();
   const linkEmail = useLinkEmailToContact();
@@ -79,29 +79,23 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
     );
   };
 
-  // Auto-mark as read when viewing email (with 1 second delay)
+  // Opening a message is the read action. Keep the id in the guard (rather
+  // than a boolean reset in a second effect) so moving directly from one
+  // unread message to another cannot accidentally skip the second message.
   useEffect(() => {
-    if (!email.is_read && !markedAsReadRef.current) {
-      markedAsReadRef.current = true;
-      const timer = setTimeout(() => {
-        markEmailRead.mutate(
-          { emailId: email.id, isRead: true },
-          {
-            onError: (error) => {
-              console.error("Failed to mark email as read:", error);
-            },
-          }
-        );
-      }, 1000);
+    if (email.is_read || markedEmailIdRef.current === email.id) return;
 
-      return () => clearTimeout(timer);
-    }
+    markedEmailIdRef.current = email.id;
+    markEmailRead.mutate(
+      { emailId: email.id, isRead: true },
+      {
+        onError: (error) => {
+          markedEmailIdRef.current = null;
+          console.error("Failed to mark email thread as read:", error);
+        },
+      }
+    );
   }, [email.id, email.is_read, markEmailRead]);
-
-  // Reset ref when email changes
-  useEffect(() => {
-    markedAsReadRef.current = false;
-  }, [email.id]);
 
   // Get reply recipient
   const replyTo = email.direction === "inbound" ? email.from_email : email.to_emails?.[0];

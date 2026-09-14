@@ -107,48 +107,52 @@ serve(async (req: Request): Promise<Response> => {
         .eq("id", account.id);
     }
 
-    // Call Gmail API to modify labels
-    // Mark as read: remove UNREAD label
-    // Mark as unread: add UNREAD label
+    // Reading a conversation means reading every synced reply in it. Manual
+    // "mark unread" remains message-specific so users can flag one reply.
+    let emailsToUpdate = [email];
+    if (isRead && email.thread_id) {
+      const { data: threadEmails, error: threadError } = await supabase
+        .from("emails")
+        .select("id, gmail_id, labels")
+        .eq("account_id", email.account_id)
+        .eq("thread_id", email.thread_id)
+        .eq("is_read", false);
+
+      if (threadError) throw new Error(`Failed to load email thread: ${threadError.message}`);
+      if (threadEmails?.length) emailsToUpdate = threadEmails;
+    }
+
+    // Call Gmail for every reply before updating the local read state.
     const modifyBody = isRead
       ? { removeLabelIds: ["UNREAD"] }
       : { addLabelIds: ["UNREAD"] };
 
-    console.log(`Calling Gmail API to ${isRead ? 'remove' : 'add'} UNREAD label for message ${email.gmail_id}`);
-
-    const gmailResponse = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${email.gmail_id}/modify`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(modifyBody),
+    const updatedLabels = new Map<string, string[]>();
+    for (const threadEmail of emailsToUpdate) {
+      const gmailResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${threadEmail.gmail_id}/modify`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(modifyBody),
+        }
+      );
+      if (!gmailResponse.ok) {
+        const errorText = await gmailResponse.text();
+        console.error("Gmail API error:", errorText);
+        throw new Error(`Failed to update Gmail: ${gmailResponse.status}`);
       }
-    );
-
-    if (!gmailResponse.ok) {
-      const errorText = await gmailResponse.text();
-      console.error("Gmail API error:", errorText);
-      throw new Error(`Failed to update Gmail: ${gmailResponse.status}`);
+      const gmailResult = await gmailResponse.json();
+      updatedLabels.set(threadEmail.id, gmailResult.labelIds || threadEmail.labels || []);
     }
 
-    const gmailResult = await gmailResponse.json();
-    console.log("Gmail API response:", gmailResult);
-
     // Update local database
-    const { error: updateError } = await supabase
-      .from("emails")
-      .update({
-        is_read: isRead,
-        labels: gmailResult.labelIds || email.labels,
-      })
-      .eq("id", emailId);
-
-    if (updateError) {
-      console.error("Error updating local database:", updateError);
-      throw new Error(`Failed to update local database: ${updateError.message}`);
+    for (const threadEmail of emailsToUpdate) {
+      const { error: updateError } = await supabase
+        .from("emails")
+        .update({ is_read: isRead, labels: updatedLabels.get(threadEmail.id) })
+        .eq("id", threadEmail.id);
+      if (updateError) throw new Error(`Failed to update local database: ${updateError.message}`);
     }
 
     console.log(`Successfully marked email ${emailId} as ${isRead ? 'read' : 'unread'}`);
@@ -158,7 +162,7 @@ serve(async (req: Request): Promise<Response> => {
         success: true,
         emailId,
         isRead,
-        labels: gmailResult.labelIds,
+        updatedCount: emailsToUpdate.length,
       }),
       {
         status: 200,

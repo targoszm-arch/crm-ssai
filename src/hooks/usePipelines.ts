@@ -19,6 +19,7 @@ export interface PipelineStage {
   is_won: boolean;
   is_lost: boolean;
   created_at: string;
+  wiki_content: string | null;
 }
 
 export function usePipelines() {
