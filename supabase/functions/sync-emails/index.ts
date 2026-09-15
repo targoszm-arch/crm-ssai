@@ -176,7 +176,6 @@ serve(async (req: Request): Promise<Response> => {
         .eq("id", accountId);
     }
 
-    // Calculate date filter (100 days back)
     // How far back to ask Gmail for. A routine sync only needs what arrived since the
     // last one; re-walking 30 days every time is what made opening the Inbox expensive.
     // The 10 minute overlap covers messages that landed mid-sync or arrived slightly out
