@@ -36,6 +36,35 @@ import {
 import { format } from "date-fns";
 import { EnrollAbandonmentModal } from "@/components/recovery/EnrollAbandonmentModal";
 
+/**
+ * Pull the real message out of a failed functions.invoke().
+ *
+ * On any non-2xx the client throws a FunctionsHttpError whose `message` is the
+ * useless constant "Edge Function returned a non-2xx status code" — the response
+ * body, which is where the function actually says what went wrong, hangs off
+ * `context` and is otherwise dropped on the floor. That is why a missing
+ * BACKFILL_OWNER_IDS showed up as a bare 500 in the console and a generic toast:
+ * the function was explaining itself and nobody was reading it.
+ */
+async function describeFunctionError(err: unknown): Promise<string> {
+  const context = (err as { context?: unknown })?.context;
+  if (context instanceof Response) {
+    try {
+      const body = await context.clone().json();
+      if (body?.detail) return `${body.error}: ${body.detail}`;
+      if (body?.error) return String(body.error);
+    } catch {
+      try {
+        const text = await context.clone().text();
+        if (text) return text.slice(0, 300);
+      } catch {
+        /* body already consumed or not readable */
+      }
+    }
+  }
+  return err instanceof Error ? err.message : "Unknown error";
+}
+
 /** The shape backfill-lms-leads reports, for both the dry run and the real one. */
 interface BackfillReport {
   apply: boolean;
@@ -125,10 +154,10 @@ export function ExternalLMSLeadsTab() {
         setPreview(report);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
+      const message = await describeFunctionError(err);
       toast.error(
         message.includes("BACKFILL_OWNER_IDS")
-          ? "Set the BACKFILL_OWNER_IDS secret to your auth user id before running this."
+          ? "Set the BACKFILL_OWNER_IDS secret (Supabase \u2192 Edge Functions \u2192 Secrets) to your auth user id, then run this again."
           : `Could not save to the CRM: ${message}`,
       );
       setPreview(null);
