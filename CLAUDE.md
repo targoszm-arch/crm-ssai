@@ -50,6 +50,16 @@ anywhere:
 (`gdpr_consents`), the CRM owns leads and companies, Resend owns sending for lifecycle.
 This CRM's `user_consent` table mirrors the LMS; it never competes with it.
 
+**A third leg: `CRM -> Peak Focus`, commercial fields only.** The CRM owns `stage` and ARR
+for a client; Peak Focus owns the work (projects, tasks, wikis, tags) and keeps its own
+name, colour, health and renewal. Nothing flows back. This **reverses** 20260904000652,
+which made Peak Focus the author and had the CRM mirror inbound — that sync never ran
+(`peak_focus_sync_runs` is empty) and both sides drifted instead, leaving EUR 138,000 of
+ARR visible only in Peak Focus and the two stage fields disagreeing on every linked client.
+Scope is narrow on purpose: linked, or a deal at 1st Follow Up or beyond — 14 companies,
+not 882. Read `docs/peak-focus-sync.md` before touching any of it; the push is staged and
+dry-run by default, and has not been turned on.
+
 ## Known state (verified 10 September 2026)
 
 Re-check these with a query before relying on them; they move.
