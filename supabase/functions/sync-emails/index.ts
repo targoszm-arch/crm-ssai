@@ -113,7 +113,12 @@ serve(async (req: Request): Promise<Response> => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { accountId, maxResults = 2000, daysBack = 100 }: SyncRequest = await req.json();
+    const body: SyncRequest = await req.json();
+    const { accountId, maxResults = 2000 } = body;
+    // Distinguish "caller asked for 30 days" from "caller said nothing" — only the
+    // latter is allowed to narrow to an incremental window.
+    const explicitDaysBack = body.daysBack;
+    const daysBack = explicitDaysBack ?? 100;
 
     if (!accountId) {
       throw new Error("accountId is required");
@@ -172,9 +177,21 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // Calculate date filter (100 days back)
+    // How far back to ask Gmail for. A routine sync only needs what arrived since the
+    // last one; re-walking 30 days every time is what made opening the Inbox expensive.
+    // The 10 minute overlap covers messages that landed mid-sync or arrived slightly out
+    // of order, since Gmail's after: is second-granular and we would rather re-skip a
+    // handful than silently miss one. An explicit daysBack (a manual "sync everything")
+    // always wins, and an account that has never synced gets the full window.
+    const OVERLAP_MS = 10 * 60 * 1000;
     const afterDate = new Date();
-    afterDate.setDate(afterDate.getDate() - daysBack);
+    if (explicitDaysBack === undefined && account.last_sync_at) {
+      afterDate.setTime(new Date(account.last_sync_at).getTime() - OVERLAP_MS);
+    } else {
+      afterDate.setDate(afterDate.getDate() - daysBack);
+    }
     const afterTimestamp = Math.floor(afterDate.getTime() / 1000);
+    const syncStartedAt = new Date().toISOString();
     
     // Gmail query: messages after date from INBOX or SENT
     const query = `after:${afterTimestamp}`;
@@ -246,17 +263,29 @@ serve(async (req: Request): Promise<Response> => {
     let skippedCount = 0;
     let errorCount = 0;
     
+    // Which of these are already stored, asked once. This used to be a SELECT per
+    // message — 500 sequential round trips on every Inbox open, almost all of them
+    // answering "yes, already have it". Chunked because a very long IN list is its
+    // own problem.
+    const alreadySynced = new Set<string>();
+    const ID_CHUNK = 200;
+    for (let i = 0; i < allMessageIds.length; i += ID_CHUNK) {
+      const chunk = allMessageIds.slice(i, i + ID_CHUNK).map((m) => m.id);
+      const { data: rows, error: existingError } = await supabase
+        .from("emails")
+        .select("gmail_id")
+        .eq("account_id", accountId)
+        .in("gmail_id", chunk);
+      if (existingError) {
+        // Falling through here would re-insert everything, so fail loudly instead.
+        throw new Error(`Could not check existing emails: ${existingError.message}`);
+      }
+      for (const row of rows ?? []) alreadySynced.add(row.gmail_id);
+    }
+
     for (const msg of allMessageIds) {
       try {
-        // Check if already synced
-        const { data: existing } = await supabase
-          .from("emails")
-          .select("id")
-          .eq("account_id", accountId)
-          .eq("gmail_id", msg.id)
-          .single();
-
-        if (existing) {
+        if (alreadySynced.has(msg.id)) {
           skippedCount++;
           continue;
         }
@@ -362,6 +391,13 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     console.log(`Sync complete: ${syncedEmails.length} new, ${skippedCount} skipped (already synced), ${errorCount} errors`);
+
+    // Stamped with when the sync STARTED, not finished: anything that arrived while it
+    // was running must still be picked up next time.
+    await supabase
+      .from("email_accounts")
+      .update({ last_sync_at: syncStartedAt })
+      .eq("id", accountId);
 
     return new Response(
       JSON.stringify({

@@ -28,7 +28,21 @@ import Visitors from "./pages/Visitors";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+// React Query's defaults are staleTime 0 + refetch on every mount and every window
+// focus. In a CRM that means every navigation and every alt-tab re-pulls every list on
+// the page from Postgres — the flood of requests that made the app feel like it was
+// constantly syncing. Data here is not second-to-second critical: a short staleTime and
+// no refetch-on-focus is both calmer and closer to how a mail client actually behaves.
+// Anything that must be live says so itself (the emails query keeps its own realtime
+// subscription, and mutations invalidate the keys they touch).
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 /**
  * Every protected page gets the same shell, so a page can't quietly opt out of

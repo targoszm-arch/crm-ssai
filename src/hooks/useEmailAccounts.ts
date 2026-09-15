@@ -7,6 +7,7 @@ export interface EmailAccount {
   provider: string;
   email_address: string;
   expires_at: string | null;
+  last_sync_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -17,7 +18,7 @@ export function useEmailAccounts() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("email_accounts")
-        .select("id, user_id, provider, email_address, expires_at, created_at, updated_at")
+        .select("id, user_id, provider, email_address, expires_at, last_sync_at, created_at, updated_at")
         .order("created_at", { ascending: false });
 
       if (error) throw error;

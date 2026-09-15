@@ -129,17 +129,21 @@ export function useSyncEmails() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ 
-      accountId, 
+    mutationFn: async ({
+      accountId,
       maxResults = 2000,
-      daysBack = 100 
-    }: { 
-      accountId: string; 
+      daysBack,
+    }: {
+      accountId: string;
       maxResults?: number;
       daysBack?: number;
     }) => {
+      // daysBack is deliberately NOT defaulted here. Sending one always would tell the
+      // function "the caller explicitly wants this window", which switches off the
+      // incremental sync from last_sync_at. Omitting it is how a routine sync says
+      // "just give me what is new".
       const { data, error } = await supabase.functions.invoke("sync-emails", {
-        body: { accountId, maxResults, daysBack },
+        body: { accountId, maxResults, ...(daysBack !== undefined ? { daysBack } : {}) },
       });
 
       if (error) throw error;
@@ -149,6 +153,9 @@ export function useSyncEmails() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["emails"] });
+      // last_sync_at just moved; without this the Inbox would keep judging staleness
+      // from the value it read on mount.
+      queryClient.invalidateQueries({ queryKey: ["email-accounts"] });
     },
   });
 }
