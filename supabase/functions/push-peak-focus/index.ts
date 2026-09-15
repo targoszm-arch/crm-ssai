@@ -15,6 +15,18 @@
 // diff. A push that quietly starts writing nothing is otherwise indistinguishable from one
 // with nothing to do.
 //
+// DEPLOYING THIS. It needs a [functions.push-peak-focus] block in supabase/config.toml
+// with verify_jwt = true. The deploy workflow refuses to ship a function that has no
+// block, because the CLI defaults verify_jwt to true and a public function that inherited
+// that default would silently stop working. This function was merged without one and the
+// deploy failed on exactly that gate, so it sat in main undeployed -- which is the drift
+// the workflow exists to prevent.
+//
+// The workflow also picks what to deploy by diffing supabase/functions/**, so a commit
+// that only edits config.toml triggers it and deploys nothing. Changing the block for an
+// existing function means touching the function too, or running the workflow by hand with
+// its name.
+//
 // SECRET. PEAK_FOCUS_SERVICE_ROLE_KEY is the Peak Focus project's service-role key, set as
 // a Function secret on the CRM project:
 //   supabase secrets set PEAK_FOCUS_SERVICE_ROLE_KEY=... --project-ref getqcxnjsohtlagscmfc
