@@ -40,6 +40,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { PageActions } from "@/components/layout/PageActions";
 
 type InboxTab = "email" | "linkedin";
+// How stale the mailbox has to be before opening the Inbox starts a background sync.
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+
 type SelectedItem = { type: "email"; item: Email } | { type: "linkedin"; item: LinkedInMessage } | null;
 type ViewMode = "split" | "full";
 
@@ -93,32 +96,53 @@ export default function Inbox() {
     localStorage.setItem("inbox-view-mode", viewMode);
   }, [viewMode]);
 
+  // Opening the Inbox used to kick off a full 30-day, 500-message Gmail sync every
+  // single time — the ref guarding it is per-mount, so navigating away and back re-ran
+  // it. That is not how a mail client behaves: Gmail syncs in the background and the UI
+  // just reads what is already stored.
+  //
+  // Now the sync is only started when one is actually due, judged by the account's
+  // last_sync_at, and it asks for no daysBack so the function pulls incrementally from
+  // that point. Opening the Inbox twice in a minute reads the database and nothing more.
   useEffect(() => {
-    if (activeTab === "email" && currentAccount && !autoSyncTriggered.current && !isAutoSyncing) {
-      autoSyncTriggered.current = true;
-      setIsAutoSyncing(true);
-      
-      syncEmails.mutate(
-        { accountId: currentAccount.id, maxResults: 500, daysBack: 30 },
-        {
-          onSuccess: (data) => {
+    if (activeTab !== "email" || !currentAccount) return;
+    if (autoSyncTriggered.current || isAutoSyncing) return;
+
+    const lastSync = currentAccount.last_sync_at
+      ? new Date(currentAccount.last_sync_at).getTime()
+      : 0;
+    const isDue = Date.now() - lastSync > AUTO_SYNC_INTERVAL_MS;
+    if (!isDue) return;
+
+    autoSyncTriggered.current = true;
+    setIsAutoSyncing(true);
+
+    syncEmails.mutate(
+      { accountId: currentAccount.id, maxResults: 500 },
+      {
+        onSuccess: (data) => {
+          // "0 new, 500 already synced" is not news. Only say something when the
+          // sync actually changed what is on screen.
+          if (data.syncedCount > 0 || data.errorCount > 0) {
             toast({
-              title: "Inbox Updated",
-              description: `${data.syncedCount} new, ${data.skippedCount} already synced, ${data.errorCount} errors`,
+              title: "Inbox updated",
+              description: `${data.syncedCount} new${
+                data.errorCount > 0 ? `, ${data.errorCount} errors` : ""
+              }`,
             });
-            setIsAutoSyncing(false);
-          },
-          onError: (error) => {
-            toast({
-              title: "Email Sync Failed",
-              description: error instanceof Error ? error.message : "Unknown error",
-              variant: "destructive",
-            });
-            setIsAutoSyncing(false);
-          },
-        }
-      );
-    }
+          }
+          setIsAutoSyncing(false);
+        },
+        onError: (error) => {
+          toast({
+            title: "Email Sync Failed",
+            description: error instanceof Error ? error.message : "Unknown error",
+            variant: "destructive",
+          });
+          setIsAutoSyncing(false);
+        },
+      }
+    );
   }, [activeTab, currentAccount, syncEmails, isAutoSyncing]);
 
   const handleSyncMeetAlfred = async () => {
@@ -393,9 +417,11 @@ export default function Inbox() {
                 showCheckboxes={true}
               />
             ) : (
-              <div className="flex-1 overflow-auto">
-                <LinkedInMessageList search="" linkedOnly={false} selectedMessage={selectedItem?.type === "linkedin" ? selectedItem.item : null} onSelectMessage={handleSelectLinkedInMessage} />
-              </div>
+              <LinkedInMessageList
+                linkedOnly={false}
+                selectedMessage={selectedItem?.type === "linkedin" ? selectedItem.item : null}
+                onSelectMessage={handleSelectLinkedInMessage}
+              />
             )}
           </div>
           

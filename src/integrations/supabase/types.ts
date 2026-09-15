@@ -895,6 +895,7 @@ export type Database = {
           created_at: string
           email_address: string
           expires_at: string | null
+          last_sync_at: string | null
           id: string
           provider: string
           refresh_token: string | null
@@ -906,6 +907,7 @@ export type Database = {
           created_at?: string
           email_address: string
           expires_at?: string | null
+          last_sync_at?: string | null
           id?: string
           provider?: string
           refresh_token?: string | null
@@ -917,6 +919,7 @@ export type Database = {
           created_at?: string
           email_address?: string
           expires_at?: string | null
+          last_sync_at?: string | null
           id?: string
           provider?: string
           refresh_token?: string | null
@@ -1550,6 +1553,55 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      list_members: {
+        Row: {
+          added_at: string
+          company_id: string | null
+          contact_id: string | null
+          id: string
+          list_id: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          company_id?: string | null
+          contact_id?: string | null
+          id?: string
+          list_id: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          company_id?: string | null
+          contact_id?: string | null
+          id?: string
+          list_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "list_members_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "list_members_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "list_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lms_leads: {
         Row: {

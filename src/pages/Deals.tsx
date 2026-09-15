@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Plus, Search, LayoutGrid, List, Table, TrendingUp, Settings, ChevronDown } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Plus, Search, LayoutGrid, List, Table, TrendingUp, Settings, ChevronDown, Building2, User, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -290,6 +290,37 @@ export default function Deals() {
                   </div>
                 </div>
                 
+                {/* The people the deal is about. Showing only the money and the
+                    stage meant the sheet was a dead end: you knew a deal existed
+                    and had no way to reach whoever it belongs to. */}
+                <div className="space-y-2 border-t pt-4">
+                  <p className="text-sm text-muted-foreground">Linked records</p>
+                  {selectedDeal.contacts ? (
+                    <Link
+                      to={`/people/${selectedDeal.contacts.id}`}
+                      className="flex items-center gap-2 text-sm font-medium hover:underline"
+                    >
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      {selectedDeal.contacts.first_name} {selectedDeal.contacts.last_name}
+                      <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Link>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No contact linked</p>
+                  )}
+                  {selectedDeal.companies ? (
+                    <Link
+                      to={`/companies/${selectedDeal.companies.id}`}
+                      className="flex items-center gap-2 text-sm font-medium hover:underline"
+                    >
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      {selectedDeal.companies.company_name}
+                      <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Link>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No company linked</p>
+                  )}
+                </div>
+
                 {selectedDeal.notes && (
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Notes</p>

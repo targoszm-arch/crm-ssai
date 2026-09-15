@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { Building2, Users, AlertTriangle, DollarSign } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -67,10 +68,16 @@ export function DealCard({ deal, onClick, isDragging }: DealCardProps) {
 
         {/* Company */}
         {deal.companies && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Building2 className="h-3.5 w-3.5" />
+          <Link
+            to={`/companies/${deal.companies.id}`}
+            // The card itself opens the deal, so a link inside it has to keep its
+            // click to itself or you get both the sheet and the navigation.
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
+          >
+            <Building2 className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{deal.companies.company_name}</span>
-          </div>
+          </Link>
         )}
 
         {/* Value and details */}
@@ -117,15 +124,19 @@ export function DealCard({ deal, onClick, isDragging }: DealCardProps) {
 
         {/* Contact info */}
         {deal.contacts && (
-          <div className="flex items-center gap-2 pt-1 border-t">
-            <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+          <Link
+            to={`/people/${deal.contacts.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-2 pt-1 border-t group"
+          >
+            <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">
               {deal.contacts.first_name?.[0]?.toUpperCase()}
               {deal.contacts.last_name?.[0]?.toUpperCase()}
             </div>
-            <span className="text-xs text-muted-foreground truncate">
+            <span className="text-xs text-muted-foreground truncate group-hover:text-foreground group-hover:underline">
               {deal.contacts.first_name} {deal.contacts.last_name}
             </span>
-          </div>
+          </Link>
         )}
       </div>
     </Card>

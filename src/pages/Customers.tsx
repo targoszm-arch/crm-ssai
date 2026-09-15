@@ -3,9 +3,10 @@ import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserPlus, Building2, Users, GraduationCap } from "lucide-react";
+import { UserPlus, Building2, Users, GraduationCap, List as ListIcon } from "lucide-react";
 import { CustomersTab } from "@/components/customers/CustomersTab";
 import { OrganisationsTab } from "@/components/customers/OrganisationsTab";
+import { ListsTab } from "@/components/customers/ListsTab";
 import { ExternalLMSLeadsTab } from "@/components/customers/ExternalLMSLeadsTab";
 import { ImportDataButton } from "@/components/customers/ImportDataButton";
 import { AddContactModal } from "@/components/customers/AddContactModal";
@@ -47,7 +48,7 @@ export default function Customers() {
             }}
             className="w-full"
           >
-            <TabsList className="grid w-full max-w-lg grid-cols-3">
+            <TabsList className="grid w-full max-w-2xl grid-cols-4">
               <TabsTrigger value="customers" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
                 Customers
@@ -59,6 +60,10 @@ export default function Customers() {
               <TabsTrigger value="lms-leads" className="flex items-center gap-2">
                 <GraduationCap className="h-4 w-4" />
                 LMS Leads
+              </TabsTrigger>
+              <TabsTrigger value="lists" className="flex items-center gap-2">
+                <ListIcon className="h-4 w-4" />
+                Lists
               </TabsTrigger>
             </TabsList>
 
@@ -72,6 +77,10 @@ export default function Customers() {
 
             <TabsContent value="lms-leads" className="mt-6">
               <ExternalLMSLeadsTab />
+            </TabsContent>
+
+            <TabsContent value="lists" className="mt-6">
+              <ListsTab />
             </TabsContent>
           </Tabs>
         </CardContent>
