@@ -126,19 +126,60 @@ Deno.serve(async (req: Request) => {
       lastName = nameParts.slice(1).join(" ") || "";
     }
 
-    // Try to find existing contact by email
+    // Find the existing contact by email, case-insensitively, and tolerate more than one.
+    //
+    // WHY NOT .eq(...).maybeSingle(), WHICH IS WHAT THIS WAS. Two ways that produced a
+    // duplicate contact on a signup from someone already in the CRM:
+    //
+    //   1. CASE. `email` above is lowercased, but .eq() is an exact match and 30 of the
+    //      2,802 contacts carry a mixed-case address (Meet Alfred and LinkedIn imports
+    //      write them as typed — "Shane.OHanlon@intertradeireland.com"). Lowercasing one
+    //      side of an exact comparison finds nothing, so the webhook created a second row
+    //      for a person it already had.
+    //   2. MULTIPLE MATCHES. maybeSingle() errors when more than one row comes back, and
+    //      that error was only logged — execution carried on with existingContact
+    //      undefined and inserted anyway. So an email that was already duplicated got a
+    //      THIRD row, every single time that person did anything. One address is already
+    //      duplicated today.
+    //
+    // ilike is the case-insensitive match. The address is escaped first because ilike
+    // treats _ and % as wildcards and both are legal in an email local part — without it,
+    // "a_b@x.com" would match "aXb@x.com" and attach a signup to a stranger.
+    //
+    // Ordering by created_at and taking the first makes the choice deterministic: the
+    // oldest row wins, so repeated signups keep landing on the same contact instead of
+    // ping-ponging between duplicates.
+    //
+    // contacts has no unique index on email (only on email_status), so nothing downstream
+    // catches a duplicate the lookup misses. This function is the only guard there is.
+    const emailPattern = email.replace(/([\\%_])/g, "\\$1");
     console.log(`Looking for existing contact with email: ${email}`);
-    const { data: existingContact, error: contactError } = await supabase
+    const { data: matchedContacts, error: contactError } = await supabase
       .from("contacts")
       .select("id, company_id")
-      .eq("email", email)
+      .ilike("email", emailPattern)
       .eq("user_id", userId)
-      .maybeSingle();
+      .order("created_at", { ascending: true })
+      .limit(1);
 
     if (contactError) {
+      // Still only logged, but now it cannot silently cause an insert: a failed lookup
+      // means we do not know whether the contact exists, and guessing "no" is what
+      // created the duplicates.
       console.error("Error finding contact:", contactError);
+      return new Response(
+        JSON.stringify({
+          error: "Contact lookup failed",
+          message: contactError.message,
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
+    const existingContact = matchedContacts?.[0] ?? null;
     let contactId = existingContact?.id || null;
     let companyId = existingContact?.company_id || null;
 
