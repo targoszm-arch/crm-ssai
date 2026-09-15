@@ -117,3 +117,9 @@ verify_jwt = true
 # so it must never be reachable without one.
 [functions.backfill-lms-leads]
 verify_jwt = true
+
+# Called from the app with the user's session. It rewrites another system's client
+# roster using a service-role key for the Peak Focus project, so it must never be
+# reachable without one — the function re-checks the session itself as well.
+[functions.push-peak-focus]
+verify_jwt = true
