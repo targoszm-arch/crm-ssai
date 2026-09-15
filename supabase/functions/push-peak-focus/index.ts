@@ -80,17 +80,58 @@ Deno.serve(async (req) => {
 
   try {
     // Who is asking. A push rewrites another system's client roster, so it is never
-    // anonymous even though the work below runs as service role.
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) return json({ error: 'Not authenticated' }, 401);
+    // anonymous even though the work below runs as service role. Two kinds of caller:
+    //
+    //   A PERSON, from the app, with a real session. The normal path.
+    //
+    //   THE SCHEDULER, with x-api-key. pg_cron has no user, and the other cron jobs here
+    //   authenticate with the anon key -- which works for them only because those
+    //   functions are verify_jwt = false. This one is verify_jwt = true and calls
+    //   auth.getUser(), and an anon key resolves to no user, so a cron using the same
+    //   pattern would 401 every night. Hence a shared secret, the same shape lms-webhook
+    //   already uses. It is its OWN secret, not CRM_WEBHOOK_API_KEY: that one is an
+    //   ingress key pasted into Zapier, and if it leaked it must not also let anyone
+    //   trigger writes into Peak Focus.
+    const pushKey = Deno.env.get('PEAK_FOCUS_PUSH_KEY');
+    const suppliedKey = req.headers.get('x-api-key');
+    const isScheduler = !!pushKey && !!suppliedKey && suppliedKey === pushKey;
 
-    const asUser = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: { user }, error: authError } = await asUser.auth.getUser();
-    if (authError || !user) return json({ error: 'Not authenticated' }, 401);
+    let ownerId: string;
+
+    if (isScheduler) {
+      // Which account's companies to push. Derived, never hardcoded -- but a machine
+      // caller must not GUESS when the answer is ambiguous, so more than one owner is a
+      // refusal rather than a pick. A person calling gets their own id and never lands
+      // here.
+      const { data: owners, error: ownerError } = await admin
+        .from('peak_focus_client_scope')
+        .select('user_id');
+      if (ownerError) throw new Error(`owner lookup failed: ${ownerError.message}`);
+
+      const distinct = [...new Set((owners ?? []).map((r) => r.user_id as string))];
+      if (distinct.length === 0) {
+        return json({ dry_run: true, scoped: 0, detail: 'Nothing in scope' });
+      }
+      if (distinct.length > 1) {
+        return json(
+          { error: `Scope spans ${distinct.length} owners; a scheduled push cannot choose` },
+          409,
+        );
+      }
+      ownerId = distinct[0];
+    } else {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) return json({ error: 'Not authenticated' }, 401);
+
+      const asUser = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: { user }, error: authError } = await asUser.auth.getUser();
+      if (authError || !user) return json({ error: 'Not authenticated' }, 401);
+      ownerId = user.id;
+    }
 
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
     dryRun = body?.dry_run !== false;
@@ -103,7 +144,7 @@ Deno.serve(async (req) => {
     const { data: scope, error: scopeError } = await admin
       .from('peak_focus_client_scope')
       .select('*')
-      .eq('user_id', user.id);
+      .eq('user_id', ownerId);
 
     if (scopeError) throw new Error(`scope read failed: ${scopeError.message}`);
 
@@ -144,6 +185,7 @@ Deno.serve(async (req) => {
     await admin.from('peak_focus_push_runs').insert({
       dry_run: dryRun,
       ok: true,
+      detail: isScheduler ? 'scheduled' : 'manual',
       scoped: rows.length,
       inserted: counts.insert ?? 0,
       updated: counts.update ?? 0,
