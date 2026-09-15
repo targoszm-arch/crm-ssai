@@ -393,9 +393,11 @@ export default function Inbox() {
                 showCheckboxes={true}
               />
             ) : (
-              <div className="flex-1 overflow-auto">
-                <LinkedInMessageList search="" linkedOnly={false} selectedMessage={selectedItem?.type === "linkedin" ? selectedItem.item : null} onSelectMessage={handleSelectLinkedInMessage} />
-              </div>
+              <LinkedInMessageList
+                linkedOnly={false}
+                selectedMessage={selectedItem?.type === "linkedin" ? selectedItem.item : null}
+                onSelectMessage={handleSelectLinkedInMessage}
+              />
             )}
           </div>
           

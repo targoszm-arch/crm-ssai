@@ -1,6 +1,7 @@
 import { Trash2, X, Download, Tag, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EnrichProviderMenu } from "./EnrichProviderMenu";
+import { AddToListMenu } from "./AddToListMenu";
 import type { EnrichProvider } from "@/lib/api/enrichment";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -17,6 +18,7 @@ import {
 
 interface OrganisationsBulkActionBarProps {
   selectedCount: number;
+  selectedIds: string[];
   onDelete: () => void;
   onClearSelection: () => void;
   onExport: () => void;
@@ -27,6 +29,7 @@ interface OrganisationsBulkActionBarProps {
 
 export function OrganisationsBulkActionBar({
   selectedCount,
+  selectedIds,
   onDelete,
   onClearSelection,
   onExport,
@@ -60,6 +63,8 @@ export function OrganisationsBulkActionBar({
             <Download className="h-4 w-4 mr-1" />
             Export CSV
           </Button>
+
+          <AddToListMenu companyIds={selectedIds} />
 
           <EnrichProviderMenu
             onEnrich={(provider) => onEnrich?.(provider)}

@@ -552,6 +552,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
 
       <OrganisationsBulkActionBar
         selectedCount={selectedIds.size}
+        selectedIds={Array.from(selectedIds)}
         onDelete={handleBulkDelete}
         onClearSelection={() => setSelectedIds(new Set())}
         onExport={handleExportCSV}

@@ -578,6 +578,7 @@ export function CustomersTab() {
 
       <CustomersBulkActionBar
         selectedCount={selectedIds.size}
+        selectedIds={Array.from(selectedIds)}
         onDelete={handleBulkDelete}
         onClearSelection={() => setSelectedIds(new Set())}
         onExport={handleBulkExport}
