@@ -25,9 +25,20 @@ The moment someone signs up they leave cold outbound permanently. Never send col
 mail through Resend — it is a permission-based ESP and the domain is the thing at risk.
 
 **Never enrol without checking three things:** marketing consent, the suppression list, and
-whether they are a paying customer. Customer exclusion is a query
-(`stripe_subscription_id is not null` in the LMS), never a hand-maintained list of names —
-there were 67 live subscriptions on 10 Sep 2026, not the two we had once written down.
+whether they are a paying customer. Customer exclusion is a query, never a hand-maintained
+list of names — but it is not the query this file used to give.
+
+`stripe_subscription_id is not null` does **not** mean paying, and the "67 live
+subscriptions on 10 Sep 2026" recorded here was that count. The LMS provisions a Stripe
+subscription for everyone at signup, Free plan included, so the id says a Stripe object
+exists and nothing about money. All of `subscription_events` on 15 Sep 2026: 62 events on
+the Free plan across 50 people, 3 touching Starter, and **exactly one invoice carrying a
+non-zero amount (EUR 29.00)**. Sixty-eight of those sixty-nine are not customers, and
+excluding them from lifecycle mail excludes almost every real signup.
+
+Paying means invoiced: `sum(amount_cents) > 0` in the LMS `subscription_events`. Read it
+off `trial_funnel.has_paid_invoice`, which exists for this. The old signal is still there
+as `has_stripe_subscription` — useful, but never as an answer to "are they a customer".
 
 ## Consent conventions (LMS)
 
