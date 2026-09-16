@@ -83,12 +83,18 @@ function VatPeriodTable({ txs, year }: { txs: FinanceTransaction[]; year: number
 
   const rows = periods.map(p => {
     const inPeriod = txs.filter(t => t.transaction_date >= p.start && t.transaction_date <= p.end);
+    // A VAT3 is filed in euro, so both sides use the converted figure.
+    // `vat_amount_cents` holds VAT as the receipt states it — USD on a USD
+    // invoice — and summing that mixes currencies: across the receipt log it
+    // reads EUR 357.64 of input VAT where the euro total is EUR 344.72.
+    const vatEur = (t: FinanceTransaction) =>
+      t.vat_eur_cents || t.vat_amount_cents || 0;
     const outputVat = inPeriod
       .filter(t => t.type === "income" && t.vat_treatment === "standard_23")
-      .reduce((s, t) => s + (t.vat_amount_cents ?? 0), 0);
+      .reduce((s, t) => s + (t.vat_collected_cents || vatEur(t)), 0);
     const inputVat = inPeriod
       .filter(t => t.type === "expense" && (t.vat_treatment === "standard_23" || t.vat_treatment === "reduced_135"))
-      .reduce((s, t) => s + (t.vat_amount_cents ?? 0), 0);
+      .reduce((s, t) => s + vatEur(t), 0);
     const vatDue = outputVat - inputVat;
     return { ...p, outputVat, inputVat, vatDue };
   });
