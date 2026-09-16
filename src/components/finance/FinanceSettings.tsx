@@ -8,6 +8,7 @@ import { CreditCard, Building2, Mail, Percent, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useTaxRates, useUpdateTaxRate } from "@/components/finance/useFinanceTransactions";
+import { RevolutConnect } from "@/components/finance/RevolutConnect";
 
 /**
  * Finance settings.
@@ -175,6 +176,8 @@ export default function FinanceSettings() {
 
   return (
     <>
+      <RevolutConnect />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Finance data sources</CardTitle>
