@@ -578,7 +578,16 @@ export default function FinancePage() {
     try {
       const { data: fnData, error } = await supabase.functions.invoke("sync-gmail-receipts", {});
       if (error) throw error;
-      toast.success(`Gmail: synced ${fnData.synced} receipts, skipped ${fnData.skipped}`);
+      // The harvest walks back to April 2025 and stops on a time budget, so
+      // "not finished" is a normal outcome and has to be said out loud —
+      // otherwise a partial run reads as a complete one.
+      if (fnData.done === false) {
+        toast.warning(fnData.message ?? "Time limit reached — run it again to continue.", {
+          duration: 10000,
+        });
+      } else {
+        toast.success(`Gmail: ${fnData.synced} new receipts (${fnData.skipped} skipped)`);
+      }
       if (fnData.synced > 0) setReceiptReviewOpen(true);
     } catch (err) {
       toast.error(`Gmail sync failed: ${String(err)}`);
