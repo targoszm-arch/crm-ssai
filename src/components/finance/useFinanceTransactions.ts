@@ -4,7 +4,9 @@ import { useAuth } from "@/hooks/useAuth";
 
 export interface FinanceTransaction {
   id: string;
-  source: "stripe" | "revolut" | "paypal" | "manual";
+  // Widened by 20260916120000: the Gmail receipt sync writes 'gmail' and the
+  // spreadsheet backfill writes 'receipt_log'.
+  source: "stripe" | "revolut" | "paypal" | "manual" | "gmail" | "receipt_log";
   source_id: string | null;
   type: "income" | "expense" | "refund" | "fee";
   category: string | null;

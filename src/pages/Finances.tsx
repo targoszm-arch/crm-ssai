@@ -10,15 +10,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, RefreshCw, Download,
   Receipt, Percent, DollarSign, Info, Check, Trash2, Search,
-  ChevronUp, ChevronDown, ChevronsUpDown, Layers, CreditCard, Mail, Building2
+  ChevronUp, ChevronDown, ChevronsUpDown, Layers, CreditCard, Mail, Building2, Copy
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, useLastSynced, useTaxRates, FinanceTransaction, FinanceTaxRate } from "@/components/finance/useFinanceTransactions";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { ImportStatementDialog } from "@/components/finance/ImportStatementDialog";
+import { DuplicateReviewDialog, DuplicateReviewItem } from "@/components/finance/DuplicateReviewDialog";
+import { findDuplicateGroups } from "@/components/finance/duplicateUtils";
 import { ReceiptReviewDialog } from "@/components/finance/ReceiptReviewDialog";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   centsToEur, centsToNum, VAT_TREATMENT_LABELS, VAT_TREATMENT_COLORS,
   SOURCE_COLORS, TYPE_COLORS, CATEGORIES, getVatPeriods, exportToCsv,
@@ -387,6 +389,9 @@ export default function FinancePage() {
   const [syncingGmail, setSyncingGmail] = useState(false);
   const [syncingRevolut, setSyncingRevolut] = useState(false);
   const [receiptReviewOpen, setReceiptReviewOpen] = useState(false);
+  const [dupReviewOpen, setDupReviewOpen] = useState(false);
+  const [dupWorking, setDupWorking] = useState(false);
+  const qc = useQueryClient();
 
   const { data: allTxs = [], isLoading } = useFinanceTransactions({ type: typeFilter, source: sourceFilter });
   const { data: lastSynced = {} } = useLastSynced();
@@ -416,6 +421,57 @@ export default function FinancePage() {
     : [...selectedYears].sort((a, b) => a - b).join(", ");
   const deleteTx = useDeleteTransaction();
   const updateTx = useUpdateTransaction();
+
+  // Suspected duplicates across everything stored, not just the visible year:
+  // the pair that matters most is an imported 2025 row against a 2026 sync.
+  const duplicateGroups = useMemo(() => findDuplicateGroups(allTxs), [allTxs]);
+  const duplicateItems: DuplicateReviewItem[] = useMemo(
+    () => duplicateGroups.flatMap(g => g.extras.map(extra => ({
+      key: extra.id,
+      candidate: {
+        date: extra.transaction_date,
+        who: extra.counterparty_name ?? extra.description ?? "—",
+        amountCents: extra.amount_eur_cents ?? extra.amount_cents,
+        currency: extra.currency,
+        type: extra.type,
+        note: `From ${extra.source}, added ${extra.created_at.slice(0, 10)}`
+          + (extra.is_reconciled ? " · reconciled" : ""),
+      },
+      matches: [{
+        date: g.keep.transaction_date,
+        who: g.keep.counterparty_name ?? g.keep.description ?? "—",
+        amountCents: g.keep.amount_eur_cents ?? g.keep.amount_cents,
+        currency: g.keep.currency,
+        type: g.keep.type,
+        note: `From ${g.keep.source}, added ${g.keep.created_at.slice(0, 10)}`
+          + (g.keep.is_reconciled ? " · reconciled" : ""),
+      }],
+      certain: !!extra.source_id && extra.source_id === g.keep.source_id,
+    }))),
+    [duplicateGroups],
+  );
+
+  // Approve keeps the row; decline deletes it. Deleting is the irreversible
+  // answer, so it is never the default and never applied in bulk without her
+  // saying so in the dialog.
+  const applyDuplicateDecisions = async (declined: Set<string>) => {
+    if (declined.size === 0) { setDupReviewOpen(false); return; }
+    setDupWorking(true);
+    try {
+      const { error } = await supabase
+        .from("finance_transactions")
+        .delete()
+        .in("id", [...declined]);
+      if (error) throw error;
+      toast.success(`Removed ${declined.size} duplicate ${declined.size === 1 ? "row" : "rows"}`);
+      qc.invalidateQueries({ queryKey: ["finance_transactions"] });
+      setDupReviewOpen(false);
+    } catch (e) {
+      toast.error(`Could not remove: ${String(e instanceof Error ? e.message : e)}`);
+    } finally {
+      setDupWorking(false);
+    }
+  };
 
   // Count unreconciled Gmail receipts for badge
   const { data: pendingReceipts = [] } = useQuery({
@@ -631,6 +687,12 @@ export default function FinancePage() {
               Review receipts ({pendingReceipts.length})
             </Button>
           )}
+          {duplicateItems.length > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setDupReviewOpen(true)}>
+              <Copy className="h-4 w-4 mr-2" />
+              Review duplicates ({duplicateItems.length})
+            </Button>
+          )}
           <AddTransactionDialog />
           <ImportStatementDialog />
           <Button variant="outline" size="sm" onClick={handleExport}>
@@ -686,6 +748,24 @@ export default function FinancePage() {
       </div>
 
       <ReceiptReviewDialog open={receiptReviewOpen} onClose={() => setReceiptReviewOpen(false)} />
+
+      <DuplicateReviewDialog
+        open={dupReviewOpen}
+        onOpenChange={setDupReviewOpen}
+        title="Possible duplicates"
+        description={
+          "These rows share a date, an amount and a counterparty with another row you "
+          + "already have. That is a filter, not a verdict — two genuine identical payments "
+          + "on one day look exactly like this. Keep the ones that are real; delete the "
+          + "ones that are the same money recorded twice."
+        }
+        items={duplicateItems}
+        approveLabel="Keep"
+        declineLabel="Delete"
+        defaultDecision="approve"
+        busy={dupWorking}
+        onConfirm={declined => { void applyDuplicateDecisions(declined); }}
+      />
 
       {/* Metric cards (FinanceFlow style) */}
       <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
