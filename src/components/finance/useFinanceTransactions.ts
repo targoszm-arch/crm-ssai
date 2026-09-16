@@ -233,3 +233,30 @@ export function useUpdateTaxRate() {
     },
   });
 }
+
+/**
+ * Row counts per calendar year, ignoring the year filter.
+ *
+ * The page filters to one year, so importing a statement that predates it
+ * looks exactly like an import that silently failed: hundreds of rows land
+ * and the table stays empty. This is what lets the page say where they went.
+ */
+export function useTransactionYears() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["finance_transaction_years", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("transaction_date");
+      if (error) throw error;
+      const counts = new Map<number, number>();
+      for (const row of data ?? []) {
+        const year = Number(String(row.transaction_date).slice(0, 4));
+        if (!Number.isNaN(year)) counts.set(year, (counts.get(year) ?? 0) + 1);
+      }
+      return counts;
+    },
+    enabled: !!user,
+  });
+}

@@ -181,7 +181,10 @@ async function parseStatement(text: string, kind: SourceKind): Promise<ParsedRow
     // Identity, best available first.
     //
     // A provider transaction id is stable no matter which export it arrives
-    // in, so overlapping date ranges reconcile correctly.
+    // in, so overlapping date ranges reconcile correctly. It is stored
+    // verbatim, not hashed, because the API sync stores Revolut's id verbatim
+    // too — that is what makes a transaction imported from a statement and
+    // the same transaction pulled from the API one row instead of two.
     //
     // Without one, identity has to come from the row's own contents — and two
     // byte-identical lines are legitimate (a subscription charged twice in a
@@ -195,7 +198,7 @@ async function parseStatement(text: string, kind: SourceKind): Promise<ParsedRow
 
     let sourceId: string;
     if (providerId) {
-      sourceId = await hashId(kind, ["id", providerId]);
+      sourceId = providerId;
     } else {
       const baseKey = [date, description, String(amountCents), currency, counterparty ?? ""];
       const seen = (occurrences.get(baseKey.join("|")) ?? 0) + 1;
@@ -269,9 +272,16 @@ export function ImportStatementDialog() {
         new Map(payload.map(r => [r.source_id, r])).values(),
       );
 
+      // ignoreDuplicates => ON CONFLICT DO NOTHING. A statement line is a
+      // fact that does not change once it has cleared, whereas the accounting
+      // category, tax rate, VAT treatment and reconciled flag on that row are
+      // a person's work. DO UPDATE would send this file's blank values over
+      // the top of them, so re-importing an overlapping period would quietly
+      // undo an afternoon of classifying. New rows land; existing rows are
+      // left exactly as they are.
       const { error } = await supabase
         .from("finance_transactions")
-        .upsert(deduped, { onConflict: "source,source_id", ignoreDuplicates: false });
+        .upsert(deduped, { onConflict: "source,source_id", ignoreDuplicates: true });
       if (error) throw error;
 
       toast.success(`Imported ${deduped.length} ${kind} transactions`);

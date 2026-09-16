@@ -300,7 +300,13 @@ Deno.serve(async (req: Request) => {
 
     const { error: upsertErr } = await sb
       .from("finance_transactions")
-      .upsert(rows, { onConflict: "source,source_id", ignoreDuplicates: false });
+      // ignoreDuplicates => ON CONFLICT DO NOTHING. A completed transaction is
+      // a fixed fact, but the accounting category, tax rate, VAT treatment and
+      // reconciled flag on that row are a person's work. DO UPDATE sent this
+      // function's blank values over the top of them, so a sync silently
+      // reset classification — the reconciliation work is the expensive part,
+      // and a bank feed has no business overwriting it.
+      .upsert(rows, { onConflict: "source,source_id", ignoreDuplicates: true });
     if (upsertErr) throw upsertErr;
 
     return json({ synced: rows.length, skipped });

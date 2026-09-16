@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, useLastSynced, useTaxRates, FinanceTransaction, FinanceTaxRate } from "@/components/finance/useFinanceTransactions";
+import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, useLastSynced, useTaxRates, useTransactionYears, FinanceTransaction, FinanceTaxRate } from "@/components/finance/useFinanceTransactions";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { ImportStatementDialog } from "@/components/finance/ImportStatementDialog";
 import { ReceiptReviewDialog } from "@/components/finance/ReceiptReviewDialog";
@@ -34,7 +34,7 @@ import { PageActions } from "@/components/layout/PageActions";
 const COLUMN_COUNT = 20;
 
 const currentYear = new Date().getFullYear();
-const YEARS = [currentYear, currentYear - 1, currentYear - 2];
+const YEARS = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3];
 
 // ── Metric card (adapted from remix-of-financeflow MetricCard) ──────────────
 function MetricCard({
@@ -390,6 +390,7 @@ export default function FinancePage() {
   const { data: txs = [], isLoading } = useFinanceTransactions({ year, type: typeFilter, source: sourceFilter });
   const { data: lastSynced = {} } = useLastSynced();
   const { data: taxRates = [] } = useTaxRates();
+  const { data: yearCounts } = useTransactionYears();
   const deleteTx = useDeleteTransaction();
   const updateTx = useUpdateTransaction();
 
@@ -442,6 +443,15 @@ export default function FinancePage() {
     });
     return months;
   }, [txs, year]);
+
+  // Years that hold rows the current filter hides.
+  const otherYears = useMemo(() => {
+    if (!yearCounts) return [];
+    return Array.from(yearCounts.entries())
+      .filter(([y, count]) => y !== year && count > 0)
+      .sort(([a], [b]) => b - a)
+      .map(([y, count]) => ({ year: y, count }));
+  }, [yearCounts, year]);
 
   // ── Filtered + searched + sorted rows ────────────────────────────────────
   const filteredTxs = useMemo(() => {
@@ -778,6 +788,25 @@ export default function FinancePage() {
               {filteredTxs.length} row{filteredTxs.length !== 1 ? "s" : ""}
             </span>
           </div>
+
+          {/* Rows outside the chosen year are invisible, which makes a
+              successful import of an older statement look like a failed one.
+              Say where they are, and offer the jump. */}
+          {otherYears.length > 0 && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+              <Info className="h-4 w-4 shrink-0" />
+              <span>
+                {otherYears.reduce((n, y) => n + y.count, 0)} transaction
+                {otherYears.reduce((n, y) => n + y.count, 0) === 1 ? "" : "s"} outside {year}.
+              </span>
+              {otherYears.map(y => (
+                <Button key={y.year} variant="outline" size="sm" className="h-7"
+                  onClick={() => setYear(y.year)}>
+                  {y.year} ({y.count})
+                </Button>
+              ))}
+            </div>
+          )}
 
           <Card className="overflow-hidden">
             <div className="max-h-[70vh] min-h-[280px] overflow-auto">

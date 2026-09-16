@@ -313,7 +313,7 @@ Deno.serve(async (req: Request) => {
 
         const { error: upsertErr } = await sb
           .from("finance_transactions")
-          .upsert(upsertRow, { onConflict: "source,source_id", ignoreDuplicates: false });
+          .upsert(upsertRow, { onConflict: "source,source_id", ignoreDuplicates: true });
 
         if (upsertErr) {
           errors.push(`${msg.id}: ${upsertErr.message}`);
