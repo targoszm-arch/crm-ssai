@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import FinanceSettings from "@/components/finance/FinanceSettings";
 
 const WEBHOOK_URL = "https://getqcxnjsohtlagscmfc.supabase.co/functions/v1/lms-webhook";
 
@@ -145,6 +146,8 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      <FinanceSettings />
     </div>);
 
 }

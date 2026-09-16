@@ -25,6 +25,35 @@ export interface FinanceTransaction {
   notes: string | null;
   raw_data: Record<string, unknown> | null;
   created_at: string;
+
+  // Receipt-log columns. `subject` is the receipt email's subject and is what
+  // identifies a document to a human; `description` mirrors it for rows that
+  // came from elsewhere. The three links are how a row gets reconciled —
+  // reconciliation means opening the PDF, not ticking a box.
+  subject: string | null;
+  vat_eur_cents: number;
+  vat_collected_cents: number;
+  receipt_filename: string | null;
+  receipt_size: string | null;
+  drive_url: string | null;
+  gmail_url: string | null;
+  mailbox: string | null;
+
+  // Accounting posting. `accounting_category` is a fixed chart-of-accounts
+  // code; the tax rate stores both name and the percentage it was posted at,
+  // so editing a rate later cannot restate a filed period.
+  accounting_category: string | null;
+  tax_rate_name: string | null;
+  tax_rate_percent: number | null;
+}
+
+export interface FinanceTaxRate {
+  id: string;
+  name: string;
+  percent: number;
+  applies_to: "sales" | "purchases" | "both";
+  is_active: boolean;
+  sort_order: number;
 }
 
 export function useFinanceTransactions(filters?: {
@@ -163,5 +192,44 @@ export function useUnreconciledGmailTransactions() {
       return data as FinanceTransaction[];
     },
     enabled: !!user,
+  });
+}
+
+/**
+ * Tax rates are rows, not a constant, because the percentage is editable
+ * while the names are not. A transaction stores the percentage it was posted
+ * at, so changing a rate here never silently restates an already-filed VAT3.
+ */
+export function useTaxRates() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["finance_tax_rates", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("finance_tax_rates")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as FinanceTaxRate[];
+    },
+    enabled: !!user,
+  });
+}
+
+export function useUpdateTaxRate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, percent }: { id: string; percent: number }) => {
+      const { error } = await supabase
+        .from("finance_tax_rates")
+        .update({ percent })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["finance_tax_rates"] });
+      qc.invalidateQueries({ queryKey: ["finance_transactions"] });
+    },
   });
 }
