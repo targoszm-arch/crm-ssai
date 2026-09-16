@@ -112,10 +112,112 @@ Deno.serve(async (req) => {
       .single();
 
     if (findError || !sequenceEmail) {
-      console.log("Sequence email not found for:", data.email_id);
-      return new Response(JSON.stringify({ success: true, message: "Email not from sequence" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      // Not a sequence email. Until now this returned here and the event was lost, which
+      // is why email_tracking_events sat at zero rows while Resend had been delivering
+      // events to this endpoint since January.
+      //
+      // Content Lab solved the same problem by keying on the RECIPIENT rather than a
+      // message id (its newsletter_events table has ~925 opens and counting). Keying on
+      // resend_message_id alone cannot work for a send composed outside the sequence
+      // engine: the id does not exist until Resend returns it, so email.sent and
+      // email.delivered routinely arrive before any row exists to match.
+      //
+      // So fall back to the address. Anything we can tie to a contact gets recorded.
+      const recipient = Array.isArray(data?.to) ? String(data.to[0] ?? "").toLowerCase() : "";
+      if (!recipient) {
+        return new Response(JSON.stringify({ success: true, message: "No recipient to match" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Tags are how a send declares what it belongs to; send-email and any hand-rolled
+      // send should set campaign and user_id. Mirrors Content Lab's schedule_id/user_id.
+      const tagMap: Record<string, string> = {};
+      for (const t of (Array.isArray(data?.tags) ? data.tags : [])) {
+        if (t?.name && t?.value) tagMap[String(t.name)] = String(t.value);
+      }
+
+      // Escape LIKE wildcards — an address is user-supplied and ilike treats % and _ as
+      // patterns, which would otherwise match the wrong contact.
+      const pattern = recipient.replace(/([\\%_])/g, "\\$1");
+      const { data: matched, error: contactErr } = await supabase
+        .from("contacts")
+        .select("id, user_id")
+        .ilike("email", pattern)
+        .order("created_at", { ascending: true })
+        .limit(1);
+
+      if (contactErr) {
+        console.error("Contact lookup failed:", contactErr);
+        // 503 so Resend retries rather than silently dropping the event.
+        return new Response(JSON.stringify({ success: false, error: "Contact lookup failed" }), {
+          status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const contact = matched?.[0] ?? null;
+      if (!contact) {
+        console.log("No contact for recipient, nothing to attribute:", recipient);
+        return new Response(JSON.stringify({ success: true, message: "No matching contact" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Same vocabulary Content Lab uses, so the two projects report alike.
+      const EVENT_TYPES: Record<string, string> = {
+        "email.opened": "open",
+        "email.clicked": "click",
+        "email.bounced": "bounce",
+        "email.complained": "complaint",
+        "email.unsubscribed": "unsubscribe",
+        // sent/delivered deliberately absent: one row per recipient per send for a
+        // signal nobody reads. Absence of a bounce is the delivery signal.
+      };
+      const eventType = EVENT_TYPES[type] ?? null;
+
+      if (!eventType) {
+        return new Response(JSON.stringify({ success: true, message: `Unhandled type ${type}` }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const linkUrl: string | null = data?.click?.link ?? null;
+      const { error: eventError } = await supabase.from("email_tracking_events").insert({
+        contact_id: contact.id,
+        event_type: eventType,
+        link_url: linkUrl,
+        occurred_at: payload?.created_at ?? new Date().toISOString(),
+        user_agent: data?.click?.user_agent ?? `resend-webhook/${type}`,
+        ip_address: data?.click?.ip_address ?? null,
+        user_id: tagMap["user_id"] ?? contact.user_id ?? null,
       });
+      if (eventError) {
+        console.error("Error recording tracking event:", eventError);
+      }
+
+      // A click still routes, exactly as it does on the sequence path — one set of rules.
+      if (eventType === "click" && linkUrl) {
+        const { error: routeError } = await supabase.rpc("route_sequence_click", {
+          p_contact_id: contact.id,
+          p_link_url: linkUrl,
+          p_user_id: tagMap["user_id"] ?? contact.user_id ?? null,
+        });
+        if (routeError) console.error("route_sequence_click failed:", routeError);
+      }
+
+      // Honour an opt-out on the contact so a later send cannot reach them again.
+      if (eventType === "unsubscribe" || eventType === "complaint") {
+        const { error: dncError } = await supabase
+          .from("contacts")
+          .update({ do_not_contact: true })
+          .eq("id", contact.id);
+        if (dncError) console.error("Failed to set do_not_contact:", dncError);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, matched_by: "recipient", event_type: eventType }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // Update based on event type
