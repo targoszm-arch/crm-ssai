@@ -578,7 +578,7 @@ export default function FinancePage() {
   };
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col gap-6">
+    <div className="flex w-full shrink-0 flex-col gap-6 pb-12">
       {/* Header */}
       <div className="flex shrink-0 flex-col gap-4">
         <PageActions>
@@ -701,14 +701,14 @@ export default function FinancePage() {
       </Card>
 
       {/* Tabs */}
-      <Tabs defaultValue="transactions" className="flex min-h-0 flex-1 flex-col">
+      <Tabs defaultValue="transactions">
         <TabsList className="shrink-0 self-start">
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
           <TabsTrigger value="vat">VAT Report</TabsTrigger>
         </TabsList>
 
         {/* ── Transactions tab ──────────────────────────────────────────── */}
-        <TabsContent value="transactions" className="mt-4 flex min-h-0 flex-1 flex-col gap-4 data-[state=inactive]:hidden">
+        <TabsContent value="transactions" className="mt-4 space-y-4">
           {/* Filter + Group row */}
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <div className="relative">
@@ -779,8 +779,8 @@ export default function FinancePage() {
             </span>
           </div>
 
-          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-auto">
+          <Card className="overflow-hidden">
+            <div className="max-h-[70vh] min-h-[280px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -809,12 +809,16 @@ export default function FinancePage() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={COLUMN_COUNT} className="text-center py-12 text-muted-foreground">Loading…</TableCell>
+                      <TableCell colSpan={COLUMN_COUNT} className="h-48 text-muted-foreground">
+                        <div className="sticky left-0 w-[min(100vw,60rem)] text-center">Loading…</div>
+                      </TableCell>
                     </TableRow>
                   ) : filteredTxs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={COLUMN_COUNT} className="text-center py-12 text-muted-foreground">
-                        No transactions found. Sync Stripe, import a statement, or add one manually.
+                      <TableCell colSpan={COLUMN_COUNT} className="h-48 text-muted-foreground">
+                        <div className="sticky left-0 w-[min(100vw,60rem)] text-center">
+                          No transactions found. Sync Stripe, import a statement, or add one manually.
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : groupedRows ? (
@@ -855,7 +859,7 @@ export default function FinancePage() {
         </TabsContent>
 
         {/* ── VAT Report tab ─────────────────────────────────────────────── */}
-        <TabsContent value="vat" className="mt-4 space-y-6 overflow-auto">
+        <TabsContent value="vat" className="mt-4 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-5">
               <p className="text-sm text-muted-foreground">Output VAT (collected)</p>

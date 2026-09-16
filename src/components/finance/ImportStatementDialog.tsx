@@ -132,6 +132,9 @@ async function parseStatement(text: string, kind: SourceKind): Promise<ParsedRow
   }
 
   const out: ParsedRow[] = [];
+  // How many times each identifying key has been seen so far in this file.
+  const occurrences = new Map<string, number>();
+
   for (const r of rows.slice(1)) {
     const date = toDate(r[dateCol] ?? "");
     if (!date) continue;
@@ -153,8 +156,12 @@ async function parseStatement(text: string, kind: SourceKind): Promise<ParsedRow
     else if (rawType.includes("fee")) type = "fee";
     else type = amountCents > 0 ? "income" : "expense";
 
+    const baseKey = [date, description, String(amountCents), currency, counterparty ?? ""];
+    const seen = (occurrences.get(baseKey.join("|")) ?? 0) + 1;
+    occurrences.set(baseKey.join("|"), seen);
+
     out.push({
-      source_id: await hashId(kind, [date, description, String(amountCents), currency, counterparty ?? ""]),
+      source_id: await hashId(kind, seen === 1 ? baseKey : [...baseKey, `#${seen}`]),
       transaction_date: date,
       description,
       counterparty_name: counterparty,
@@ -213,12 +220,18 @@ export function ImportStatementDialog() {
         raw_data: { imported_from: fileName },
       }));
 
+      // Postgres rejects an ON CONFLICT DO UPDATE that would affect the same
+      // row twice, so the batch must be unique on source_id before it is sent.
+      const deduped = Array.from(
+        new Map(payload.map(r => [r.source_id, r])).values(),
+      );
+
       const { error } = await supabase
         .from("finance_transactions")
-        .upsert(payload, { onConflict: "source,source_id", ignoreDuplicates: false });
+        .upsert(deduped, { onConflict: "source,source_id", ignoreDuplicates: false });
       if (error) throw error;
 
-      toast.success(`Imported ${payload.length} ${kind} transactions`);
+      toast.success(`Imported ${deduped.length} ${kind} transactions`);
       qc.invalidateQueries({ queryKey: ["finance_transactions"] });
       setOpen(false);
       setRows([]);
