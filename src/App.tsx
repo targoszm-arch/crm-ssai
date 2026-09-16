@@ -24,6 +24,7 @@ import Deals from "./pages/Deals";
 import Auth from "./pages/Auth";
 import OAuthCallback from "./pages/OAuthCallback";
 import Analytics from "./pages/Analytics";
+import Growth from "./pages/Growth";
 import Visitors from "./pages/Visitors";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -65,6 +66,7 @@ const PROTECTED_ROUTES: Array<{ path: string; element: ReactNode }> = [
   { path: "/calendar", element: <Calendar /> },
   { path: "/visitors", element: <Visitors /> },
   { path: "/analytics", element: <Analytics /> },
+  { path: "/growth", element: <Growth /> },
   { path: "/settings", element: <Settings /> },
 ];
 

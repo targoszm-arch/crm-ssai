@@ -84,6 +84,12 @@ verify_jwt = false
 [functions.fetch-lms-customers]
 verify_jwt = false
 
+# Reads trial-funnel aggregates from the LMS for the growth dashboard. Like
+# fetch-lms-customers it checks the caller's session itself with
+# auth.getUser(), so the platform gate is off and the function is the gate.
+[functions.fetch-lms-funnel]
+verify_jwt = false
+
 [functions.linkedin-guard-webhook]
 verify_jwt = false
 
