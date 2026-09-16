@@ -1019,6 +1019,7 @@ export type Database = {
           ip_address: string | null
           link_url: string | null
           occurred_at: string | null
+          sequence_email_id: string | null
           user_agent: string | null
           user_id: string | null
         }
@@ -1031,6 +1032,7 @@ export type Database = {
           ip_address?: string | null
           link_url?: string | null
           occurred_at?: string | null
+          sequence_email_id?: string | null
           user_agent?: string | null
           user_id?: string | null
         }
@@ -1043,6 +1045,7 @@ export type Database = {
           ip_address?: string | null
           link_url?: string | null
           occurred_at?: string | null
+          sequence_email_id?: string | null
           user_agent?: string | null
           user_id?: string | null
         }
@@ -1059,6 +1062,13 @@ export type Database = {
             columns: ["email_id"]
             isOneToOne: false
             referencedRelation: "emails"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_tracking_events_sequence_email_id_fkey"
+            columns: ["sequence_email_id"]
+            isOneToOne: false
+            referencedRelation: "sequence_emails"
             referencedColumns: ["id"]
           },
         ]

@@ -103,6 +103,12 @@ Deno.serve(async (req) => {
       .select(`
         id,
         enrollment_id,
+        opened_at,
+        clicked_at,
+        total_opens,
+        unique_opens,
+        total_clicks,
+        unique_clicks,
         sequence_enrollments (
           contact_id,
           user_id
@@ -181,8 +187,25 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Attribute the event to a send where one exists. Matching on
+      // resend_message_id failed above, but the analytics page joins tracking events
+      // to sequence_emails on email_id, so an event with a null email_id shows up in
+      // no chart. The most recent send to this contact is the best available guess and
+      // is nearly always right: a person is not in two campaigns the same minute.
+      // Still a guess, so it never overrides the message-id match — it only fills a
+      // column that would otherwise be null.
+      const { data: recentSend } = await supabase
+        .from("sequence_emails")
+        .select("id, sequence_enrollments!inner(contact_id)")
+        .eq("sequence_enrollments.contact_id", contact.id)
+        .not("sent_at", "is", null)
+        .order("sent_at", { ascending: false })
+        .limit(1);
+      const attributedSequenceEmailId: string | null = recentSend?.[0]?.id ?? null;
+
       const linkUrl: string | null = data?.click?.link ?? null;
       const { error: eventError } = await supabase.from("email_tracking_events").insert({
+        sequence_email_id: attributedSequenceEmailId,
         contact_id: contact.id,
         event_type: eventType,
         link_url: linkUrl,
@@ -231,14 +254,47 @@ Deno.serve(async (req) => {
       case "email.delivered":
         updates.status = "delivered";
         break;
-      case "email.opened":
-        updates.opened_at = new Date().toISOString();
+      case "email.opened": {
+        const openedAt = new Date().toISOString();
         updates.status = "opened";
+        // opened_at is the FIRST open — overwriting it on every re-open would turn
+        // "when did they read it" into "when did they last read it".
+        if (!(sequenceEmail as any).opened_at) updates.opened_at = openedAt;
+
+        // Read-modify-write. Two opens landing in the same instant can lose a count;
+        // that is acceptable for a counter nobody bills on, and the tracking rows
+        // below are the authoritative record either way.
+        updates.total_opens = ((sequenceEmail as any).total_opens ?? 0) + 1;
+        updates.unique_opens = (sequenceEmail as any).opened_at
+          ? ((sequenceEmail as any).unique_opens ?? 1)
+          : 1;
+
+        // The charts read email_tracking_events, not these columns. Without this row
+        // an open recorded here appeared in the totals but in none of the timelines.
+        const openEnrollment = (sequenceEmail as any).sequence_enrollments;
+        if (openEnrollment?.contact_id) {
+          const { error: openEventError } = await supabase
+            .from("email_tracking_events").insert({
+              sequence_email_id: sequenceEmail.id,
+              contact_id: openEnrollment.contact_id,
+              event_type: "open",
+              occurred_at: openedAt,
+              user_agent: data?.user_agent ?? `resend-webhook/${type}`,
+              ip_address: data?.ip_address ?? null,
+              user_id: openEnrollment.user_id ?? null,
+            });
+          if (openEventError) console.error("Error recording open event:", openEventError);
+        }
         break;
+      }
       case "email.clicked": {
         const clickedAt = new Date().toISOString();
-        updates.clicked_at = clickedAt;
         updates.status = "clicked";
+        if (!(sequenceEmail as any).clicked_at) updates.clicked_at = clickedAt;
+        updates.total_clicks = ((sequenceEmail as any).total_clicks ?? 0) + 1;
+        updates.unique_clicks = (sequenceEmail as any).clicked_at
+          ? ((sequenceEmail as any).unique_clicks ?? 1)
+          : 1;
 
         // Resend tells us WHICH link was clicked, in data.click.link. This used to be
         // dropped, which made segmentation impossible for anything Resend sent — and under
@@ -252,7 +308,10 @@ Deno.serve(async (req) => {
           // email_tracking_events is where clicks are read from for reporting. Write it
           // here too so a Resend-sent click and a CRM-sent click look the same downstream.
           const { error: eventError } = await supabase.from("email_tracking_events").insert({
-            email_id: sequenceEmail.id,
+            // sequence_email_id, not email_id: email_id references `emails` (the
+            // mailbox table) and this is a sequence send. Writing it to email_id
+            // violated the foreign key and the insert was silently discarded.
+            sequence_email_id: sequenceEmail.id,
             contact_id: contactId,
             event_type: "click",
             link_url: linkUrl,
