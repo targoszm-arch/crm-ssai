@@ -255,3 +255,69 @@ export function useTransactionYears() {
     enabled: !!user,
   });
 }
+
+export interface FinanceVatReturn {
+  id: string;
+  period_start: string;
+  period_end: string;
+  status: "open" | "submitted";
+  submitted_on: string | null;
+  filed_output_vat_cents: number | null;
+  filed_input_vat_cents: number | null;
+  filed_net_cents: number | null;
+  notes: string | null;
+}
+
+export function useVatReturns() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["finance_vat_returns", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("finance_vat_returns")
+        .select("*")
+        .order("period_start", { ascending: false });
+      if (error) throw error;
+      return data as unknown as FinanceVatReturn[];
+    },
+    enabled: !!user,
+  });
+}
+
+/**
+ * Marks a period filed, or reopens it.
+ *
+ * Filing copies the figures in rather than referencing them: what went to
+ * Revenue is a historical fact, and classifying an old receipt next month must
+ * not restate a return that has already been submitted.
+ */
+export function useSetVatReturnStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      period_start: string;
+      period_end: string;
+      status: "open" | "submitted";
+      submitted_on?: string | null;
+      outputVatCents?: number;
+      inputVatCents?: number;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const filed = args.status === "submitted";
+      const { error } = await supabase
+        .from("finance_vat_returns")
+        .upsert({
+          user_id: user!.id,
+          period_start: args.period_start,
+          period_end: args.period_end,
+          status: args.status,
+          submitted_on: filed ? (args.submitted_on ?? new Date().toISOString().slice(0, 10)) : null,
+          filed_output_vat_cents: filed ? (args.outputVatCents ?? 0) : null,
+          filed_input_vat_cents: filed ? (args.inputVatCents ?? 0) : null,
+          filed_net_cents: filed ? (args.outputVatCents ?? 0) - (args.inputVatCents ?? 0) : null,
+        } as never, { onConflict: "user_id,period_start,period_end" });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance_vat_returns"] }),
+  });
+}

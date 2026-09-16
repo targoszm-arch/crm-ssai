@@ -1464,6 +1464,51 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_vat_returns: {
+        Row: {
+          created_at: string
+          filed_input_vat_cents: number | null
+          filed_net_cents: number | null
+          filed_output_vat_cents: number | null
+          id: string
+          notes: string | null
+          period_end: string
+          period_start: string
+          status: string
+          submitted_on: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          filed_input_vat_cents?: number | null
+          filed_net_cents?: number | null
+          filed_output_vat_cents?: number | null
+          id?: string
+          notes?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          submitted_on?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          filed_input_vat_cents?: number | null
+          filed_net_cents?: number | null
+          filed_output_vat_cents?: number | null
+          id?: string
+          notes?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          submitted_on?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           amount: number

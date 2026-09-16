@@ -14,10 +14,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, useLastSynced, useTaxRates, FinanceTransaction, FinanceTaxRate } from "@/components/finance/useFinanceTransactions";
+import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, useLastSynced, useTaxRates, useVatReturns, FinanceTransaction, FinanceTaxRate } from "@/components/finance/useFinanceTransactions";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { ImportStatementDialog } from "@/components/finance/ImportStatementDialog";
 import { DuplicateReviewDialog, DuplicateReviewItem } from "@/components/finance/DuplicateReviewDialog";
+import { AccountantPack } from "@/components/finance/AccountantPack";
 import { findDuplicateGroups } from "@/components/finance/duplicateUtils";
 import { ReceiptReviewDialog } from "@/components/finance/ReceiptReviewDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -78,63 +79,6 @@ function MetricCard({
 }
 
 // ── VAT summary row ────────────────────────────────────────────────────────
-function VatPeriodTable({ txs, year }: { txs: FinanceTransaction[]; year: number }) {
-  const periods = getVatPeriods(year);
-
-  const rows = periods.map(p => {
-    const inPeriod = txs.filter(t => t.transaction_date >= p.start && t.transaction_date <= p.end);
-    // A VAT3 is filed in euro, so both sides use the converted figure.
-    // `vat_amount_cents` holds VAT as the receipt states it — USD on a USD
-    // invoice — and summing that mixes currencies: across the receipt log it
-    // reads EUR 357.64 of input VAT where the euro total is EUR 344.72.
-    const vatEur = (t: FinanceTransaction) =>
-      t.vat_eur_cents || t.vat_amount_cents || 0;
-    const outputVat = inPeriod
-      .filter(t => t.type === "income" && t.vat_treatment === "standard_23")
-      .reduce((s, t) => s + (t.vat_collected_cents || vatEur(t)), 0);
-    const inputVat = inPeriod
-      .filter(t => t.type === "expense" && (t.vat_treatment === "standard_23" || t.vat_treatment === "reduced_135"))
-      .reduce((s, t) => s + vatEur(t), 0);
-    const vatDue = outputVat - inputVat;
-    return { ...p, outputVat, inputVat, vatDue };
-  });
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Period (VAT3)</TableHead>
-          <TableHead className="text-right">Output VAT (€)</TableHead>
-          <TableHead className="text-right">Input VAT (€)</TableHead>
-          <TableHead className="text-right">VAT Due (€)</TableHead>
-          <TableHead>Status</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map(r => (
-          <TableRow key={r.label}>
-            <TableCell className="font-medium">{r.label} {year}</TableCell>
-            <TableCell className="text-right">{centsToEur(r.outputVat)}</TableCell>
-            <TableCell className="text-right text-emerald-600">-{centsToEur(r.inputVat)}</TableCell>
-            <TableCell className={cn("text-right font-semibold", r.vatDue > 0 ? "text-rose-600" : "text-emerald-600")}>
-              {centsToEur(r.vatDue)}
-            </TableCell>
-            <TableCell>
-              {r.vatDue === 0 && r.outputVat === 0 ? (
-                <Badge variant="secondary">No data</Badge>
-              ) : (
-                <Badge className={r.vatDue > 0 ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"}>
-                  {r.vatDue > 0 ? "Payable" : "Refund"}
-                </Badge>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
 type SortField = "date" | "amount" | "customer" | "category" | "type";
 type SortDir = "asc" | "desc";
 type GroupBy = "none" | "category" | "type" | "customer" | "month";
@@ -402,6 +346,7 @@ export default function FinancePage() {
   const { data: allTxs = [], isLoading } = useFinanceTransactions({ type: typeFilter, source: sourceFilter });
   const { data: lastSynced = {} } = useLastSynced();
   const { data: taxRates = [] } = useTaxRates();
+  const { data: vatReturns = [] } = useVatReturns();
   // Years present in the data, derived from rows already in memory.
   const availableYears = useMemo(() => {
     const counts = new Map<number, number>();
@@ -1006,36 +951,13 @@ export default function FinancePage() {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                VAT3 Bi-Monthly Periods — {yearLabel}
-                <Tooltip>
-                  <TooltipTrigger>
-                    <Info className="h-4 w-4 text-muted-foreground" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    Irish VAT returns (VAT3) are filed bi-monthly via ROS. Deadline is 19th of the month following the end of the period (23rd for ROS online).
-                  </TooltipContent>
-                </Tooltip>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* A VAT3 is filed per period per year, so each selected year
-                  gets its own table rather than being summed together. */}
-              <div className="space-y-6">
-                {(selectedYears.size > 0
-                  ? [...selectedYears].sort((a, b) => b - a)
-                  : availableYears.map(y => y.year)
-                ).map(y => (
-                  <div key={y}>
-                    <p className="mb-2 text-sm font-medium text-muted-foreground">{y}</p>
-                    <VatPeriodTable txs={txs} year={y} />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          {/* His four artefacts, plus the per-period figures and the filing
+              ledger that keep the Offset row honest. */}
+          <AccountantPack
+            allTxs={allTxs}
+            years={selectedYears.size > 0 ? [...selectedYears] : availableYears.map(y => y.year)}
+            vatReturns={vatReturns}
+          />
 
           <Card className="p-5 bg-blue-50 border-blue-200">
             <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
