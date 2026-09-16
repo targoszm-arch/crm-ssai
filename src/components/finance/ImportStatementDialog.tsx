@@ -77,6 +77,20 @@ function findCol(headers: string[], ...candidates: string[]): number {
   return -1;
 }
 
+/**
+ * Exact header match only. `findCol` falls back to a substring test, which is
+ * right for descriptive columns and badly wrong for an identity column: "ID"
+ * would match "Paid ID", "Balance ID", anything.
+ */
+function findExactCol(headers: string[], ...candidates: string[]): number {
+  const norm = headers.map(h => h.trim().toLowerCase());
+  for (const c of candidates) {
+    const i = norm.indexOf(c.toLowerCase());
+    if (i !== -1) return i;
+  }
+  return -1;
+}
+
 function toCents(raw: string): number {
   if (!raw) return 0;
   // Strip currency symbols and thousands separators; accept comma decimals.
@@ -124,6 +138,14 @@ async function parseStatement(text: string, kind: SourceKind): Promise<ParsedRow
   const feeCol  = findCol(headers, "Fee");
   const typeCol = findCol(headers, "Type");
   const stateCol = findCol(headers, "State", "Status");
+  // A provider-assigned id is the only file-independent identity a statement
+  // offers. PayPal exports carry "Transaction ID"; some Revolut exports carry
+  // an id or reference column. When one exists, everything below about
+  // occurrence counting is moot.
+  const idCol = findExactCol(
+    headers, "Transaction ID", "Transaction reference", "Reference ID",
+    "Payment ID", "Transaction id", "ID",
+  );
 
   if (dateCol === -1 || amtCol === -1) {
     throw new Error(
@@ -156,12 +178,33 @@ async function parseStatement(text: string, kind: SourceKind): Promise<ParsedRow
     else if (rawType.includes("fee")) type = "fee";
     else type = amountCents > 0 ? "income" : "expense";
 
-    const baseKey = [date, description, String(amountCents), currency, counterparty ?? ""];
-    const seen = (occurrences.get(baseKey.join("|")) ?? 0) + 1;
-    occurrences.set(baseKey.join("|"), seen);
+    // Identity, best available first.
+    //
+    // A provider transaction id is stable no matter which export it arrives
+    // in, so overlapping date ranges reconcile correctly.
+    //
+    // Without one, identity has to come from the row's own contents — and two
+    // byte-identical lines are legitimate (a subscription charged twice in a
+    // day, a split payment), so the nth occurrence gets its own id. That
+    // counter restarts per file, which is exact for the normal case of
+    // whole-day exports (every row sharing a key shares its date, so any
+    // export covering that date contains all of them) but can mis-pair if an
+    // export boundary ever splits a same-day, same-amount set. Nothing in the
+    // file can distinguish those rows, so this is the floor, not a choice.
+    const providerId = idCol !== -1 ? (r[idCol] ?? "").trim() : "";
+
+    let sourceId: string;
+    if (providerId) {
+      sourceId = await hashId(kind, ["id", providerId]);
+    } else {
+      const baseKey = [date, description, String(amountCents), currency, counterparty ?? ""];
+      const seen = (occurrences.get(baseKey.join("|")) ?? 0) + 1;
+      occurrences.set(baseKey.join("|"), seen);
+      sourceId = await hashId(kind, seen === 1 ? baseKey : [...baseKey, `#${seen}`]);
+    }
 
     out.push({
-      source_id: await hashId(kind, seen === 1 ? baseKey : [...baseKey, `#${seen}`]),
+      source_id: sourceId,
       transaction_date: date,
       description,
       counterparty_name: counterparty,
