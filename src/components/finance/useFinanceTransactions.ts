@@ -57,7 +57,6 @@ export interface FinanceTaxRate {
 }
 
 export function useFinanceTransactions(filters?: {
-  year?: number;
   type?: string;
   source?: string;
 }) {
@@ -65,22 +64,16 @@ export function useFinanceTransactions(filters?: {
   return useQuery({
     queryKey: ["finance_transactions", filters, user?.id],
     queryFn: async () => {
+      // No date constraint: the page filters years in memory so that changing
+      // the selection is instant rather than a round trip, and so that a row
+      // outside the current selection can still be counted and offered.
       let q = supabase
         .from("finance_transactions")
         .select("*")
         .order("transaction_date", { ascending: false });
 
-      if (filters?.year) {
-        q = q
-          .gte("transaction_date", `${filters.year}-01-01`)
-          .lte("transaction_date", `${filters.year}-12-31`);
-      }
-      if (filters?.type && filters.type !== "all") {
-        q = q.eq("type", filters.type);
-      }
-      if (filters?.source && filters.source !== "all") {
-        q = q.eq("source", filters.source);
-      }
+      if (filters?.type && filters.type !== "all") q = q.eq("type", filters.type);
+      if (filters?.source && filters.source !== "all") q = q.eq("source", filters.source);
 
       const { data, error } = await q;
       if (error) throw error;

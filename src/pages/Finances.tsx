@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, useLastSynced, useTaxRates, useTransactionYears, FinanceTransaction, FinanceTaxRate } from "@/components/finance/useFinanceTransactions";
+import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, useLastSynced, useTaxRates, FinanceTransaction, FinanceTaxRate } from "@/components/finance/useFinanceTransactions";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { ImportStatementDialog } from "@/components/finance/ImportStatementDialog";
 import { ReceiptReviewDialog } from "@/components/finance/ReceiptReviewDialog";
@@ -28,13 +28,12 @@ import {
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as ChartTooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
 import { PageActions } from "@/components/layout/PageActions";
+import { YearFilter } from "@/components/finance/YearFilter";
 
 // Kept next to the header so adding a column and forgetting the colSpans is
 // a one-line fix rather than three silently mismatched numbers.
 const COLUMN_COUNT = 20;
 
-const currentYear = new Date().getFullYear();
-const YEARS = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3];
 
 // ── Metric card (adapted from remix-of-financeflow MetricCard) ──────────────
 function MetricCard({
@@ -77,8 +76,7 @@ function MetricCard({
 }
 
 // ── VAT summary row ────────────────────────────────────────────────────────
-function VatPeriodTable({ txs }: { txs: FinanceTransaction[] }) {
-  const year = new Date().getFullYear();
+function VatPeriodTable({ txs, year }: { txs: FinanceTransaction[]; year: number }) {
   const periods = getVatPeriods(year);
 
   const rows = periods.map(p => {
@@ -374,7 +372,10 @@ function TxRow({ tx, updateTx, deleteTx, taxRates }: {
 
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function FinancePage() {
-  const [year, setYear] = useState(currentYear);
+  // Empty set = every year. Filtering is done in memory over the full
+  // table, so changing the selection is instant and nothing is hidden
+  // behind a refetch.
+  const [selectedYears, setSelectedYears] = useState<Set<number>>(new Set());
   const [typeFilter, setTypeFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -387,10 +388,32 @@ export default function FinancePage() {
   const [syncingRevolut, setSyncingRevolut] = useState(false);
   const [receiptReviewOpen, setReceiptReviewOpen] = useState(false);
 
-  const { data: txs = [], isLoading } = useFinanceTransactions({ year, type: typeFilter, source: sourceFilter });
+  const { data: allTxs = [], isLoading } = useFinanceTransactions({ type: typeFilter, source: sourceFilter });
   const { data: lastSynced = {} } = useLastSynced();
   const { data: taxRates = [] } = useTaxRates();
-  const { data: yearCounts } = useTransactionYears();
+  // Years present in the data, derived from rows already in memory.
+  const availableYears = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const t of allTxs) {
+      const y = Number(t.transaction_date.slice(0, 4));
+      if (!Number.isNaN(y)) counts.set(y, (counts.get(y) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort(([a], [b]) => b - a)
+      .map(([year, count]) => ({ year, count }));
+  }, [allTxs]);
+
+  // Everything downstream — metrics, chart, VAT, table — reads this.
+  const txs = useMemo(
+    () => allTxs.filter(t =>
+      selectedYears.size === 0 || selectedYears.has(Number(t.transaction_date.slice(0, 4)))),
+    [allTxs, selectedYears],
+  );
+
+  // Label for headings: one year reads as that year, several as a list.
+  const yearLabel = selectedYears.size === 0
+    ? "all years"
+    : [...selectedYears].sort((a, b) => a - b).join(", ");
   const deleteTx = useDeleteTransaction();
   const updateTx = useUpdateTransaction();
 
@@ -430,28 +453,34 @@ export default function FinancePage() {
   }, [txs]);
 
   // ── Monthly bar chart data ─────────────────────────────────────────────
+  // One year selected reads as Jan–Dec; several read as a continuous run of
+  // months across them, so a year boundary is visible rather than folded
+  // over itself.
   const chartData = useMemo(() => {
-    const months = Array.from({ length: 12 }, (_, i) => {
-      const m = String(i + 1).padStart(2, "0");
-      const label = new Date(year, i, 1).toLocaleString("en-IE", { month: "short" });
-      const inMonth = txs.filter(t => t.transaction_date.startsWith(`${year}-${m}`));
-      return {
-        month: label,
-        Income: centsToNum(inMonth.filter(t => t.type === "income").reduce((s, t) => s + (t.amount_eur_cents ?? t.amount_cents), 0)),
-        Expenses: centsToNum(inMonth.filter(t => t.type === "expense").reduce((s, t) => s + (t.amount_eur_cents ?? t.amount_cents), 0)),
-      };
-    });
-    return months;
-  }, [txs, year]);
+    const years = selectedYears.size > 0
+      ? [...selectedYears].sort((a, b) => a - b)
+      : availableYears.map(y => y.year).sort((a, b) => a - b);
+    if (years.length === 0) return [];
 
-  // Years that hold rows the current filter hides.
-  const otherYears = useMemo(() => {
-    if (!yearCounts) return [];
-    return Array.from(yearCounts.entries())
-      .filter(([y, count]) => y !== year && count > 0)
-      .sort(([a], [b]) => b - a)
-      .map(([y, count]) => ({ year: y, count }));
-  }, [yearCounts, year]);
+    const multi = years.length > 1;
+    const buckets: { month: string; Income: number; Expenses: number }[] = [];
+
+    for (const y of years) {
+      for (let i = 0; i < 12; i++) {
+        const key = `${y}-${String(i + 1).padStart(2, "0")}`;
+        const inMonth = txs.filter(t => t.transaction_date.startsWith(key));
+        const short = new Date(y, i, 1).toLocaleString("en-IE", { month: "short" });
+        buckets.push({
+          month: multi ? `${short} ${String(y).slice(2)}` : short,
+          Income: centsToNum(inMonth.filter(t => t.type === "income")
+            .reduce((s, t) => s + (t.amount_eur_cents ?? t.amount_cents), 0)),
+          Expenses: centsToNum(inMonth.filter(t => t.type === "expense")
+            .reduce((s, t) => s + (t.amount_eur_cents ?? t.amount_cents), 0)),
+        });
+      }
+    }
+    return buckets;
+  }, [txs, selectedYears, availableYears]);
 
   // ── Filtered + searched + sorted rows ────────────────────────────────────
   const filteredTxs = useMemo(() => {
@@ -583,7 +612,7 @@ export default function FinancePage() {
       Notes: t.notes ?? "",
       Reconciled: t.is_reconciled ? "yes" : "no",
     }));
-    exportToCsv(rows, `skillstudio-finance-${year}.csv`);
+    exportToCsv(rows, `skillstudio-finance-${yearLabel.replace(/[^0-9]+/g, "-")}.csv`);
     toast.success("CSV exported");
   };
 
@@ -617,14 +646,13 @@ export default function FinancePage() {
               Reconcile income, expenses and VAT for your Irish tax return
             </p>
           </div>
-          {/* The year stays on the page: it filters what you are looking at
+          {/* The filter stays on the page: it changes what you are looking at
               rather than doing something, and reads as part of the report. */}
-          <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
-            <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <YearFilter
+            years={availableYears}
+            selected={selectedYears}
+            onChange={setSelectedYears}
+          />
         </div>
 
         {/* Data Sources status bar */}
@@ -664,14 +692,14 @@ export default function FinancePage() {
         <MetricCard
           title="Total Income"
           value={centsToEur(metrics.totalIncome)}
-          sub={`${year} gross`}
+          sub={`${yearLabel} gross`}
           gradient="income"
           icon={<ArrowUpRight className="w-5 h-5 text-white" />}
         />
         <MetricCard
           title="Total Expenses"
           value={centsToEur(metrics.totalExpenses)}
-          sub={`${year} gross`}
+          sub={`${yearLabel} gross`}
           gradient="expense"
           icon={<ArrowDownLeft className="w-5 h-5 text-white" />}
         />
@@ -685,7 +713,7 @@ export default function FinancePage() {
         <MetricCard
           title="Net Profit"
           value={centsToEur(metrics.netProfit)}
-          sub={`${year} pre-tax`}
+          sub={`${yearLabel} pre-tax`}
           gradient="net"
           icon={<DollarSign className="w-5 h-5 text-white" />}
         />
@@ -694,7 +722,7 @@ export default function FinancePage() {
       {/* Revenue / Expenses bar chart */}
       <Card className="shrink-0">
         <CardHeader>
-          <CardTitle className="text-base">Monthly Income vs Expenses ({year})</CardTitle>
+          <CardTitle className="text-base">Monthly Income vs Expenses ({yearLabel})</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={240}>
@@ -788,25 +816,6 @@ export default function FinancePage() {
               {filteredTxs.length} row{filteredTxs.length !== 1 ? "s" : ""}
             </span>
           </div>
-
-          {/* Rows outside the chosen year are invisible, which makes a
-              successful import of an older statement look like a failed one.
-              Say where they are, and offer the jump. */}
-          {otherYears.length > 0 && (
-            <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-              <Info className="h-4 w-4 shrink-0" />
-              <span>
-                {otherYears.reduce((n, y) => n + y.count, 0)} transaction
-                {otherYears.reduce((n, y) => n + y.count, 0) === 1 ? "" : "s"} outside {year}.
-              </span>
-              {otherYears.map(y => (
-                <Button key={y.year} variant="outline" size="sm" className="h-7"
-                  onClick={() => setYear(y.year)}>
-                  {y.year} ({y.count})
-                </Button>
-              ))}
-            </div>
-          )}
 
           <Card className="overflow-hidden">
             <div className="max-h-[70vh] min-h-[280px] overflow-auto">
@@ -914,7 +923,7 @@ export default function FinancePage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                VAT3 Bi-Monthly Periods — {year}
+                VAT3 Bi-Monthly Periods — {yearLabel}
                 <Tooltip>
                   <TooltipTrigger>
                     <Info className="h-4 w-4 text-muted-foreground" />
@@ -926,7 +935,19 @@ export default function FinancePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <VatPeriodTable txs={txs} />
+              {/* A VAT3 is filed per period per year, so each selected year
+                  gets its own table rather than being summed together. */}
+              <div className="space-y-6">
+                {(selectedYears.size > 0
+                  ? [...selectedYears].sort((a, b) => b - a)
+                  : availableYears.map(y => y.year)
+                ).map(y => (
+                  <div key={y}>
+                    <p className="mb-2 text-sm font-medium text-muted-foreground">{y}</p>
+                    <VatPeriodTable txs={txs} year={y} />
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
 
