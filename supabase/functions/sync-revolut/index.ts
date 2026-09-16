@@ -2,26 +2,28 @@
  * sync-revolut — pulls transactions from the Revolut Business API into
  * finance_transactions.
  *
- * Revolut Business does not accept a static API key. Every call needs a
- * 40-minute access token, minted by presenting a long-lived refresh token
- * together with an RS256 JWT ("client assertion") signed with the private
- * half of the certificate uploaded to Revolut. So this function mints a fresh
- * access token on each run rather than storing one — a stored one would be
- * stale within the hour, which is exactly what the previous static-key
- * version got wrong.
+ * Revolut Business issues no static API key. Every call needs a 40-minute
+ * access token, minted by presenting a long-lived refresh token together with
+ * an RS256 JWT ("client assertion") signed with the private half of the X509
+ * certificate uploaded to Revolut. So a fresh access token is minted per run;
+ * storing one would leave it stale within the hour.
  *
- * Secrets (Supabase → Edge Functions → Secrets):
- *   REVOLUT_CLIENT_ID     — from Revolut Business → Settings → API
- *   REVOLUT_PRIVATE_KEY   — contents of privatekey.pem, PKCS#8 ("BEGIN PRIVATE KEY")
- *   REVOLUT_REFRESH_TOKEN — from the one-time code exchange (see below)
- *   REVOLUT_REDIRECT_URI  — the OAuth redirect URI registered with Revolut
- *   REVOLUT_SANDBOX       — optional, "true" to hit the sandbox host
+ * The refresh token lives in public.finance_oauth_tokens, not in a secret,
+ * because Revolut's consent lapses periodically and re-authorising is a
+ * recurring chore. Keeping it in the database lets this function write it
+ * itself, so re-auth never needs the Supabase dashboard. That table is
+ * service-role only (RLS on, no policies), so the browser cannot read it.
  *
- * One-time setup: after clicking Enable in Revolut you are redirected to your
- * redirect URI with ?code=oa_prod_… in the address bar. Call this function
- * once with { "action": "exchange", "code": "oa_prod_…" } and it returns the
- * refresh token to store as REVOLUT_REFRESH_TOKEN. The code is single-use and
- * expires quickly, so do it promptly.
+ * Secrets:
+ *   REVOLUT_CLIENT_ID     — Revolut Business → Settings → API
+ *   REVOLUT_PRIVATE_KEY   — privatekey_pkcs8.pem contents ("BEGIN PRIVATE KEY")
+ *   REVOLUT_REDIRECT_URI  — the registered OAuth redirect URI
+ *   REVOLUT_SANDBOX       — optional, "true" for the sandbox host
+ *
+ * Actions (POST body):
+ *   {"action":"exchange","code":"oa_prod_…"}  one-time / re-auth bootstrap
+ *   {"action":"status"}                       is a refresh token stored?
+ *   {"days":90}                               sync (default)
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -51,11 +53,6 @@ function b64url(bytes: Uint8Array): string {
 
 const b64urlText = (s: string) => b64url(new TextEncoder().encode(s));
 
-/**
- * Import the private key. Web Crypto only accepts PKCS#8, while
- * `openssl genrsa` on OpenSSL 1.x emits PKCS#1 — a difference that shows up
- * only as an opaque DataError, so name it explicitly.
- */
 async function importPrivateKey(pem: string): Promise<CryptoKey> {
   const trimmed = pem.trim();
   if (trimmed.includes("BEGIN RSA PRIVATE KEY")) {
@@ -73,11 +70,7 @@ async function importPrivateKey(pem: string): Promise<CryptoKey> {
     .replace(/\s+/g, "");
   const der = Uint8Array.from(atob(body), c => c.charCodeAt(0));
   return await crypto.subtle.importKey(
-    "pkcs8",
-    der,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"],
+    "pkcs8", der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"],
   );
 }
 
@@ -86,31 +79,29 @@ async function buildClientAssertion(): Promise<string> {
   const privateKeyPem = Deno.env.get("REVOLUT_PRIVATE_KEY");
   const redirectUri = Deno.env.get("REVOLUT_REDIRECT_URI");
 
-  if (!clientId || !privateKeyPem || !redirectUri) {
-    throw new Error(
-      "not_configured: REVOLUT_CLIENT_ID, REVOLUT_PRIVATE_KEY and REVOLUT_REDIRECT_URI must all be set.",
-    );
-  }
+  const missing = [
+    !clientId && "REVOLUT_CLIENT_ID",
+    !privateKeyPem && "REVOLUT_PRIVATE_KEY",
+    !redirectUri && "REVOLUT_REDIRECT_URI",
+  ].filter(Boolean);
+  if (missing.length) throw new Error(`not_configured: missing ${missing.join(", ")}`);
 
-  // `iss` is the *host* of the redirect URI, with no scheme or path. Revolut
-  // rejects the assertion if it does not match the registered URI's domain.
-  const issuer = new URL(redirectUri).hostname;
+  // `iss` is the *host* of the redirect URI — no scheme, no path. Derived
+  // rather than configured separately so the two cannot drift.
+  const issuer = new URL(redirectUri!).hostname;
 
   const header = { alg: "RS256", typ: "JWT" };
   const payload = {
     iss: issuer,
     sub: clientId,
     aud: "https://revolut.com",
-    // Short-lived on purpose: it only has to survive this one token call.
     exp: Math.floor(Date.now() / 1000) + 60,
   };
 
   const signingInput = `${b64urlText(JSON.stringify(header))}.${b64urlText(JSON.stringify(payload))}`;
-  const key = await importPrivateKey(privateKeyPem);
+  const key = await importPrivateKey(privateKeyPem!);
   const sig = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    new TextEncoder().encode(signingInput),
+    "RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(signingInput),
   );
   return `${signingInput}.${b64url(new Uint8Array(sig))}`;
 }
@@ -134,10 +125,6 @@ async function postToken(params: Record<string, string>): Promise<Record<string,
   if (!res.ok) throw new Error(`Revolut token error ${res.status}: ${text}`);
   return JSON.parse(text);
 }
-
-const getAccessToken = async (refreshToken: string) =>
-  (await postToken({ grant_type: "refresh_token", refresh_token: refreshToken }))
-    .access_token as string;
 
 // ── Transaction mapping ────────────────────────────────────────────────────
 
@@ -169,40 +156,86 @@ Deno.serve(async (req: Request) => {
 
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
 
-    // ── One-time: swap the ?code=… from the redirect for a refresh token ──
-    if (body.action === "exchange") {
-      if (!body.code) return json({ error: "bad_request", message: "Provide the `code` from the redirect URL." }, 400);
-      const tokens = await postToken({
-        grant_type: "authorization_code",
-        code: String(body.code),
-      });
+    const readStoredToken = async (): Promise<string | null> => {
+      const { data } = await sb
+        .from("finance_oauth_tokens")
+        .select("refresh_token")
+        .eq("provider", "revolut")
+        .maybeSingle();
+      return (data?.refresh_token as string) ?? Deno.env.get("REVOLUT_REFRESH_TOKEN") ?? null;
+    };
+
+    const storeToken = async (token: string) => {
+      await sb.from("finance_oauth_tokens").upsert(
+        { provider: "revolut", refresh_token: token, obtained_at: new Date().toISOString() },
+        { onConflict: "provider" },
+      );
+    };
+
+    // ── status: does the UI need to show "connect" or "connected"? ────────
+    if (body.action === "status") {
+      const { data } = await sb
+        .from("finance_oauth_tokens")
+        .select("obtained_at, updated_at")
+        .eq("provider", "revolut")
+        .maybeSingle();
+      const secretsSet = Boolean(
+        Deno.env.get("REVOLUT_CLIENT_ID") &&
+        Deno.env.get("REVOLUT_PRIVATE_KEY") &&
+        Deno.env.get("REVOLUT_REDIRECT_URI"),
+      );
       return json({
-        message: "Store `refresh_token` as the REVOLUT_REFRESH_TOKEN secret. It is shown once.",
-        refresh_token: tokens.refresh_token,
-        access_token_expires_in: tokens.expires_in,
+        secrets_set: secretsSet,
+        has_refresh_token: Boolean(data) || Boolean(Deno.env.get("REVOLUT_REFRESH_TOKEN")),
+        obtained_at: data?.obtained_at ?? null,
       });
     }
 
-    const refreshToken = Deno.env.get("REVOLUT_REFRESH_TOKEN");
+    // ── exchange: swap the ?code=… from the redirect for a refresh token ──
+    if (body.action === "exchange") {
+      const code = String(body.code ?? "").trim();
+      if (!code) return json({ error: "bad_request", message: "Paste the code from the redirect URL." }, 400);
+      try {
+        const tokens = await postToken({ grant_type: "authorization_code", code });
+        const refresh = tokens.refresh_token as string | undefined;
+        if (!refresh) return json({ error: "no_refresh_token", message: "Revolut returned no refresh token.", raw: tokens }, 400);
+        await storeToken(refresh);
+        // Deliberately not returned to the browser: it is stored server-side
+        // and there is no reason for it to exist in a browser tab.
+        return json({ ok: true, message: "Revolut connected. Refresh token stored." });
+      } catch (e) {
+        const msg = String(e);
+        if (msg.includes("not_configured")) return json({ error: "not_configured", message: msg }, 400);
+        return json({
+          error: "exchange_failed",
+          message: msg + " — authorisation codes expire within minutes and are single-use. Click Enable in Revolut again for a fresh one.",
+        }, 400);
+      }
+    }
+
+    // ── sync ──────────────────────────────────────────────────────────────
+    const refreshToken = await readStoredToken();
     if (!refreshToken) {
       return json({
         error: "not_configured",
-        message: "REVOLUT_REFRESH_TOKEN is not set. Run this function once with " +
-                 '{"action":"exchange","code":"oa_prod_…"} to obtain it, or import a Revolut CSV instead.',
+        message: "Revolut is not connected yet. Use Connect Revolut in Settings, or import a CSV statement instead.",
       }, 400);
     }
 
     let accessToken: string;
     try {
-      accessToken = await getAccessToken(refreshToken);
+      const tokens = await postToken({ grant_type: "refresh_token", refresh_token: refreshToken });
+      accessToken = tokens.access_token as string;
+      // Revolut may rotate the refresh token; persist it when it does.
+      if (tokens.refresh_token && tokens.refresh_token !== refreshToken) {
+        await storeToken(tokens.refresh_token as string);
+      }
     } catch (e) {
       const msg = String(e);
-      // A missing/!expired credential is a setup state, not a crash — the
-      // Settings page branches on `not_configured` to say "not connected".
       if (msg.includes("not_configured")) return json({ error: "not_configured", message: msg }, 400);
       return json({
         error: "auth_failed",
-        message: msg + " — if the refresh token has been revoked or the 90-day consent lapsed, re-authorise in Revolut and re-run the exchange step.",
+        message: msg + " — the consent may have lapsed. Re-connect with Connect Revolut in Settings.",
       }, 400);
     }
 
@@ -255,8 +288,7 @@ Deno.serve(async (req: Request) => {
         subject: description,
         counterparty_name: (merchant?.name as string) ?? (counterparty?.name as string) ?? null,
         counterparty_country: (merchant?.country as string) ?? null,
-        // Left null deliberately: VAT treatment is a tax position, not
-        // something a bank feed knows. It is set during reconciliation.
+        // A bank feed does not know a tax position; that is set at reconciliation.
         vat_treatment: null,
         vat_amount_cents: 0,
         is_reconciled: false,
