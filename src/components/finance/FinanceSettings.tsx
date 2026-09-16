@@ -42,8 +42,17 @@ const CONNECTIONS = [
     label: "Revolut Business",
     fn: "sync-revolut",
     icon: Building2,
-    secrets: ["REVOLUT_API_KEY"],
-    help: "Revolut Business → Settings → API → Production API Keys. No key yet? Import a CSV statement on the Finance page instead.",
+    secrets: [
+      "REVOLUT_CLIENT_ID",
+      "REVOLUT_PRIVATE_KEY",
+      "REVOLUT_REFRESH_TOKEN",
+      "REVOLUT_REDIRECT_URI",
+    ],
+    // Revolut Business has no static API key: access tokens last 40 minutes
+    // and are minted per run from the refresh token plus a JWT signed with
+    // the certificate's private key. Consent also lapses periodically, which
+    // is why the CSV route stays a first-class option rather than a fallback.
+    help: "Revolut Business → Settings → API. Upload the X509 certificate, then run the one-time code exchange to get the refresh token. Consent must be renewed periodically — CSV import needs none of this.",
   },
   {
     key: "gmail",
