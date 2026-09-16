@@ -42,7 +42,17 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not configured");
+    if (!stripeKey) {
+      // Same as Revolut: "nobody has connected Stripe yet" is a state the
+      // Settings page reports, not an error the user has to decode.
+      return new Response(
+        JSON.stringify({
+          error: "not_configured",
+          message: "STRIPE_SECRET_KEY is not set. Add it in Supabase → Edge Functions → Secrets.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // Auth: verify the calling user
     const supabase = createClient(supabaseUrl, supabaseServiceKey);

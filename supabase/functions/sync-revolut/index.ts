@@ -37,7 +37,18 @@ Deno.serve(async (req: Request) => {
 
   try {
     const revolutKey = Deno.env.get("REVOLUT_API_KEY");
-    if (!revolutKey) throw new Error("REVOLUT_API_KEY not configured. Add it in Supabase → Edge Functions → Secrets.");
+    if (!revolutKey) {
+      // A missing key is a configuration state, not a crash. 400 + a code the
+      // UI can branch on keeps the Settings page able to say "not connected"
+      // instead of showing a red failure for something nobody has set up yet.
+      return new Response(
+        JSON.stringify({
+          error: "not_configured",
+          message: "REVOLUT_API_KEY is not set. Add it in Supabase → Edge Functions → Secrets, or import a Revolut CSV statement instead.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

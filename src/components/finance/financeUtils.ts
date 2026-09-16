@@ -89,3 +89,121 @@ export function exportToCsv(rows: Record<string, unknown>[], filename: string) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// ── Irish chart of accounts (FRS 102 / Irish GAAP) ─────────────────────────
+//
+// This is a *different axis* from `CATEGORIES` above and both are kept.
+// `CATEGORIES` says what the spend was for in product terms ("SaaS
+// subscription"); this says which line of the financial statements the amount
+// posts to, which is what an accountant, Xero or Sage needs. The two diverge
+// often enough to matter: a laptop is "Equipment" to us and a *fixed asset*
+// to the accounts, and client dinners are an overhead that is specifically
+// NOT deductible in Ireland, which is why "Entertainment – Disallowable" is
+// its own line rather than being folded into Travel & Subsistence.
+//
+// The list is deliberately fixed. A chart of accounts that anyone can extend
+// from a text box stops reconciling to anything, so the dropdown offers these
+// and nothing else. Tax *rates* are the opposite — see FinanceTaxRate.
+
+export interface AccountingCategoryGroup {
+  group: string;
+  statement: "pl" | "cogs" | "income" | "asset" | "liability";
+  options: { value: string; label: string }[];
+}
+
+export const ACCOUNTING_CATEGORIES: AccountingCategoryGroup[] = [
+  {
+    group: "Expenses (P&L / Overheads)",
+    statement: "pl",
+    options: [
+      { value: "advertising_marketing",   label: "Advertising & Marketing" },
+      { value: "audit_accountancy",       label: "Audit & Accountancy Fees" },
+      { value: "bank_fees",               label: "Bank Fees & Charges" },
+      { value: "bank_revaluations",       label: "Bank Revaluations" },
+      { value: "cleaning_waste",          label: "Cleaning & Waste Disposal" },
+      { value: "computer_it_support",     label: "Computer & IT Support" },
+      { value: "consultancy_fees",        label: "Consultancy Fees" },
+      { value: "courier_freight",         label: "Courier & Freight" },
+      { value: "entertainment_disallow",  label: "Entertainment – Disallowable" },
+      { value: "general_sundry",          label: "General Expenses / Sundry" },
+      { value: "insurance",               label: "Insurance" },
+      { value: "legal_fees",              label: "Legal Fees" },
+      { value: "light_heat_power",        label: "Light, Heat & Power" },
+      { value: "motor_expenses",          label: "Motor Expenses" },
+      { value: "printing_stationery",     label: "Printing & Stationery" },
+      { value: "rent_rates",              label: "Rent & Rates" },
+      { value: "repairs_maintenance",     label: "Repairs & Maintenance" },
+      { value: "software_subscriptions",  label: "Software & Subscriptions" },
+      { value: "staff_wages",             label: "Staff Wages & Salaries" },
+      { value: "staff_training",          label: "Staff Training & Recruitment" },
+      { value: "telephone_broadband",     label: "Telephone & Broadband" },
+      { value: "travel_subsistence",      label: "Travel & Subsistence" },
+    ],
+  },
+  {
+    group: "Direct Costs (COGS)",
+    statement: "cogs",
+    options: [
+      { value: "direct_contractor_fees",  label: "Direct Contractor Fees" },
+      { value: "inventory_materials",     label: "Inventory / Material Purchases" },
+      { value: "import_duties_carriage",  label: "Import Duties & Carriage" },
+    ],
+  },
+  {
+    group: "Revenue (Income)",
+    statement: "income",
+    options: [
+      { value: "sales_income",            label: "Sales / Sales Income" },
+      { value: "other_income",            label: "Other Income" },
+      { value: "realised_currency_gains", label: "Realised Currency Gains" },
+    ],
+  },
+  {
+    group: "Assets (Balance Sheet)",
+    statement: "asset",
+    options: [
+      { value: "accounts_receivable",     label: "Accounts Receivable (Debtors)" },
+      { value: "bank_cash_accounts",      label: "Bank / Cash Accounts" },
+      { value: "computer_equipment",      label: "Computer Equipment (Fixed Asset)" },
+      { value: "office_equipment",        label: "Office Equipment (Fixed Asset)" },
+      { value: "prepayments",             label: "Prepayments" },
+    ],
+  },
+  {
+    group: "Liabilities (Balance Sheet)",
+    statement: "liability",
+    options: [
+      { value: "accounts_payable",        label: "Accounts Payable (Creditors)" },
+      { value: "accruals",                label: "Accruals" },
+      { value: "directors_loan",          label: "Director's Loan Account" },
+      { value: "paye_prsi_usc",           label: "PAYE/PRSI/USC Liability" },
+      { value: "vat_control",             label: "VAT Control Account" },
+    ],
+  },
+];
+
+export const ACCOUNTING_CATEGORY_LABELS: Record<string, string> =
+  Object.fromEntries(
+    ACCOUNTING_CATEGORIES.flatMap(g => g.options.map(o => [o.value, o.label]))
+  );
+
+/** Which statement group a posting code belongs to — drives the row colour. */
+export const ACCOUNTING_CATEGORY_STATEMENT: Record<string, AccountingCategoryGroup["statement"]> =
+  Object.fromEntries(
+    ACCOUNTING_CATEGORIES.flatMap(g => g.options.map(o => [o.value, g.statement]))
+  );
+
+export const STATEMENT_COLORS: Record<AccountingCategoryGroup["statement"], string> = {
+  pl:        "bg-amber-100 text-amber-800",
+  cogs:      "bg-orange-100 text-orange-800",
+  income:    "bg-emerald-100 text-emerald-800",
+  asset:     "bg-sky-100 text-sky-800",
+  liability: "bg-rose-100 text-rose-800",
+};
+
+/** Format a stored rate for the cell: "Tax on Sales (23%)". */
+export function formatTaxRate(name: string | null, percent: number | null): string {
+  if (!name) return "—";
+  const pct = percent == null ? null : Number(percent);
+  return pct == null ? name : `${name} (${pct % 1 === 0 ? pct.toFixed(0) : pct}%)`;
+}

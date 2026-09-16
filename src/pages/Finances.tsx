@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -14,17 +14,24 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, useLastSynced, FinanceTransaction } from "@/components/finance/useFinanceTransactions";
+import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, useLastSynced, useTaxRates, FinanceTransaction, FinanceTaxRate } from "@/components/finance/useFinanceTransactions";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
+import { ImportStatementDialog } from "@/components/finance/ImportStatementDialog";
 import { ReceiptReviewDialog } from "@/components/finance/ReceiptReviewDialog";
 import { useQuery } from "@tanstack/react-query";
 import {
   centsToEur, centsToNum, VAT_TREATMENT_LABELS, VAT_TREATMENT_COLORS,
-  SOURCE_COLORS, TYPE_COLORS, CATEGORIES, getVatPeriods, exportToCsv
+  SOURCE_COLORS, TYPE_COLORS, CATEGORIES, getVatPeriods, exportToCsv,
+  ACCOUNTING_CATEGORIES, ACCOUNTING_CATEGORY_LABELS, ACCOUNTING_CATEGORY_STATEMENT,
+  STATEMENT_COLORS
 } from "@/components/finance/financeUtils";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as ChartTooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
 import { PageActions } from "@/components/layout/PageActions";
+
+// Kept next to the header so adding a column and forgetting the colSpans is
+// a one-line fix rather than three silently mismatched numbers.
+const COLUMN_COUNT = 20;
 
 const currentYear = new Date().getFullYear();
 const YEARS = [currentYear, currentYear - 1, currentYear - 2];
@@ -198,53 +205,143 @@ function SourceChip({
 }
 
 // ── Transaction row ────────────────────────────────────────────────────────
-function TxRow({ tx, updateTx, deleteTx }: {
+function TxRow({ tx, updateTx, deleteTx, taxRates }: {
   tx: FinanceTransaction;
   updateTx: ReturnType<typeof useUpdateTransaction>;
   deleteTx: ReturnType<typeof useDeleteTransaction>;
+  taxRates: FinanceTaxRate[];
 }) {
-  const catLabel = CATEGORIES.find(c => c.value === tx.category)?.label ?? tx.category ?? "—";
+  const statement = tx.accounting_category
+    ? ACCOUNTING_CATEGORY_STATEMENT[tx.accounting_category]
+    : undefined;
+
+  // Picking a rate stores the name *and* the percentage as it stands today.
+  const setTaxRate = (name: string) => {
+    const rate = taxRates.find(r => r.name === name);
+    updateTx.mutate({
+      id: tx.id,
+      tax_rate_name: name,
+      tax_rate_percent: rate ? Number(rate.percent) : null,
+    });
+  };
+
+  const money = (cents: number | null | undefined, dash = true) =>
+    cents == null || (cents === 0 && dash) ? "—" : centsToEur(cents);
+
   return (
     <TableRow>
       <TableCell className="text-sm font-medium whitespace-nowrap">{tx.transaction_date}</TableCell>
-      <TableCell className="max-w-[180px]">
-        <span className="text-sm truncate block">{tx.description ?? "—"}</span>
-      </TableCell>
-      <TableCell className="max-w-[140px]">
+
+      <TableCell className="max-w-[160px]">
         <span className="text-sm truncate block">{tx.counterparty_name ?? "—"}</span>
         {tx.counterparty_country && (
           <span className="text-xs text-muted-foreground">{tx.counterparty_country}</span>
         )}
       </TableCell>
+
+      <TableCell className="max-w-[260px]">
+        <span className="text-sm truncate block" title={tx.subject ?? tx.description ?? ""}>
+          {tx.subject ?? tx.description ?? "—"}
+        </span>
+      </TableCell>
+
+      {/* Accounting category — fixed chart of accounts, so a Select, not an input. */}
       <TableCell>
-        {tx.category ? (
-          <Badge variant="secondary" className="text-xs">{catLabel}</Badge>
-        ) : <span className="text-muted-foreground text-xs">—</span>}
+        <Select
+          value={tx.accounting_category ?? ""}
+          onValueChange={v => updateTx.mutate({ id: tx.id, accounting_category: v })}
+        >
+          <SelectTrigger className="h-8 w-[190px] text-xs">
+            <SelectValue placeholder="Unposted" />
+          </SelectTrigger>
+          <SelectContent className="max-h-80">
+            {ACCOUNTING_CATEGORIES.map(g => (
+              <SelectGroup key={g.group}>
+                <SelectLabel className="text-xs">{g.group}</SelectLabel>
+                {g.options.map(o => (
+                  <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
+        {statement && (
+          <Badge variant="secondary" className={cn("mt-1 text-[10px]", STATEMENT_COLORS[statement])}>
+            {statement === "pl" ? "P&L" : statement === "cogs" ? "COGS" : statement}
+          </Badge>
+        )}
+      </TableCell>
+
+      {/* Tax rate — name is chosen here, the percentage is edited in Settings. */}
+      <TableCell>
+        <Select value={tx.tax_rate_name ?? ""} onValueChange={setTaxRate}>
+          <SelectTrigger className="h-8 w-[170px] text-xs">
+            <SelectValue placeholder="No rate" />
+          </SelectTrigger>
+          <SelectContent>
+            {taxRates.map(r => (
+              <SelectItem key={r.id} value={r.name} className="text-xs">
+                {r.name} ({Number(r.percent)}%)
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {tx.tax_rate_name && (
+          <span className="mt-1 block text-[10px] text-muted-foreground">
+            posted at {Number(tx.tax_rate_percent ?? 0)}%
+          </span>
+        )}
+      </TableCell>
+
+      <TableCell className={cn("text-right text-sm font-semibold whitespace-nowrap", TYPE_COLORS[tx.type])}>
+        {tx.type === "expense" || tx.type === "fee" ? "-" : ""}{money(tx.amount_cents)}
+      </TableCell>
+      <TableCell className="text-right text-sm whitespace-nowrap">{money(tx.amount_eur_cents)}</TableCell>
+      <TableCell className="text-right text-sm whitespace-nowrap">{money(tx.vat_amount_cents)}</TableCell>
+      <TableCell className="text-right text-sm whitespace-nowrap">{money(tx.vat_eur_cents)}</TableCell>
+      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{tx.currency}</TableCell>
+      <TableCell className="text-right text-sm whitespace-nowrap text-emerald-700">
+        {money(tx.vat_collected_cents)}
+      </TableCell>
+
+      <TableCell>
+        <span className={cn("text-sm font-medium capitalize", TYPE_COLORS[tx.type])}>{tx.type}</span>
       </TableCell>
       <TableCell>
         <Badge variant="secondary" className={cn("capitalize text-xs", SOURCE_COLORS[tx.source])}>
-          {tx.source}
+          {tx.source === "receipt_log" ? "receipt log" : tx.source}
         </Badge>
       </TableCell>
-      <TableCell>
-        <span className={cn("text-sm font-medium capitalize", TYPE_COLORS[tx.type])}>
-          {tx.type}
+
+      <TableCell className="max-w-[180px]">
+        <span className="text-xs truncate block" title={tx.receipt_filename ?? ""}>
+          {tx.receipt_filename ?? "—"}
         </span>
       </TableCell>
+      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{tx.receipt_size ?? "—"}</TableCell>
+
+      {/* The two links are the whole point of the log: reconciling a row means
+          opening the document, so they are one click from the row. */}
       <TableCell>
-        {tx.vat_treatment ? (
-          <Badge variant="secondary" className={cn("text-xs", VAT_TREATMENT_COLORS[tx.vat_treatment])}>
-            {VAT_TREATMENT_LABELS[tx.vat_treatment] ?? tx.vat_treatment}
-          </Badge>
+        {tx.drive_url ? (
+          <a href={tx.drive_url} target="_blank" rel="noreferrer"
+             className="text-xs text-primary hover:underline whitespace-nowrap">Drive ↗</a>
         ) : <span className="text-muted-foreground text-xs">—</span>}
       </TableCell>
-      <TableCell className={cn("text-right text-sm font-semibold", TYPE_COLORS[tx.type])}>
-        {tx.type === "expense" || tx.type === "fee" ? "-" : ""}
-        {centsToEur(tx.amount_eur_cents ?? tx.amount_cents)}
+      <TableCell>
+        {tx.gmail_url ? (
+          <a href={tx.gmail_url} target="_blank" rel="noreferrer"
+             className="text-xs text-primary hover:underline whitespace-nowrap">Gmail ↗</a>
+        ) : <span className="text-muted-foreground text-xs">—</span>}
       </TableCell>
-      <TableCell className="text-right text-sm">
-        {tx.net_cents ? centsToEur(tx.net_cents) : "—"}
+      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{tx.mailbox ?? "—"}</TableCell>
+
+      <TableCell className="max-w-[200px]">
+        <span className="text-xs text-muted-foreground truncate block" title={tx.notes ?? ""}>
+          {tx.notes ?? "—"}
+        </span>
       </TableCell>
+
       <TableCell>
         <div className="flex items-center gap-1">
           {!tx.is_reconciled ? (
@@ -292,6 +389,7 @@ export default function FinancePage() {
 
   const { data: txs = [], isLoading } = useFinanceTransactions({ year, type: typeFilter, source: sourceFilter });
   const { data: lastSynced = {} } = useLastSynced();
+  const { data: taxRates = [] } = useTaxRates();
   const deleteTx = useDeleteTransaction();
   const updateTx = useUpdateTransaction();
 
@@ -348,7 +446,7 @@ export default function FinancePage() {
   // ── Filtered + searched + sorted rows ────────────────────────────────────
   const filteredTxs = useMemo(() => {
     let rows = txs;
-    if (categoryFilter !== "all") rows = rows.filter(t => t.category === categoryFilter);
+    if (categoryFilter !== "all") rows = rows.filter(t => t.accounting_category === categoryFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       rows = rows.filter(t =>
@@ -364,7 +462,7 @@ export default function FinancePage() {
         case "date":     av = a.transaction_date; bv = b.transaction_date; break;
         case "amount":   av = a.amount_eur_cents ?? a.amount_cents; bv = b.amount_eur_cents ?? b.amount_cents; break;
         case "customer": av = (a.counterparty_name ?? "").toLowerCase(); bv = (b.counterparty_name ?? "").toLowerCase(); break;
-        case "category": av = (a.category ?? "").toLowerCase(); bv = (b.category ?? "").toLowerCase(); break;
+        case "category": av = (a.accounting_category ?? "").toLowerCase(); bv = (b.accounting_category ?? "").toLowerCase(); break;
         case "type":     av = a.type; bv = b.type; break;
       }
       if (av < bv) return sortDir === "asc" ? -1 : 1;
@@ -379,7 +477,9 @@ export default function FinancePage() {
     if (groupBy === "none") return null;
     const getKey = (t: FinanceTransaction) => {
       switch (groupBy) {
-        case "category": return t.category ?? "Uncategorised";
+        case "category": return t.accounting_category
+          ? (ACCOUNTING_CATEGORY_LABELS[t.accounting_category] ?? t.accounting_category)
+          : "Unposted";
         case "type":     return t.type.charAt(0).toUpperCase() + t.type.slice(1);
         case "customer": return t.counterparty_name ?? "Unknown";
         case "month":    return t.transaction_date.slice(0, 7); // YYYY-MM
@@ -450,27 +550,37 @@ export default function FinancePage() {
   const handleExport = () => {
     const rows = filteredTxs.map(t => ({
       Date: t.transaction_date,
+      Supplier: t.counterparty_name ?? "",
+      Subject: t.subject ?? t.description ?? "",
+      "Accounting Category": t.accounting_category
+        ? (ACCOUNTING_CATEGORY_LABELS[t.accounting_category] ?? t.accounting_category)
+        : "",
+      "Tax Rate": t.tax_rate_name ?? "",
+      "Tax Rate %": t.tax_rate_percent ?? "",
+      "Invoice Amount": t.amount_cents / 100,
+      "Invoices Paid": t.amount_eur_cents == null ? "" : t.amount_eur_cents / 100,
+      "VAT Paid": (t.vat_amount_cents ?? 0) / 100,
+      "VAT - Curr conv": (t.vat_eur_cents ?? 0) / 100,
+      Currency: t.currency,
+      "VAT Collected": (t.vat_collected_cents ?? 0) / 100,
       Type: t.type,
       Source: t.source,
-      Category: t.category ?? "",
-      Description: t.description ?? "",
-      Counterparty: t.counterparty_name ?? "",
-      Country: t.counterparty_country ?? "",
-      "Amount (EUR)": (t.amount_eur_cents ?? t.amount_cents) / 100,
-      "VAT Treatment": t.vat_treatment ?? "",
-      "VAT (EUR)": (t.vat_amount_cents ?? 0) / 100,
-      "Stripe Fee (EUR)": (t.stripe_fee_cents ?? 0) / 100,
-      "Net (EUR)": t.net_cents ? t.net_cents / 100 : "",
+      Filename: t.receipt_filename ?? "",
+      Size: t.receipt_size ?? "",
+      "Drive link": t.drive_url ?? "",
+      "Gmail link": t.gmail_url ?? "",
+      Mailbox: t.mailbox ?? "",
       Notes: t.notes ?? "",
+      Reconciled: t.is_reconciled ? "yes" : "no",
     }));
     exportToCsv(rows, `skillstudio-finance-${year}.csv`);
     toast.success("CSV exported");
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex min-h-0 w-full flex-1 flex-col gap-6">
       {/* Header */}
-      <div className="flex flex-col gap-4">
+      <div className="flex shrink-0 flex-col gap-4">
         <PageActions>
           <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={syncing || syncingGmail || syncingRevolut}>
             <RefreshCw className={cn("h-4 w-4 mr-2", (syncing || syncingGmail || syncingRevolut) && "animate-spin")} />
@@ -483,6 +593,7 @@ export default function FinancePage() {
             </Button>
           )}
           <AddTransactionDialog />
+          <ImportStatementDialog />
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-2" />
             Export CSV
@@ -539,7 +650,7 @@ export default function FinancePage() {
       <ReceiptReviewDialog open={receiptReviewOpen} onClose={() => setReceiptReviewOpen(false)} />
 
       {/* Metric cards (FinanceFlow style) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Total Income"
           value={centsToEur(metrics.totalIncome)}
@@ -571,7 +682,7 @@ export default function FinancePage() {
       </div>
 
       {/* Revenue / Expenses bar chart */}
-      <Card>
+      <Card className="shrink-0">
         <CardHeader>
           <CardTitle className="text-base">Monthly Income vs Expenses ({year})</CardTitle>
         </CardHeader>
@@ -590,16 +701,16 @@ export default function FinancePage() {
       </Card>
 
       {/* Tabs */}
-      <Tabs defaultValue="transactions">
-        <TabsList>
+      <Tabs defaultValue="transactions" className="flex min-h-0 flex-1 flex-col">
+        <TabsList className="shrink-0 self-start">
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
           <TabsTrigger value="vat">VAT Report</TabsTrigger>
         </TabsList>
 
         {/* ── Transactions tab ──────────────────────────────────────────── */}
-        <TabsContent value="transactions" className="space-y-4 mt-4">
+        <TabsContent value="transactions" className="mt-4 flex min-h-0 flex-1 flex-col gap-4 data-[state=inactive]:hidden">
           {/* Filter + Group row */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -628,6 +739,8 @@ export default function FinancePage() {
                 <SelectItem value="stripe">Stripe</SelectItem>
                 <SelectItem value="revolut">Revolut</SelectItem>
                 <SelectItem value="paypal">PayPal</SelectItem>
+                <SelectItem value="gmail">Gmail receipts</SelectItem>
+                <SelectItem value="receipt_log">Receipt log</SelectItem>
                 <SelectItem value="manual">Manual</SelectItem>
               </SelectContent>
             </Select>
@@ -636,8 +749,13 @@ export default function FinancePage() {
               <SelectTrigger className="w-44"><SelectValue placeholder="Category" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All categories</SelectItem>
-                {CATEGORIES.map(c => (
-                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                {ACCOUNTING_CATEGORIES.map(g => (
+                  <SelectGroup key={g.group}>
+                    <SelectLabel className="text-xs">{g.group}</SelectLabel>
+                    {g.options.map(o => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
@@ -661,32 +779,42 @@ export default function FinancePage() {
             </span>
           </div>
 
-          <Card>
-            <div className="overflow-x-auto">
+          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <SortHead field="date"     label="Date"     sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <TableHead>Description</TableHead>
-                    <SortHead field="customer" label="Customer" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <SortHead field="category" label="Category" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <TableHead>Source</TableHead>
+                    <SortHead field="customer" label="Supplier" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    <TableHead>Subject</TableHead>
+                    <SortHead field="category" label="Accounting Category" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    <TableHead>Tax Rate</TableHead>
+                    <SortHead field="amount" label="Invoice Amount" sortField={sortField} sortDir={sortDir} onSort={handleSort} className="text-right" />
+                    <TableHead className="text-right whitespace-nowrap">Invoices Paid</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">VAT Paid</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">VAT – Curr conv</TableHead>
+                    <TableHead>Currency</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">VAT Collected</TableHead>
                     <SortHead field="type"     label="Type"     sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <TableHead>VAT</TableHead>
-                    <SortHead field="amount"   label="Amount"   sortField={sortField} sortDir={sortDir} onSort={handleSort} className="text-right" />
-                    <TableHead className="text-right">Net</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Filename</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>Drive link</TableHead>
+                    <TableHead>Gmail link</TableHead>
+                    <TableHead>Mailbox</TableHead>
+                    <TableHead>Notes</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">Loading…</TableCell>
+                      <TableCell colSpan={COLUMN_COUNT} className="text-center py-12 text-muted-foreground">Loading…</TableCell>
                     </TableRow>
                   ) : filteredTxs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
-                        No transactions found. Sync Stripe or add one manually.
+                      <TableCell colSpan={COLUMN_COUNT} className="text-center py-12 text-muted-foreground">
+                        No transactions found. Sync Stripe, import a statement, or add one manually.
                       </TableCell>
                     </TableRow>
                   ) : groupedRows ? (
@@ -699,7 +827,7 @@ export default function FinancePage() {
                       return (
                         <>
                           <TableRow key={`g-${groupKey}`} className="bg-muted/60 hover:bg-muted/70">
-                            <TableCell colSpan={7} className="py-2 font-semibold text-sm">
+                            <TableCell colSpan={5} className="py-2 font-semibold text-sm">
                               {groupBy === "month"
                                 ? new Date(groupKey + "-01").toLocaleString("en-IE", { month: "long", year: "numeric" })
                                 : groupKey}
@@ -710,15 +838,15 @@ export default function FinancePage() {
                             <TableCell className={cn("text-right font-bold text-sm py-2", groupTotal >= 0 ? "text-emerald-700" : "text-rose-700")}>
                               {groupTotal >= 0 ? "" : "-"}{centsToEur(Math.abs(groupTotal))}
                             </TableCell>
-                            <TableCell colSpan={2} />
+                            <TableCell colSpan={COLUMN_COUNT - 6} />
                           </TableRow>
-                          {groupTxs.map(tx => <TxRow key={tx.id} tx={tx} updateTx={updateTx} deleteTx={deleteTx} />)}
+                          {groupTxs.map(tx => <TxRow key={tx.id} tx={tx} updateTx={updateTx} deleteTx={deleteTx} taxRates={taxRates} />)}
                         </>
                       );
                     })
                   ) : (
                     // ── Flat view ─────────────────────────────────────────
-                    filteredTxs.map(tx => <TxRow key={tx.id} tx={tx} updateTx={updateTx} deleteTx={deleteTx} />)
+                    filteredTxs.map(tx => <TxRow key={tx.id} tx={tx} updateTx={updateTx} deleteTx={deleteTx} taxRates={taxRates} />)
                   )}
                 </TableBody>
               </Table>
@@ -727,7 +855,7 @@ export default function FinancePage() {
         </TabsContent>
 
         {/* ── VAT Report tab ─────────────────────────────────────────────── */}
-        <TabsContent value="vat" className="space-y-6 mt-4">
+        <TabsContent value="vat" className="mt-4 space-y-6 overflow-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-5">
               <p className="text-sm text-muted-foreground">Output VAT (collected)</p>

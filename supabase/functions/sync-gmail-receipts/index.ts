@@ -185,8 +185,17 @@ Deno.serve(async (req: Request) => {
     );
     if (authError || !user) throw new Error("Unauthorized");
 
-    // Get Gmail access token (refresh if needed)
-    const accessToken = await getGmailAccessToken();
+    // Get Gmail access token (refresh if needed). Not being connected yet is
+    // a configuration state the Settings page reports, not a 500.
+    let accessToken: string;
+    try {
+      accessToken = await getGmailAccessToken();
+    } catch (e) {
+      return new Response(
+        JSON.stringify({ error: "not_configured", message: String(e) }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // Search Gmail for receipts/invoices from the last 90 days
     const searchParams = new URLSearchParams({
@@ -279,6 +288,12 @@ Deno.serve(async (req: Request) => {
           net_cents: amount !== null ? Math.round(amount * 100) : null,
           transaction_date: transactionDate,
           description: subject,
+          // Mirror the receipt-log columns so a scanned receipt lands in the
+          // same shape as an imported one and the Gmail link is one click.
+          subject,
+          gmail_url: `https://mail.google.com/mail/u/0/#all/${msg.id}`,
+          mailbox: user.email ?? null,
+          receipt_filename: pdfAttachment?.filename ?? null,
           counterparty_name: senderName,
           counterparty_email: from.match(/<([^>]+)>/)?.[1] ?? from,
           counterparty_country: null,
