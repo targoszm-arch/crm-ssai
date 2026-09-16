@@ -89,8 +89,9 @@ export function useSequenceAnalytics(sequenceId?: string) {
           unique_clicks,
           total_clicks,
           subject,
-          sequence_enrollments (
+          sequence_enrollments!inner (
             id,
+            sequence_id,
             contact_id,
             contacts (
               id,
@@ -106,8 +107,11 @@ export function useSequenceAnalytics(sequenceId?: string) {
       // Fetch tracking events for time series
       const { data: trackingEvents } = await supabase
         .from("email_tracking_events")
-        .select("event_type, occurred_at, link_url")
-        .in("email_id", (emails || []).map(e => e.id))
+        .select("event_type, occurred_at, link_url, contact_id")
+        // sequence_email_id, not email_id. email_id references the `emails` mailbox
+        // table, so filtering it by sequence_emails ids matched nothing and left the
+        // timeline and link panels permanently empty.
+        .in("sequence_email_id", (emails || []).map(e => e.id))
         .order("occurred_at", { ascending: true });
 
       // Calculate metrics
@@ -186,7 +190,9 @@ export function useSequenceAnalytics(sequenceId?: string) {
       for (const event of trackingEvents || []) {
         if (event.event_type === "click" && event.link_url) {
           const existing = linkMap.get(event.link_url) || { unique: new Set(), total: 0 };
-          existing.unique.add(event.occurred_at); // Use timestamp as unique identifier
+          // Unique means distinct person. This was keyed on occurred_at, which made
+          // every click unique by definition.
+          if (event.contact_id) existing.unique.add(event.contact_id);
           existing.total++;
           linkMap.set(event.link_url, existing);
         }
@@ -227,6 +233,18 @@ export function useSequenceAnalytics(sequenceId?: string) {
   });
 }
 
+// Per-campaign rollup for the List tab. Without this the only way to compare two
+// sends was to pick each one in turn from the header dropdown and remember the
+// numbers.
+export interface SequenceRollup {
+  sent: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  openRate: number;
+  clickRate: number;
+}
+
 export function useAllSequencesAnalytics() {
   return useQuery({
     queryKey: ["all-sequences-analytics"],
@@ -247,7 +265,10 @@ export function useAllSequencesAnalytics() {
           clicked_at,
           bounced_at,
           total_opens,
-          total_clicks
+          total_clicks,
+          sequence_enrollments!inner (
+            sequence_id
+          )
         `)
         .not("sent_at", "is", null);
 
@@ -258,8 +279,33 @@ export function useAllSequencesAnalytics() {
       const aggregateOpens = emailStats?.reduce((sum, e) => sum + (e.total_opens || 0), 0) || 0;
       const aggregateClicks = emailStats?.reduce((sum, e) => sum + (e.total_clicks || 0), 0) || 0;
 
+      // Group by sequence so a campaign's own numbers sit on its own row.
+      const bySequence: Record<string, SequenceRollup> = {};
+      for (const e of emailStats || []) {
+        // Narrow rather than `any`: PostgREST returns the !inner embed as an object
+        // here, but the generated types express it loosely enough to need a cast.
+        const embedded = e.sequence_enrollments as { sequence_id?: string | null } | null;
+        const sequenceId = embedded?.sequence_id;
+        if (!sequenceId) continue;
+        const r = bySequence[sequenceId] ??= {
+          sent: 0, opened: 0, clicked: 0, bounced: 0, openRate: 0, clickRate: 0,
+        };
+        r.sent++;
+        if (e.opened_at) r.opened++;
+        if (e.clicked_at) r.clicked++;
+        if (e.bounced_at) r.bounced++;
+      }
+      // Rate against delivered, not sent: a bounce never had the chance to be opened,
+      // so counting it in the denominator understates how the copy performed.
+      for (const r of Object.values(bySequence)) {
+        const delivered = r.sent - r.bounced;
+        r.openRate = delivered > 0 ? Math.round((r.opened / delivered) * 100) : 0;
+        r.clickRate = delivered > 0 ? Math.round((r.clicked / delivered) * 100) : 0;
+      }
+
       return {
         sequences: sequences || [],
+        bySequence,
         totalSent,
         totalOpened,
         totalClicked,

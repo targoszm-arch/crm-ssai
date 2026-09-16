@@ -77,6 +77,10 @@ export function SequenceListTab({ onSelectSequence }: SequenceListTabProps) {
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Steps</TableHead>
               <TableHead className="text-right">Duration</TableHead>
+              <TableHead className="text-right">Sent</TableHead>
+              <TableHead className="text-right">Opened</TableHead>
+              <TableHead className="text-right">Open rate</TableHead>
+              <TableHead className="text-right">Clicked</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -84,7 +88,7 @@ export function SequenceListTab({ onSelectSequence }: SequenceListTabProps) {
             {sortedGroups.map(([category, seqs]) => (
               <Fragment key={category}>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={5} className="font-medium text-sm">
+                  <TableCell colSpan={9} className="font-medium text-sm">
                     {category}
                     <span className="ml-2 text-muted-foreground font-normal">
                       {seqs.length} {seqs.length === 1 ? "sequence" : "sequences"}
@@ -94,6 +98,9 @@ export function SequenceListTab({ onSelectSequence }: SequenceListTabProps) {
                 {seqs.map((seq) => {
                   const steps = seq.steps ?? [];
                   const duration = steps.length ? steps[steps.length - 1].day : 0;
+                  // A sequence that has never sent gets a dash, not a zero: "0% open
+                  // rate" reads as copy that failed, when nothing went out at all.
+                  const stats = allStats?.bySequence?.[seq.id];
                   return (
                     <TableRow key={seq.id}>
                       <TableCell>
@@ -112,6 +119,20 @@ export function SequenceListTab({ onSelectSequence }: SequenceListTabProps) {
                       <TableCell className="text-right tabular-nums">{steps.length}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
                         {duration} {duration === 1 ? "day" : "days"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {stats ? stats.sent : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {stats ? stats.opened : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {stats
+                          ? `${stats.openRate}%`
+                          : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {stats ? stats.clicked : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
