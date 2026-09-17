@@ -96,18 +96,105 @@ export function evidenceLostIfDeleted(
     .map(e => e.label);
 }
 
-/** Groups of existing rows that look like the same transaction recorded twice. */
-export function findDuplicateGroups(rows: FinanceTransaction[]): DuplicateGroup[] {
-  const byKey = new Map<string, FinanceTransaction[]>();
+/**
+ * The cross-source pair the exact key cannot see.
+ *
+ * A receipt and the bank line that paid it agree on none of the three fields
+ * `duplicateKey` joins on. The receipt is dated when the vendor issued it and
+ * the bank line when the money moved, a day or two later. The receipt states
+ * the invoice currency and the bank states what the account was debited, so
+ * USD 49.00 and EUR 44.88 are one payment wearing two numbers. And the names
+ * come from different places — "Cartesia AI, Inc." on the receipt against
+ * "Cartesia" on the statement, "Anthropic, PBC" against "Anthropic".
+ *
+ * Measured against what is stored, the exact key found 1 of 27 such pairs.
+ *
+ * So these three tolerances, and no more: a few days, a name that starts the
+ * same, and an amount close enough to be the same money across an FX rate.
+ */
+const PAIR_MAX_DAYS = 3;
+const PAIR_NAME_PREFIX = 5;
+const PAIR_AMOUNT_TOLERANCE = 0.15;
 
-  for (const row of rows) {
-    if (!isMatchable(row)) continue;
+function daysBetween(a: string, b: string): number {
+  return Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
+}
+
+function couldBeSamePayment(a: FinanceTransaction, b: FinanceTransaction): boolean {
+  if (a.type !== b.type) return false;
+  if (a.source === b.source) return false;
+  if (daysBetween(a.transaction_date, b.transaction_date) > PAIR_MAX_DAYS) return false;
+
+  const whoA = normaliseWho(a);
+  const whoB = normaliseWho(b);
+  if (whoA.slice(0, PAIR_NAME_PREFIX) !== whoB.slice(0, PAIR_NAME_PREFIX)) return false;
+
+  const amtA = amountOf(a);
+  const amtB = amountOf(b);
+  return Math.abs(amtA - amtB) <= Math.max(amtA, amtB) * PAIR_AMOUNT_TOLERANCE;
+}
+
+/**
+ * How badly a pair fits, for choosing between competing candidates. Anthropic
+ * billed EUR 24.60, EUR 24.60 and EUR 23.38 on one day; every receipt is
+ * within tolerance of every bank line, and pairing them off arbitrarily would
+ * propose deleting a real payment. Closest amount wins, then closest date, and
+ * each row is spent once.
+ */
+function pairDistance(a: FinanceTransaction, b: FinanceTransaction): number {
+  const amtA = amountOf(a);
+  const amtB = amountOf(b);
+  const byAmount = Math.abs(amtA - amtB) / Math.max(amtA, amtB, 1);
+  return byAmount * 100 + daysBetween(a.transaction_date, b.transaction_date);
+}
+
+/**
+ * Groups of existing rows that look like the same transaction recorded twice.
+ *
+ * Cross-source pairs are settled first, and the exact key only gets what is
+ * left. The order matters and is not a preference. Anthropic billed EUR 24.60
+ * twice on 29 June and both payments reached the bank on the 30th: four rows,
+ * two real payments. Letting the exact key go first pairs the two receipts
+ * with each other and the two bank lines with each other, and then proposes
+ * deleting one of each — losing a genuine payment's receipt while leaving the
+ * receipt-against-bank duplication it was supposed to find. A receipt and a
+ * bank line are one payment; two receipts a vendor issued on one day usually
+ * are not.
+ */
+export function findDuplicateGroups(rows: FinanceTransaction[]): DuplicateGroup[] {
+  const matchable = rows.filter(isMatchable);
+  const groups: DuplicateGroup[] = [];
+  const spent = new Set<string>();
+
+  const candidates: { a: FinanceTransaction; b: FinanceTransaction; d: number }[] = [];
+  for (let i = 0; i < matchable.length; i++) {
+    for (let j = i + 1; j < matchable.length; j++) {
+      if (couldBeSamePayment(matchable[i], matchable[j])) {
+        candidates.push({
+          a: matchable[i],
+          b: matchable[j],
+          d: pairDistance(matchable[i], matchable[j]),
+        });
+      }
+    }
+  }
+
+  for (const { a, b } of candidates.sort((x, y) => x.d - y.d)) {
+    if (spent.has(a.id) || spent.has(b.id)) continue;
+    spent.add(a.id);
+    spent.add(b.id);
+    const [keep, extra] = evidenceScore(a) >= evidenceScore(b) ? [a, b] : [b, a];
+    groups.push({ key: `pair|${keep.id}|${extra.id}`, keep, extras: [extra] });
+  }
+
+  const byKey = new Map<string, FinanceTransaction[]>();
+  for (const row of matchable) {
+    if (spent.has(row.id)) continue;
     const key = duplicateKey(row);
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key)!.push(row);
   }
 
-  const groups: DuplicateGroup[] = [];
   for (const [key, members] of byKey) {
     if (members.length < 2) continue;
     // Richest row first, oldest as the tie-break. Never the other way round:
