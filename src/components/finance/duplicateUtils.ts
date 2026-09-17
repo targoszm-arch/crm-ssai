@@ -96,18 +96,169 @@ export function evidenceLostIfDeleted(
     .map(e => e.label);
 }
 
-/** Groups of existing rows that look like the same transaction recorded twice. */
-export function findDuplicateGroups(rows: FinanceTransaction[]): DuplicateGroup[] {
-  const byKey = new Map<string, FinanceTransaction[]>();
+/**
+ * The cross-source pair the exact key cannot see.
+ *
+ * A receipt and the bank line that paid it agree on none of the three fields
+ * `duplicateKey` joins on. The receipt is dated when the vendor issued it and
+ * the bank line when the money moved, a day or two later. The receipt states
+ * the invoice currency and the bank states what the account was debited, so
+ * USD 49.00 and EUR 44.88 are one payment wearing two numbers. And the names
+ * come from different places — "Cartesia AI, Inc." on the receipt against
+ * "Cartesia" on the statement, "Anthropic, PBC" against "Anthropic".
+ *
+ * Measured against what is stored, the exact key found 1 of 27 such pairs.
+ *
+ * So these three tolerances, and no more: a few days, a name that starts the
+ * same, and an amount close enough to be the same money across an FX rate.
+ */
+const PAIR_MAX_DAYS = 3;
+const PAIR_NAME_PREFIX = 5;
+const PAIR_AMOUNT_TOLERANCE = 0.15;
 
-  for (const row of rows) {
-    if (!isMatchable(row)) continue;
+function daysBetween(a: string, b: string): number {
+  return Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
+}
+
+function couldBeSamePayment(a: FinanceTransaction, b: FinanceTransaction): boolean {
+  if (a.type !== b.type) return false;
+  if (a.source === b.source) return false;
+  if (daysBetween(a.transaction_date, b.transaction_date) > PAIR_MAX_DAYS) return false;
+
+  const whoA = normaliseWho(a);
+  const whoB = normaliseWho(b);
+  if (whoA.slice(0, PAIR_NAME_PREFIX) !== whoB.slice(0, PAIR_NAME_PREFIX)) return false;
+
+  const amtA = amountOf(a);
+  const amtB = amountOf(b);
+  return Math.abs(amtA - amtB) <= Math.max(amtA, amtB) * PAIR_AMOUNT_TOLERANCE;
+}
+
+/**
+ * How well a pair fits, for choosing between competing candidates. Anthropic
+ * billed EUR 24.60, EUR 24.60 and EUR 23.38 on one day; every receipt is
+ * within tolerance of every bank line, and pairing them off arbitrarily would
+ * propose deleting a real payment.
+ *
+ * Amount decides and the date only breaks ties. Folding the two into one
+ * scalar does not do that at any exchange rate: weigh a day against a
+ * percentage point and an exact-amount bank line three days out loses to a
+ * same-day one that is 2% off, which is the wrong row to offer for deletion
+ * and leaves the right one unmatched.
+ */
+interface PairFit {
+  amount: number;
+  days: number;
+}
+
+function pairFit(a: FinanceTransaction, b: FinanceTransaction): PairFit {
+  const amtA = amountOf(a);
+  const amtB = amountOf(b);
+  return {
+    amount: Math.abs(amtA - amtB) / Math.max(amtA, amtB, 1),
+    days: daysBetween(a.transaction_date, b.transaction_date),
+  };
+}
+
+function byFit(x: PairFit, y: PairFit): number {
+  return x.amount - y.amount || x.days - y.days;
+}
+
+/**
+ * Groups of existing rows that look like the same transaction recorded twice.
+ *
+ * Cross-source pairs are settled first, and the exact key only gets what is
+ * left. The order matters and is not a preference. Anthropic billed EUR 24.60
+ * twice on 29 June and both payments reached the bank on the 30th: four rows,
+ * two real payments. Letting the exact key go first pairs the two receipts
+ * with each other and the two bank lines with each other, and then proposes
+ * deleting one of each — losing a genuine payment's receipt while leaving the
+ * receipt-against-bank duplication it was supposed to find. A receipt and a
+ * bank line are one payment; two receipts a vendor issued on one day usually
+ * are not.
+ *
+ * A payment is not always two rows. Anthropic's EUR 18.45 on 5 July is three —
+ * the Gmail row, the receipt_log row and the bank line — and stopping at a
+ * pair proposes removing one of the three while the ledger still counts the
+ * payment twice. So a set grows past two, bounded by the one thing that makes
+ * these sets safe: at most one row per source. That bound is what keeps the
+ * two genuine EUR 24.60 payments apart, since a second receipt cannot join a
+ * set that already holds one.
+ */
+export function findDuplicateGroups(rows: FinanceTransaction[]): DuplicateGroup[] {
+  const matchable = rows.filter(isMatchable);
+  const groups: DuplicateGroup[] = [];
+  const spent = new Set<string>();
+
+  const candidates: { a: FinanceTransaction; b: FinanceTransaction; fit: PairFit }[] = [];
+  for (let i = 0; i < matchable.length; i++) {
+    for (let j = i + 1; j < matchable.length; j++) {
+      if (couldBeSamePayment(matchable[i], matchable[j])) {
+        candidates.push({
+          a: matchable[i],
+          b: matchable[j],
+          fit: pairFit(matchable[i], matchable[j]),
+        });
+      }
+    }
+  }
+
+  candidates.sort((x, y) => byFit(x.fit, y.fit));
+
+  // Best edge first, and taking it can in principle strand two rows that would
+  // have paired with each other — a maximum-cardinality matching would find
+  // more pairs than this does. Measured on the stored ledger it does not: over
+  // 91 candidate edges in 53 components, greedy finds 56 pairs and the exact
+  // maximum is also 56.
+  //
+  // Closest-fit-first is also the safer objective here even where the two
+  // differ. Maximising the count buys extra pairs at the far end of tolerance —
+  // it would rather propose two matches 10% and 14% apart than one that is
+  // exact — and a proposal is a proposal to delete a row carrying VAT and a
+  // PDF. Of the 56 pairs found, 53 are within 5% and one is beyond 10%. A
+  // missed pair costs a proposal nobody makes; a forced one costs evidence.
+  const setOf = new Map<string, FinanceTransaction[]>();
+  for (const { a, b } of candidates) {
+    if (spent.has(a.id) || spent.has(b.id)) continue;
+    const set = [a, b];
+    spent.add(a.id);
+    spent.add(b.id);
+    setOf.set(a.id, set);
+    setOf.set(b.id, set);
+  }
+
+  // The third representation, and any beyond it. A row joins a set only when
+  // it fits every member already in it and brings a source none of them has.
+  for (const { a, b } of candidates) {
+    const set = setOf.get(a.id) ?? setOf.get(b.id);
+    if (!set) continue;
+    const row = setOf.has(a.id) ? b : a;
+    if (spent.has(row.id)) continue;
+    if (set.some(m => m.source === row.source)) continue;
+    if (!set.every(m => couldBeSamePayment(row, m))) continue;
+    set.push(row);
+    spent.add(row.id);
+    setOf.set(row.id, set);
+  }
+
+  for (const set of new Set(setOf.values())) {
+    const sorted = [...set].sort((a, b) =>
+      evidenceScore(b) - evidenceScore(a) || a.created_at.localeCompare(b.created_at));
+    groups.push({
+      key: `pair|${sorted.map(r => r.id).join("|")}`,
+      keep: sorted[0],
+      extras: sorted.slice(1),
+    });
+  }
+
+  const byKey = new Map<string, FinanceTransaction[]>();
+  for (const row of matchable) {
+    if (spent.has(row.id)) continue;
     const key = duplicateKey(row);
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key)!.push(row);
   }
 
-  const groups: DuplicateGroup[] = [];
   for (const [key, members] of byKey) {
     if (members.length < 2) continue;
     // Richest row first, oldest as the tie-break. Never the other way round:

@@ -2,18 +2,16 @@ import { useState } from "react";
 import PageShell from "@/components/layout/PageShell";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Building2, Mail, Phone, MapPin, BriefcaseBusiness, CalendarDays, Linkedin, Sparkles } from "lucide-react";
+import { ArrowLeft, Building2, Mail, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ContactWithCompany } from "@/components/customers/ContactDetailContent";
+import { ContactDetailContent, ContactWithCompany } from "@/components/customers/ContactDetailContent";
 import { ActivityStreamPanel } from "@/components/customers/ActivityStreamPanel";
 import { FilesPanel } from "@/components/customers/FilesPanel";
 import { ComposeEmail } from "@/components/inbox/ComposeEmail";
-import { LinkedDealsCard } from "@/components/deals/LinkedDealsCard";
 import { HistoryPanel } from "@/components/customers/HistoryPanel";
 import { useEmailAccounts } from "@/hooks/useEmailAccounts";
 
@@ -27,7 +25,7 @@ export default function PersonDetail() {
   const [historyEmailId, setHistoryEmailId] = useState<string | null>(null);
   const { data: accounts } = useEmailAccounts();
   const mailbox = accounts?.[0] ?? null;
-  const { data: contact, isLoading, error } = useQuery({
+  const { data: contact, isLoading, error, refetch } = useQuery({
     queryKey: ["contact-detail", id],
     queryFn: async () => {
       const { data, error } = await supabase.from("contacts").select("*, companies!contacts_company_id_fkey(company_name)").eq("id", id).single();
@@ -59,7 +57,7 @@ export default function PersonDetail() {
       </Tabs>
       {activeTab === "activity" && <div className="max-w-4xl"><ActivityStreamPanel scope={{ contactId: contact.id, companyId: contact.company_id }} onOpenEmail={(emailId) => { setHistoryEmailId(emailId); setHistoryOpen(true); }} /></div>}
       {activeTab === "files" && <div className="max-w-4xl"><FilesPanel scope={{ contactId: contact.id, companyId: contact.company_id }} /></div>}
-      <div hidden={activeTab !== "overview"} className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,.9fr)]"><div className="space-y-4"><Card><CardHeader className="border-b"><CardTitle className="text-base">Contact information</CardTitle></CardHeader><CardContent className="grid gap-3 p-5 sm:grid-cols-2"><Info icon={Mail} label="Primary email" value={contact.email} /><Info icon={Phone} label="Phone number" value={contact.phone} /><Info icon={BriefcaseBusiness} label="Job title" value={contact.title} /><Info icon={MapPin} label="Location" value={contact.work_location} /><Info icon={CalendarDays} label="Stage" value={contact.interest_level || contact.marketing_status} /><Info icon={Linkedin} label="LinkedIn" value={contact.linkedin_url ? "Attached" : "Not attached"} /></CardContent></Card><Card><CardHeader className="border-b"><CardTitle className="text-base">Company overview</CardTitle></CardHeader><CardContent className="p-5"><div className="rounded-2xl border bg-muted/20 p-5"><div className="flex items-center justify-between"><div><p className="font-semibold">{companyName || "No company linked"}</p><p className="mt-1 text-sm text-muted-foreground">{companyName ? "Linked account for this contact." : "Link a company to keep CRM records aligned."}</p></div>{contact.company_id && <Button variant="outline" size="sm" asChild><Link to={`/companies/${contact.company_id}?from=customers`}>Open account</Link></Button>}</div></div></CardContent></Card><LinkedDealsCard contactId={contact.id} companyId={contact.company_id} contactName={name} /></div><div className="space-y-4"><Card><CardHeader><CardTitle className="text-base">Quick actions</CardTitle></CardHeader><CardContent className="flex flex-col gap-2"><Button variant="outline" className="justify-between" disabled={!contact.email} onClick={() => setComposeOpen(true)}>Send email <Mail className="h-4 w-4" /></Button><Button variant="outline" className="justify-between" onClick={() => { setHistoryEmailId(null); setHistoryOpen(true); }}>Open history <Mail className="h-4 w-4" /></Button><Button variant="outline" className="justify-between" onClick={() => setActiveTab("files")}><Sparkles className="h-4 w-4" /> Attach a document</Button></CardContent></Card><Card><CardHeader><CardTitle className="text-base">CRM overview</CardTitle></CardHeader><CardContent className="grid gap-3"><Metric label="Contact stage" value={contact.interest_level || contact.marketing_status || "Lead"} /><Metric label="Time zone" value="Not set" /></CardContent></Card></div></div>
+      <div hidden={activeTab !== "overview"} className="max-w-4xl"><ContactDetailContent contact={contact} onRefetched={refetch} /></div>
     </PageShell>
     {/* An anchor with a mailto: href handed the click to whatever the OS has
         registered — Apple Mail here — which is not the CRM and doesn't log
@@ -83,5 +81,3 @@ export default function PersonDetail() {
     />
   </div>;
 }
-function Info({ icon: Icon, label, value }: { icon: typeof Mail; label: string; value?: string | null }) { return <div className="rounded-xl border p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Icon className="h-4 w-4" />{label}</div><p className="mt-2 text-sm font-medium">{value || "Not available"}</p></div>; }
-function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border bg-muted/20 p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value}</p></div>; }
