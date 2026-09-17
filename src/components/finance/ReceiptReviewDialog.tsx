@@ -91,6 +91,11 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
   const queryClient = useQueryClient();
   const [index, setIndex] = useState(0);
   const [saving, setSaving] = useState(false);
+  // The row the confirmation was opened for, not whatever receipts[index]
+  // happens to be when Delete is clicked. The queue refetches on window
+  // focus, so an open dialog can end up pointing at a different receipt —
+  // and then delete that one instead.
+  const [pendingDelete, setPendingDelete] = useState<FinanceTransaction | null>(null);
 
   // Fetch unreconciled Gmail transactions
   const { data: receipts = [], isLoading } = useQuery<FinanceTransaction[]>({
@@ -129,7 +134,7 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
   }, [tx, reset]);
 
   // Reset index when dialog opens
-  useEffect(() => { if (open) setIndex(0); }, [open]);
+  useEffect(() => { if (open) { setIndex(0); setPendingDelete(null); } }, [open]);
 
   const vatTreatment = watch("vat_treatment");
 
@@ -180,11 +185,11 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
     }
   });
 
-  const handleDelete = async () => {
-    if (!tx) return;
-    const { error } = await supabase.from("finance_transactions").delete().eq("id", tx.id);
+  const handleDelete = async (row: FinanceTransaction) => {
+    const { error } = await supabase.from("finance_transactions").delete().eq("id", row.id);
     if (error) { toast.error(String(error.message)); return; }
     toast.success("Receipt deleted");
+    setPendingDelete(null);
     queryClient.invalidateQueries({ queryKey: ["gmail-receipts-queue"] });
     queryClient.invalidateQueries({ queryKey: ["finance_transactions"] });
     if (index >= total - 1) onClose();
@@ -316,23 +321,28 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
             {/* AlertDialog rather than a native confirm(): it can name the
                 receipt being deleted, and it matches every other destructive
                 action in the app. */}
-            <AlertDialog>
+            <AlertDialog
+              open={pendingDelete !== null}
+              onOpenChange={v => { if (!v) setPendingDelete(null); }}
+            >
               <AlertDialogTrigger asChild>
-                <Button variant="destructive">Delete this receipt</Button>
+                <Button variant="destructive" disabled={!tx} onClick={() => setPendingDelete(tx)}>
+                  Delete this receipt
+                </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete this receipt?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    {tx?.subject ?? tx?.description ?? "This receipt"} will be removed,
-                    along with the VAT and classification recorded on it. This cannot
+                    {pendingDelete?.subject ?? pendingDelete?.description ?? "This receipt"} will
+                    be removed, along with the VAT and classification recorded on it. This cannot
                     be undone, though re-running the Gmail harvest would fetch it again.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
-                    onClick={handleDelete}
+                    onClick={() => { if (pendingDelete) void handleDelete(pendingDelete); }}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
                     Delete
