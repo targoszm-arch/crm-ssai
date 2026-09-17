@@ -1314,6 +1314,108 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_receipt_matches: {
+        Row: {
+          bank_transaction_id: string
+          created_at: string
+          decided_at: string | null
+          id: string
+          reasons: Json
+          receipt_transaction_id: string
+          score: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bank_transaction_id: string
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          reasons?: Json
+          receipt_transaction_id: string
+          score: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bank_transaction_id?: string
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          reasons?: Json
+          receipt_transaction_id?: string
+          score?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_receipt_matches_bank_transaction_id_fkey"
+            columns: ["bank_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_receipt_matches_receipt_transaction_id_fkey"
+            columns: ["receipt_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_supplier_rules: {
+        Row: {
+          accounting_category: string | null
+          counterparty_country: string | null
+          counterparty_vat_number: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string | null
+          match_pattern: string
+          notes: string | null
+          priority: number
+          updated_at: string
+          user_id: string
+          vat_treatment: string | null
+        }
+        Insert: {
+          accounting_category?: string | null
+          counterparty_country?: string | null
+          counterparty_vat_number?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          match_pattern: string
+          notes?: string | null
+          priority?: number
+          updated_at?: string
+          user_id: string
+          vat_treatment?: string | null
+        }
+        Update: {
+          accounting_category?: string | null
+          counterparty_country?: string | null
+          counterparty_vat_number?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          match_pattern?: string
+          notes?: string | null
+          priority?: number
+          updated_at?: string
+          user_id?: string
+          vat_treatment?: string | null
+        }
+        Relationships: []
+      }
       finance_tax_rates: {
         Row: {
           applies_to: string
@@ -1356,6 +1458,7 @@ export type Database = {
           amount_cents: number
           amount_eur_cents: number | null
           category: string | null
+          classified_by_rule_id: string | null
           counterparty_country: string | null
           counterparty_email: string | null
           counterparty_name: string | null
@@ -1393,6 +1496,7 @@ export type Database = {
           amount_cents: number
           amount_eur_cents?: number | null
           category?: string | null
+          classified_by_rule_id?: string | null
           counterparty_country?: string | null
           counterparty_email?: string | null
           counterparty_name?: string | null
@@ -1430,6 +1534,7 @@ export type Database = {
           amount_cents?: number
           amount_eur_cents?: number | null
           category?: string | null
+          classified_by_rule_id?: string | null
           counterparty_country?: string | null
           counterparty_email?: string | null
           counterparty_name?: string | null
@@ -1462,7 +1567,15 @@ export type Database = {
           vat_eur_cents?: number | null
           vat_treatment?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_transactions_classified_by_rule_id_fkey"
+            columns: ["classified_by_rule_id"]
+            isOneToOne: false
+            referencedRelation: "finance_supplier_rules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_vat_returns: {
         Row: {
@@ -1506,6 +1619,30 @@ export type Database = {
           submitted_on?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      fx_rates: {
+        Row: {
+          created_at: string
+          currency: string
+          rate_date: string
+          rate_per_eur: number
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          currency: string
+          rate_date: string
+          rate_per_eur: number
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          rate_date?: string
+          rate_per_eur?: number
+          source?: string
         }
         Relationships: []
       }
@@ -3646,3 +3783,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+"}

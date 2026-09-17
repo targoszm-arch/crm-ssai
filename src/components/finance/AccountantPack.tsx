@@ -55,6 +55,10 @@ function buildMonths(txs: FinanceTransaction[]): MonthRow[] {
   const years = new Set(txs.map(t => t.transaction_date.slice(0, 4)));
 
   for (const t of txs) {
+    // A move between her own Revolut pockets is not a purchase and not a sale.
+    // 179 of these were typed income or expense and put EUR 38,846 of internal
+    // churn through both columns of the accountant's pivot.
+    if (t.type === "transfer") continue;
     const key = t.transaction_date.slice(0, 7);
     if (!byMonth.has(key)) {
       const [y, m] = key.split("-");
@@ -200,7 +204,10 @@ export function AccountantPack({
           .filter(t => t.type === "income")
           .reduce((s, t) => s + (t.vat_collected_cents || vatEur(t)), 0);
         const inputVat = inPeriod
-          .filter(t => t.type !== "income")
+          // Purchases only. Was `type !== "income"`, which also caught
+          // transfers; they carry no VAT today, so the figure happened to be
+          // right, but the filter asserted something false.
+          .filter(t => t.type === "expense" || t.type === "fee" || t.type === "refund")
           .reduce((s, t) => s + (t.type === "refund" ? -vatEur(t) : vatEur(t)), 0);
         out.push({
           label: `${p.label} ${year}`,

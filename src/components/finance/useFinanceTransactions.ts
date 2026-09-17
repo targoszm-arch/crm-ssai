@@ -8,7 +8,10 @@ export interface FinanceTransaction {
   // spreadsheet backfill writes 'receipt_log'.
   source: "stripe" | "revolut" | "paypal" | "manual" | "gmail" | "receipt_log";
   source_id: string | null;
-  type: "income" | "expense" | "refund" | "fee";
+  // 'transfer' added 17 Sep 2026. Money moving between Magda's own Revolut
+  // pockets is neither income nor expense; 179 such rows carrying EUR 38,846
+  // were booked as one or the other and inflated both sides of the P&L.
+  type: "income" | "expense" | "refund" | "fee" | "transfer";
   category: string | null;
   amount_cents: number;
   currency: string;

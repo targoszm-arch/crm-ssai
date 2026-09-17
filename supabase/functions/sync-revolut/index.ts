@@ -128,9 +128,30 @@ async function postToken(params: Record<string, string>): Promise<Record<string,
 
 // ── Transaction mapping ────────────────────────────────────────────────────
 
-function mapType(revType: string, amount: number): "income" | "expense" | "fee" | "refund" {
+function mapType(
+  revType: string,
+  amount: number,
+  legs: Record<string, unknown>[],
+): "income" | "expense" | "fee" | "refund" | "transfer" {
   if (revType === "refund") return "refund";
   if (revType === "fee" || revType === "card_credit") return "fee";
+
+  // A move between two of the account holder's own pockets: both legs
+  // present, neither carrying a counterparty. -6000 leaves one account_id and
+  // +6000 arrives in another, nobody else involved.
+  //
+  // This fell through to `amount > 0 ? income : expense` below, and because a
+  // transfer's first leg is negative, 61 internal moves were booked as
+  // EXPENSES totalling EUR 15,948 — money that never left the business.
+  //
+  // The test is narrow on purpose. A single-leg transfer DOES carry a
+  // counterparty ("To Magdalena Targosz") and is a real payment out; calling
+  // that a transfer would hide actual spending, which is the worse error.
+  if (revType === "transfer" && legs.length === 2
+      && !legs[0]?.counterparty && !legs[1]?.counterparty) {
+    return "transfer";
+  }
+
   if (revType === "topup" || revType === "transfer_in") return "income";
   return amount > 0 ? "income" : "expense";
 }
@@ -270,14 +291,20 @@ Deno.serve(async (req: Request) => {
 
       const merchant = tx.merchant as Record<string, unknown> | null;
       const counterparty = tx.counterparty as Record<string, unknown> | null;
+      // leg.description is where Revolut puts the human text for interest,
+      // transfers and account charges — "Interest earned - Skill Studio AI
+      // Save", "Company Pro plan fee". Leaving it out of this chain is why 153
+      // rows read "Revolut transaction" with a "-" for the supplier: the
+      // placeholder fired while the real description sat one level down.
+      const legDescription = leg.description as string | undefined;
       const description = (tx.reference as string) ?? (tx.description as string)
-        ?? (merchant?.name as string) ?? "Revolut transaction";
+        ?? (merchant?.name as string) ?? legDescription ?? "Revolut transaction";
 
       rows.push({
         user_id: user.id,
         source: "revolut",
         source_id: tx.id as string,
-        type: mapType(tx.type as string, rawAmount),
+        type: mapType(tx.type as string, rawAmount, legs),
         amount_cents: amountCents,
         currency,
         amount_eur_cents: amountEurCents,
@@ -286,7 +313,11 @@ Deno.serve(async (req: Request) => {
         transaction_date: toDate((tx.completed_at as string) ?? (tx.created_at as string)),
         description,
         subject: description,
-        counterparty_name: (merchant?.name as string) ?? (counterparty?.name as string) ?? null,
+        // Falls back to the leg description so the table has something to show
+        // and so the supplier rules have something to match on. A row with no
+        // name is invisible to both.
+        counterparty_name: (merchant?.name as string) ?? (counterparty?.name as string)
+          ?? legDescription ?? null,
         counterparty_country: (merchant?.country as string) ?? null,
         // A bank feed does not know a tax position; that is set at reconciliation.
         vat_treatment: null,

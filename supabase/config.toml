@@ -134,3 +134,6 @@ verify_jwt = true
 # reachable without one — the function re-checks the session itself as well.
 [functions.push-peak-focus]
 verify_jwt = true
+
+[functions.sync-fx-rates]
+verify_jwt = true

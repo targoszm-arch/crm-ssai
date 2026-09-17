@@ -1,0 +1,13 @@
+-- The 7 Sep dedupe left three backup tables. Two of them
+-- (dedupe_backup_contacts_20260907, dedupe_map_20260907) have RLS on with no
+-- policies; this one was missed, leaving 65,083 activity rows readable and
+-- writable by anyone holding the publishable key.
+--
+-- No policies on purpose: these are cold backups, reached through SQL or the
+-- service role, never from the browser. Matching the siblings, not inventing a
+-- rule.
+--
+-- Not dropped. CLAUDE.md records that the dedupe arithmetic does not close
+-- (about 1,100 contacts and 335 companies left by some route with no backup),
+-- so these tables are the only copy until that is settled.
+ALTER TABLE "public"."dedupe_backup_activities_20260908" ENABLE ROW LEVEL SECURITY;
