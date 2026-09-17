@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, RefreshCw, Download,
   Receipt, Percent, DollarSign, Info, Check, Trash2, Search,
-  CreditCard, Mail, Building2, Copy
+  CreditCard, Mail, Building2, Copy, ChevronUp, ChevronDown
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -324,6 +324,21 @@ export default function FinancePage() {
 
   // The grid hands its API up so the row count and the CSV reflect what is
   // actually on screen — the same rows, in the same order.
+  // The summary — four metric cards and a 240px chart — is ~330px of fixed
+  // height sitting directly above a 1,000-row ledger on a fill-height page.
+  // Everything above the grid is shrink-0, so that 330px comes straight out
+  // of the grid, which is the thing you actually work in. Collapsed by
+  // default; the choice is remembered.
+  const [summaryOpen, setSummaryOpen] = useState(() => {
+    try { return localStorage.getItem("finance.summaryOpen") === "1"; } catch { return false; }
+  });
+  const toggleSummary = () => {
+    setSummaryOpen(v => {
+      try { localStorage.setItem("finance.summaryOpen", v ? "0" : "1"); } catch { /* private mode */ }
+      return !v;
+    });
+  };
+
   const gridApiRef = useRef<GridApi<FinanceTransaction> | null>(null);
   const [displayedCount, setDisplayedCount] = useState<number | null>(null);
 
@@ -507,8 +522,10 @@ export default function FinancePage() {
           />
         </PageHeader>
 
-        {/* Data Sources status bar */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Data Sources status bar. Folded into the summary toggle: it is
+            sync status, not something you work in, and on a fill-height page
+            every fixed row above the ledger is a row taken off the ledger. */}
+        {summaryOpen && <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Data sources</span>
           <SourceChip
             icon={<CreditCard className="h-3.5 w-3.5" />}
@@ -534,7 +551,7 @@ export default function FinancePage() {
             onAction={handleGmailSync}
             loading={syncingGmail}
           />
-        </div>
+        </div>}
       </div>
 
       <ReceiptReviewDialog open={receiptReviewOpen} onClose={() => setReceiptReviewOpen(false)} />
@@ -558,7 +575,7 @@ export default function FinancePage() {
       />
 
       {/* Metric cards (FinanceFlow style) */}
-      <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {summaryOpen && <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Total Income"
           value={centsToEur(metrics.totalIncome)}
@@ -587,10 +604,10 @@ export default function FinancePage() {
           gradient="net"
           icon={<DollarSign className="w-5 h-5 text-white" />}
         />
-      </div>
+      </div>}
 
       {/* Revenue / Expenses bar chart */}
-      <Card className="shrink-0">
+      {summaryOpen && <Card className="shrink-0">
         <CardHeader>
           <CardTitle className="text-base">Monthly Income vs Expenses ({yearLabel})</CardTitle>
         </CardHeader>
@@ -606,7 +623,7 @@ export default function FinancePage() {
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Tabs */}
       {/* min-h is load-bearing, not padding. Everything above this — header,
@@ -615,6 +632,15 @@ export default function FinancePage() {
           min-h-0` lets it absorb all the way to zero. On a laptop that put the
           table at zero height: the shell would still scroll the cards into
           view, but there were no rows left to reveal.
+
+          The floor now lives on the TABLE, not on this region, and it is
+          60svh rather than a rem value. That is the difference between a
+          table whose height is whatever is left over after everything else
+          has taken its share — which is how it ended up five rows tall — and
+          one that is guaranteed most of the screen no matter what sits above
+          it. If the total then exceeds the viewport, the page scrolls. That
+          is the honest outcome, and it is bounded: the summary above the
+          table is collapsed by default.
 
           With a floor, a viewport too short to fit everything overflows the
           shell and the page scrolls — which is the honest outcome, since
@@ -626,12 +652,18 @@ export default function FinancePage() {
           CSS source order rather than by the order written here. The children
           keep min-h-0 so the table can still scroll inside whatever height
           this resolves to. */}
-      <Tabs defaultValue="transactions" className="flex min-h-[22rem] flex-1 flex-col">
-        <TabsList className="shrink-0 self-start">
-          <TabsTrigger value="transactions">Transactions</TabsTrigger>
-          <TabsTrigger value="reconcile">Reconcile</TabsTrigger>
-          <TabsTrigger value="vat">VAT Report</TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="transactions" className="flex flex-1 flex-col">
+        <div className="flex shrink-0 items-center justify-between gap-3">
+          <TabsList className="self-start">
+            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="reconcile">Reconcile</TabsTrigger>
+            <TabsTrigger value="vat">VAT Report</TabsTrigger>
+          </TabsList>
+          <Button variant="ghost" size="sm" onClick={toggleSummary} className="gap-1.5">
+            {summaryOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {summaryOpen ? "Hide summary" : "Show summary"}
+          </Button>
+        </div>
 
         {/* ── Transactions tab ──────────────────────────────────────────── */}
         <TabsContent value="transactions" className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
@@ -701,7 +733,7 @@ export default function FinancePage() {
             </span>
           </div>
 
-          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <Card className="flex min-h-[60svh] flex-1 flex-col overflow-hidden">
             <Suspense fallback={
               <div className="flex h-full items-center justify-center">
                 <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
