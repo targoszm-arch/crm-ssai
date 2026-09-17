@@ -9,6 +9,9 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { centsToEur } from "@/components/finance/financeUtils";
+import { findIncomingDuplicates } from "@/components/finance/duplicateUtils";
+import { DuplicateReviewDialog, DuplicateReviewItem } from "@/components/finance/DuplicateReviewDialog";
+import { FinanceTransaction } from "@/components/finance/useFinanceTransactions";
 
 /**
  * Import a Revolut or PayPal statement export.
@@ -77,6 +80,20 @@ function findCol(headers: string[], ...candidates: string[]): number {
   return -1;
 }
 
+/**
+ * Exact header match only. `findCol` falls back to a substring test, which is
+ * right for descriptive columns and badly wrong for an identity column: "ID"
+ * would match "Paid ID", "Balance ID", anything.
+ */
+function findExactCol(headers: string[], ...candidates: string[]): number {
+  const norm = headers.map(h => h.trim().toLowerCase());
+  for (const c of candidates) {
+    const i = norm.indexOf(c.toLowerCase());
+    if (i !== -1) return i;
+  }
+  return -1;
+}
+
 function toCents(raw: string): number {
   if (!raw) return 0;
   // Strip currency symbols and thousands separators; accept comma decimals.
@@ -124,6 +141,14 @@ async function parseStatement(text: string, kind: SourceKind): Promise<ParsedRow
   const feeCol  = findCol(headers, "Fee");
   const typeCol = findCol(headers, "Type");
   const stateCol = findCol(headers, "State", "Status");
+  // A provider-assigned id is the only file-independent identity a statement
+  // offers. PayPal exports carry "Transaction ID"; some Revolut exports carry
+  // an id or reference column. When one exists, everything below about
+  // occurrence counting is moot.
+  const idCol = findExactCol(
+    headers, "Transaction ID", "Transaction reference", "Reference ID",
+    "Payment ID", "Transaction id", "ID",
+  );
 
   if (dateCol === -1 || amtCol === -1) {
     throw new Error(
@@ -132,6 +157,9 @@ async function parseStatement(text: string, kind: SourceKind): Promise<ParsedRow
   }
 
   const out: ParsedRow[] = [];
+  // How many times each identifying key has been seen so far in this file.
+  const occurrences = new Map<string, number>();
+
   for (const r of rows.slice(1)) {
     const date = toDate(r[dateCol] ?? "");
     if (!date) continue;
@@ -153,8 +181,36 @@ async function parseStatement(text: string, kind: SourceKind): Promise<ParsedRow
     else if (rawType.includes("fee")) type = "fee";
     else type = amountCents > 0 ? "income" : "expense";
 
+    // Identity, best available first.
+    //
+    // A provider transaction id is stable no matter which export it arrives
+    // in, so overlapping date ranges reconcile correctly. It is stored
+    // verbatim, not hashed, because the API sync stores Revolut's id verbatim
+    // too — that is what makes a transaction imported from a statement and
+    // the same transaction pulled from the API one row instead of two.
+    //
+    // Without one, identity has to come from the row's own contents — and two
+    // byte-identical lines are legitimate (a subscription charged twice in a
+    // day, a split payment), so the nth occurrence gets its own id. That
+    // counter restarts per file, which is exact for the normal case of
+    // whole-day exports (every row sharing a key shares its date, so any
+    // export covering that date contains all of them) but can mis-pair if an
+    // export boundary ever splits a same-day, same-amount set. Nothing in the
+    // file can distinguish those rows, so this is the floor, not a choice.
+    const providerId = idCol !== -1 ? (r[idCol] ?? "").trim() : "";
+
+    let sourceId: string;
+    if (providerId) {
+      sourceId = providerId;
+    } else {
+      const baseKey = [date, description, String(amountCents), currency, counterparty ?? ""];
+      const seen = (occurrences.get(baseKey.join("|")) ?? 0) + 1;
+      occurrences.set(baseKey.join("|"), seen);
+      sourceId = await hashId(kind, seen === 1 ? baseKey : [...baseKey, `#${seen}`]);
+    }
+
     out.push({
-      source_id: await hashId(kind, [date, description, String(amountCents), currency, counterparty ?? ""]),
+      source_id: sourceId,
       transaction_date: date,
       description,
       counterparty_name: counterparty,
@@ -174,6 +230,8 @@ export function ImportStatementDialog() {
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [dupItems, setDupItems] = useState<DuplicateReviewItem[]>([]);
+  const [dupOpen, setDupOpen] = useState(false);
   const qc = useQueryClient();
 
   const onFile = async (file: File) => {
@@ -189,13 +247,14 @@ export function ImportStatementDialog() {
     }
   };
 
-  const doImport = async () => {
+  /** Writes the given rows. Everything about identity is decided upstream. */
+  const insertRows = async (toInsert: ParsedRow[]) => {
     setImporting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
 
-      const payload = rows.map(r => ({
+      const payload = toInsert.map(r => ({
         user_id: user.id,
         source: kind,
         source_id: r.source_id,
@@ -213,13 +272,32 @@ export function ImportStatementDialog() {
         raw_data: { imported_from: fileName },
       }));
 
-      const { error } = await supabase
-        .from("finance_transactions")
-        .upsert(payload, { onConflict: "source,source_id", ignoreDuplicates: false });
-      if (error) throw error;
+      // Postgres rejects an ON CONFLICT DO UPDATE that would affect the same
+      // row twice, so the batch must be unique on source_id before it is sent.
+      const deduped = Array.from(
+        new Map(payload.map(r => [r.source_id, r])).values(),
+      );
 
-      toast.success(`Imported ${payload.length} ${kind} transactions`);
+      if (deduped.length === 0) {
+        toast.info("Nothing left to import — every row was skipped.");
+      } else {
+        // ignoreDuplicates => ON CONFLICT DO NOTHING. A statement line is a
+        // fact that does not change once it has cleared, whereas the accounting
+        // category, tax rate, VAT treatment and reconciled flag on that row are
+        // a person's work. DO UPDATE would send this file's blank values over
+        // the top of them, so re-importing an overlapping period would quietly
+        // undo an afternoon of classifying. New rows land; existing rows are
+        // left exactly as they are.
+        const { error } = await supabase
+          .from("finance_transactions")
+          .upsert(deduped, { onConflict: "source,source_id", ignoreDuplicates: true });
+        if (error) throw error;
+        toast.success(`Imported ${deduped.length} ${kind} transactions`);
+      }
+
       qc.invalidateQueries({ queryKey: ["finance_transactions"] });
+      setDupOpen(false);
+      setDupItems([]);
       setOpen(false);
       setRows([]);
       setFileName(null);
@@ -230,12 +308,83 @@ export function ImportStatementDialog() {
     }
   };
 
+  /**
+   * Check before writing, not after. Anything that looks like money already
+   * recorded is put to her one row at a time; a clean file goes straight in.
+   */
+  const doImport = async () => {
+    setImporting(true);
+    try {
+      const { data: existing, error } = await supabase
+        .from("finance_transactions")
+        .select("*");
+      if (error) throw error;
+
+      const dups = findIncomingDuplicates(rows, (existing ?? []) as FinanceTransaction[], kind);
+      if (dups.length === 0) {
+        await insertRows(rows);
+        return;
+      }
+
+      setDupItems(dups.map(d => ({
+        key: String(d.index),
+        candidate: {
+          date: d.row.transaction_date,
+          who: d.row.counterparty_name ?? d.row.description ?? "—",
+          amountCents: d.row.amount_cents,
+          currency: d.row.currency,
+          type: d.row.type,
+          note: `In this file${d.repeatsIndex !== null ? ` · repeats line ${d.repeatsIndex + 1}` : ""}`,
+        },
+        matches: d.existing.map(m => ({
+          date: m.transaction_date,
+          who: m.counterparty_name ?? m.description ?? "—",
+          amountCents: m.amount_eur_cents ?? m.amount_cents,
+          currency: m.currency,
+          type: m.type,
+          note: `Already stored from ${m.source}, added ${m.created_at.slice(0, 10)}`
+            + (m.is_reconciled ? " · reconciled" : ""),
+        })),
+        certain: d.sameSourceId,
+      })));
+      setDupOpen(true);
+    } catch (e) {
+      toast.error(`Import failed: ${String(e instanceof Error ? e.message : e)}`);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  /** Declined rows are simply not written; approved ones join the import. */
+  const applyDuplicateDecisions = (declined: Set<string>) => {
+    const skip = new Set([...declined].map(Number));
+    void insertRows(rows.filter((_, i) => !skip.has(i)));
+  };
+
   const total = rows.reduce(
     (s, r) => s + (r.type === "expense" || r.type === "fee" ? -1 : 1) * (r.amount_eur_cents ?? r.amount_cents),
     0,
   );
 
   return (
+    <>
+    <DuplicateReviewDialog
+      open={dupOpen}
+      onOpenChange={setDupOpen}
+      title="Some of these look like money already recorded"
+      description={
+        "Same day, same amount, same counterparty as a row you already have — or as an "
+        + "earlier line in this file. That is a filter, not a verdict: two genuine identical "
+        + "payments on one day look exactly like this. Skip the ones that are duplicates; "
+        + "add the ones that are not."
+      }
+      items={dupItems}
+      approveLabel="Add"
+      declineLabel="Skip"
+      defaultDecision="decline"
+      busy={importing}
+      onConfirm={applyDuplicateDecisions}
+    />
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
@@ -323,5 +472,6 @@ export function ImportStatementDialog() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

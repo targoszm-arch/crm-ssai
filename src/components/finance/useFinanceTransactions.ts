@@ -4,7 +4,9 @@ import { useAuth } from "@/hooks/useAuth";
 
 export interface FinanceTransaction {
   id: string;
-  source: "stripe" | "revolut" | "paypal" | "manual";
+  // Widened by 20260916120000: the Gmail receipt sync writes 'gmail' and the
+  // spreadsheet backfill writes 'receipt_log'.
+  source: "stripe" | "revolut" | "paypal" | "manual" | "gmail" | "receipt_log";
   source_id: string | null;
   type: "income" | "expense" | "refund" | "fee";
   category: string | null;
@@ -57,7 +59,6 @@ export interface FinanceTaxRate {
 }
 
 export function useFinanceTransactions(filters?: {
-  year?: number;
   type?: string;
   source?: string;
 }) {
@@ -65,22 +66,16 @@ export function useFinanceTransactions(filters?: {
   return useQuery({
     queryKey: ["finance_transactions", filters, user?.id],
     queryFn: async () => {
+      // No date constraint: the page filters years in memory so that changing
+      // the selection is instant rather than a round trip, and so that a row
+      // outside the current selection can still be counted and offered.
       let q = supabase
         .from("finance_transactions")
         .select("*")
         .order("transaction_date", { ascending: false });
 
-      if (filters?.year) {
-        q = q
-          .gte("transaction_date", `${filters.year}-01-01`)
-          .lte("transaction_date", `${filters.year}-12-31`);
-      }
-      if (filters?.type && filters.type !== "all") {
-        q = q.eq("type", filters.type);
-      }
-      if (filters?.source && filters.source !== "all") {
-        q = q.eq("source", filters.source);
-      }
+      if (filters?.type && filters.type !== "all") q = q.eq("type", filters.type);
+      if (filters?.source && filters.source !== "all") q = q.eq("source", filters.source);
 
       const { data, error } = await q;
       if (error) throw error;
@@ -231,5 +226,98 @@ export function useUpdateTaxRate() {
       qc.invalidateQueries({ queryKey: ["finance_tax_rates"] });
       qc.invalidateQueries({ queryKey: ["finance_transactions"] });
     },
+  });
+}
+
+/**
+ * Row counts per calendar year, ignoring the year filter.
+ *
+ * The page filters to one year, so importing a statement that predates it
+ * looks exactly like an import that silently failed: hundreds of rows land
+ * and the table stays empty. This is what lets the page say where they went.
+ */
+export function useTransactionYears() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["finance_transaction_years", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("transaction_date");
+      if (error) throw error;
+      const counts = new Map<number, number>();
+      for (const row of data ?? []) {
+        const year = Number(String(row.transaction_date).slice(0, 4));
+        if (!Number.isNaN(year)) counts.set(year, (counts.get(year) ?? 0) + 1);
+      }
+      return counts;
+    },
+    enabled: !!user,
+  });
+}
+
+export interface FinanceVatReturn {
+  id: string;
+  period_start: string;
+  period_end: string;
+  status: "open" | "submitted";
+  submitted_on: string | null;
+  filed_output_vat_cents: number | null;
+  filed_input_vat_cents: number | null;
+  filed_net_cents: number | null;
+  notes: string | null;
+}
+
+export function useVatReturns() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["finance_vat_returns", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("finance_vat_returns")
+        .select("*")
+        .order("period_start", { ascending: false });
+      if (error) throw error;
+      return data as unknown as FinanceVatReturn[];
+    },
+    enabled: !!user,
+  });
+}
+
+/**
+ * Marks a period filed, or reopens it.
+ *
+ * Filing copies the figures in rather than referencing them: what went to
+ * Revenue is a historical fact, and classifying an old receipt next month must
+ * not restate a return that has already been submitted.
+ */
+export function useSetVatReturnStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      period_start: string;
+      period_end: string;
+      status: "open" | "submitted";
+      submitted_on?: string | null;
+      outputVatCents?: number;
+      inputVatCents?: number;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const filed = args.status === "submitted";
+      const { error } = await supabase
+        .from("finance_vat_returns")
+        .upsert({
+          user_id: user!.id,
+          period_start: args.period_start,
+          period_end: args.period_end,
+          status: args.status,
+          submitted_on: filed ? (args.submitted_on ?? new Date().toISOString().slice(0, 10)) : null,
+          filed_output_vat_cents: filed ? (args.outputVatCents ?? 0) : null,
+          filed_input_vat_cents: filed ? (args.inputVatCents ?? 0) : null,
+          filed_net_cents: filed ? (args.outputVatCents ?? 0) - (args.inputVatCents ?? 0) : null,
+        } as never, { onConflict: "user_id,period_start,period_end" });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance_vat_returns"] }),
   });
 }

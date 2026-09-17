@@ -1,19 +1,22 @@
 /**
- * sync-gmail-receipts — scans Gmail for receipts/invoices and upserts to finance_transactions.
+ * sync-gmail-receipts — harvests receipt and invoice PDFs from Gmail.
  *
- * Required env vars (set in Supabase Dashboard → Edge Functions → Secrets):
- *   GMAIL_REFRESH_TOKEN   — OAuth2 refresh token (preferred; triggers auto-refresh)
- *   GMAIL_CLIENT_ID       — Google OAuth2 client ID
- *   GMAIL_CLIENT_SECRET   — Google OAuth2 client secret
- *   OR:
- *   GMAIL_ACCESS_TOKEN    — A static access token (short-lived; use refresh token flow instead)
+ * This is the Apps Script Magda runs by hand, moved behind a button: the same
+ * four searches over the same window, saving the same attachments and writing
+ * the same log columns. What it does differently is where the output lands —
+ * rows in finance_transactions rather than a spreadsheet, so a receipt can be
+ * reconciled against the bank line that paid it.
  *
- * To obtain a refresh token:
- *   1. Create a Google Cloud project, enable Gmail API.
- *   2. Create OAuth2 credentials (Web application), add https://developers.google.com/oauthplayground as redirect URI.
- *   3. Visit https://developers.google.com/oauthplayground, select Gmail API v1 → gmail.readonly scope.
- *   4. Exchange for tokens, copy the refresh_token.
- *   5. Store as GMAIL_REFRESH_TOKEN, GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET in Supabase secrets.
+ * AUTH. It uses the mailbox already connected to the CRM (`email_accounts`,
+ * the gmail.readonly grant the Inbox uses), refreshing the token the same way
+ * sync-emails does. No new secrets. GMAIL_REFRESH_TOKEN / GMAIL_CLIENT_ID /
+ * GMAIL_CLIENT_SECRET remain as a fallback for the other mailboxes that
+ * receive receipts and are not connected here.
+ *
+ * RESUMING. Gmail is paged and Edge Functions are not infinite, so a run stops
+ * on a time budget and reports `done: false`. Messages already stored are
+ * skipped without being fetched, so calling it again continues rather than
+ * repeats — the same property the Apps Script gets from its `seenIds`.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -22,6 +25,21 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// The Apps Script's four searches, verbatim. Overlap between them is fine:
+// a message already stored is skipped before it is fetched.
+const DEFAULT_QUERIES = [
+  'has:attachment filename:pdf (invoice OR receipt OR "tax invoice" OR billing OR statement)',
+  "has:attachment filename:pdf from:(stripe.com)",
+  "has:attachment filename:pdf from:(invoice OR billing OR receipts OR noreply)",
+  "has:attachment filename:pdf (subscription OR payment OR charged)",
+];
+
+// VAT registration start — the same floor the Apps Script uses.
+const DEFAULT_AFTER = "2025/04/01";
+
+// Leave room to finish the batch and write the response.
+const TIME_BUDGET_MS = 110_000;
 
 // ── Amount regex patterns ─────────────────────────────────────────────────────
 const AMOUNT_PATTERNS = [
@@ -42,14 +60,53 @@ function extractAmount(text: string): number | null {
   }
   return null;
 }
+// ── Get a fresh Gmail access token ───────────────────────────────────────────
+//
+// The mailbox connected to the CRM comes first: it already holds a
+// gmail.readonly grant and a refresh token, so the harvest works on a click
+// with nothing to configure. The GMAIL_* secrets stay as a way to reach a
+// mailbox that is not connected here.
+// deno-lint-ignore no-explicit-any
+async function getGmailAccessToken(sb: any, userId: string): Promise<string> {
+  const { data: account } = await sb
+    .from("email_accounts")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("provider", "google")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
 
-// ── Get a fresh Gmail access token via refresh token flow ────────────────────
-async function getGmailAccessToken(): Promise<string> {
+  const clientId = Deno.env.get("GOOGLE_CLIENT_ID") ?? Deno.env.get("GMAIL_CLIENT_ID");
+  const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET") ?? Deno.env.get("GMAIL_CLIENT_SECRET");
+
+  if (account?.refresh_token && clientId && clientSecret) {
+    // Still valid? Use it. Gmail tokens last an hour and a harvest is long.
+    if (account.access_token && account.expires_at && new Date(account.expires_at) > new Date(Date.now() + 60_000)) {
+      return account.access_token;
+    }
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: account.refresh_token,
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    });
+    if (!res.ok) throw new Error(`Gmail token refresh failed: ${await res.text()}`);
+    const json = await res.json();
+    await sb.from("email_accounts").update({
+      access_token: json.access_token,
+      expires_at: new Date(Date.now() + (json.expires_in ?? 3600) * 1000).toISOString(),
+    }).eq("id", account.id);
+    return json.access_token as string;
+  }
+
+  // Fallback: a standalone grant for a mailbox not connected to the CRM.
   const refreshToken = Deno.env.get("GMAIL_REFRESH_TOKEN");
-  const clientId = Deno.env.get("GMAIL_CLIENT_ID");
-  const clientSecret = Deno.env.get("GMAIL_CLIENT_SECRET");
   const staticToken = Deno.env.get("GMAIL_ACCESS_TOKEN");
-
   if (refreshToken && clientId && clientSecret) {
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -61,18 +118,13 @@ async function getGmailAccessToken(): Promise<string> {
         client_secret: clientSecret,
       }),
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Gmail token refresh failed: ${err}`);
-    }
-    const json = await res.json();
-    return json.access_token as string;
+    if (!res.ok) throw new Error(`Gmail token refresh failed: ${await res.text()}`);
+    return (await res.json()).access_token as string;
   }
-
   if (staticToken) return staticToken;
 
   throw new Error(
-    "No Gmail credentials configured. Set GMAIL_REFRESH_TOKEN + GMAIL_CLIENT_ID + GMAIL_CLIENT_SECRET (or GMAIL_ACCESS_TOKEN) in Supabase secrets."
+    "No Gmail connection. Connect a mailbox in the Inbox, or set GMAIL_REFRESH_TOKEN + GMAIL_CLIENT_ID + GMAIL_CLIENT_SECRET."
   );
 }
 
@@ -91,14 +143,18 @@ function decodeBase64Url(s: string): string {
 }
 
 // ── Find first PDF attachment part in Gmail message payload ─────────────────
-function findPdfAttachment(payload: Record<string, unknown>): { attachmentId: string; filename: string } | null {
+function findPdfAttachment(payload: Record<string, unknown>): { attachmentId: string; filename: string; size: number } | null {
   const mimeType = payload.mimeType as string | undefined;
   const body = payload.body as Record<string, unknown> | undefined;
   const parts = payload.parts as Array<Record<string, unknown>> | undefined;
   const filename = payload.filename as string | undefined;
 
   if (mimeType === "application/pdf" && body?.attachmentId) {
-    return { attachmentId: body.attachmentId as string, filename: filename ?? "receipt.pdf" };
+    return {
+      attachmentId: body.attachmentId as string,
+      filename: filename ?? "receipt.pdf",
+      size: (body.size as number) ?? 0,
+    };
   }
   if (parts) {
     for (const part of parts) {
@@ -168,6 +224,7 @@ function parseSenderName(from: string): string {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const startedAt = Date.now();
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -188,8 +245,14 @@ Deno.serve(async (req: Request) => {
     // Get Gmail access token (refresh if needed). Not being connected yet is
     // a configuration state the Settings page reports, not a 500.
     let accessToken: string;
+    let mailboxAddress = user.email ?? null;
     try {
-      accessToken = await getGmailAccessToken();
+      accessToken = await getGmailAccessToken(sb, user.id);
+      const { data: acct } = await sb
+        .from("email_accounts").select("email_address")
+        .eq("user_id", user.id).eq("provider", "google")
+        .order("created_at", { ascending: true }).limit(1).maybeSingle();
+      if (acct?.email_address) mailboxAddress = acct.email_address;
     } catch (e) {
       return new Response(
         JSON.stringify({ error: "not_configured", message: String(e) }),
@@ -197,27 +260,70 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Search Gmail for receipts/invoices from the last 90 days
-    const searchParams = new URLSearchParams({
-      q: "receipt OR invoice has:attachment newer_than:90d",
-      maxResults: "50",
-    });
-    const listRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?${searchParams}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    if (!listRes.ok) {
-      const errText = await listRes.text();
-      throw new Error(`Gmail list error ${listRes.status}: ${errText}`);
+    const body = await req.json().catch(() => ({}));
+    const queries: string[] = body.queries ?? DEFAULT_QUERIES;
+    const after: string = body.after ?? DEFAULT_AFTER;
+    const before: string | null = body.before ?? null;
+
+    // Everything already harvested, so a message is skipped before it costs a
+    // round trip. This is what makes a second run continue rather than repeat.
+    const known = new Set<string>();
+    {
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await sb
+          .from("finance_transactions")
+          .select("source_id")
+          .eq("user_id", user.id)
+          .eq("source", "gmail")
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        for (const r of data ?? []) if (r.source_id) known.add(r.source_id);
+        if (!data || data.length < pageSize) break;
+      }
     }
-    const listData = await listRes.json();
-    const messages: Array<{ id: string }> = listData.messages ?? [];
+
+    // List every search, page by page, collecting ids we have not seen.
+    const messages: Array<{ id: string }> = [];
+    const seenInRun = new Set<string>();
+    let listedAll = true;
+
+    outer: for (const q of queries) {
+      const fullQuery = [q, `after:${after}`, before ? `before:${before}` : "", "-in:drafts"]
+        .filter(Boolean).join(" ");
+      let pageToken: string | undefined;
+
+      do {
+        if (Date.now() - startedAt > TIME_BUDGET_MS) { listedAll = false; break outer; }
+
+        const searchParams = new URLSearchParams({ q: fullQuery, maxResults: "100" });
+        if (pageToken) searchParams.set("pageToken", pageToken);
+
+        const listRes = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages?${searchParams}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!listRes.ok) {
+          const errText = await listRes.text();
+          throw new Error(`Gmail list error ${listRes.status}: ${errText}`);
+        }
+        const listData = await listRes.json();
+        for (const m of listData.messages ?? []) {
+          if (known.has(m.id) || seenInRun.has(m.id)) continue;
+          seenInRun.add(m.id);
+          messages.push(m);
+        }
+        pageToken = listData.nextPageToken;
+      } while (pageToken);
+    }
 
     let synced = 0;
     let skipped = 0;
+    let done = listedAll;
     const errors: string[] = [];
 
     for (const msg of messages) {
+      if (Date.now() - startedAt > TIME_BUDGET_MS) { done = false; break; }
       try {
         // Fetch full message
         const msgRes = await fetch(
@@ -292,8 +398,10 @@ Deno.serve(async (req: Request) => {
           // same shape as an imported one and the Gmail link is one click.
           subject,
           gmail_url: `https://mail.google.com/mail/u/0/#all/${msg.id}`,
-          mailbox: user.email ?? null,
+          mailbox: mailboxAddress,
           receipt_filename: pdfAttachment?.filename ?? null,
+          // Same "57 KB" shape the Apps Script writes, so the columns line up.
+          receipt_size: pdfAttachment ? `${Math.round(pdfAttachment.size / 1024)} KB` : null,
           counterparty_name: senderName,
           counterparty_email: from.match(/<([^>]+)>/)?.[1] ?? from,
           counterparty_country: null,
@@ -313,7 +421,7 @@ Deno.serve(async (req: Request) => {
 
         const { error: upsertErr } = await sb
           .from("finance_transactions")
-          .upsert(upsertRow, { onConflict: "source,source_id", ignoreDuplicates: false });
+          .upsert(upsertRow, { onConflict: "source,source_id", ignoreDuplicates: true });
 
         if (upsertErr) {
           errors.push(`${msg.id}: ${upsertErr.message}`);
@@ -328,7 +436,18 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ synced, skipped, errors }),
+      JSON.stringify({
+        synced, skipped, done,
+        found: messages.length,
+        already_stored: known.size,
+        window: { after, before },
+        // The Apps Script tells her to run it again when it hits its limit;
+        // so does this, and for the same reason.
+        message: done
+          ? `Harvested ${synced} new receipt(s).`
+          : `Harvested ${synced} so far — time limit reached, run it again to continue.`,
+        errors: errors.slice(0, 20),
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

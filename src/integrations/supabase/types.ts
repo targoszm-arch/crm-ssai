@@ -63,6 +63,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "activities_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
             foreignKeyName: "activities_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
@@ -150,6 +157,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
           },
           {
             foreignKeyName: "calendar_events_contact_id_fkey"
@@ -479,11 +493,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
             foreignKeyName: "fk_contacts_company"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_contacts_company"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
           },
         ]
       }
@@ -528,6 +556,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_files_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
           },
           {
             foreignKeyName: "crm_files_contact_id_fkey"
@@ -656,6 +691,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "deals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
             foreignKeyName: "deals_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
@@ -670,6 +712,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      dedupe_backup_activities_20260908: {
+        Row: {
+          activity_type: string | null
+          company_id: string | null
+          contact_id: string | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          metadata: Json | null
+          occurred_at: string | null
+          source: string | null
+          source_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          activity_type?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          metadata?: Json | null
+          occurred_at?: string | null
+          source?: string | null
+          source_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          activity_type?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          metadata?: Json | null
+          occurred_at?: string | null
+          source?: string | null
+          source_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       dedupe_backup_contacts_20260907: {
         Row: {
@@ -895,8 +979,8 @@ export type Database = {
           created_at: string
           email_address: string
           expires_at: string | null
-          last_sync_at: string | null
           id: string
+          last_sync_at: string | null
           provider: string
           refresh_token: string | null
           updated_at: string
@@ -907,8 +991,8 @@ export type Database = {
           created_at?: string
           email_address: string
           expires_at?: string | null
-          last_sync_at?: string | null
           id?: string
+          last_sync_at?: string | null
           provider?: string
           refresh_token?: string | null
           updated_at?: string
@@ -919,8 +1003,8 @@ export type Database = {
           created_at?: string
           email_address?: string
           expires_at?: string | null
-          last_sync_at?: string | null
           id?: string
+          last_sync_at?: string | null
           provider?: string
           refresh_token?: string | null
           updated_at?: string
@@ -1187,6 +1271,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "emails_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
             foreignKeyName: "emails_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
@@ -1201,6 +1292,222 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      finance_oauth_tokens: {
+        Row: {
+          obtained_at: string
+          provider: string
+          refresh_token: string
+          updated_at: string
+        }
+        Insert: {
+          obtained_at?: string
+          provider: string
+          refresh_token: string
+          updated_at?: string
+        }
+        Update: {
+          obtained_at?: string
+          provider?: string
+          refresh_token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      finance_tax_rates: {
+        Row: {
+          applies_to: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          percent: number
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          applies_to?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          percent?: number
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          applies_to?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          percent?: number
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      finance_transactions: {
+        Row: {
+          accounting_category: string | null
+          amount_cents: number
+          amount_eur_cents: number | null
+          category: string | null
+          counterparty_country: string | null
+          counterparty_email: string | null
+          counterparty_name: string | null
+          counterparty_vat_number: string | null
+          created_at: string
+          currency: string
+          description: string | null
+          drive_url: string | null
+          gmail_url: string | null
+          id: string
+          is_reconciled: boolean | null
+          mailbox: string | null
+          net_cents: number | null
+          notes: string | null
+          raw_data: Json | null
+          receipt_filename: string | null
+          receipt_size: string | null
+          source: string
+          source_id: string | null
+          stripe_fee_cents: number | null
+          subject: string | null
+          tax_rate_name: string | null
+          tax_rate_percent: number | null
+          transaction_date: string
+          type: string
+          updated_at: string
+          user_id: string
+          vat_amount_cents: number | null
+          vat_collected_cents: number | null
+          vat_eur_cents: number | null
+          vat_treatment: string | null
+        }
+        Insert: {
+          accounting_category?: string | null
+          amount_cents: number
+          amount_eur_cents?: number | null
+          category?: string | null
+          counterparty_country?: string | null
+          counterparty_email?: string | null
+          counterparty_name?: string | null
+          counterparty_vat_number?: string | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          drive_url?: string | null
+          gmail_url?: string | null
+          id?: string
+          is_reconciled?: boolean | null
+          mailbox?: string | null
+          net_cents?: number | null
+          notes?: string | null
+          raw_data?: Json | null
+          receipt_filename?: string | null
+          receipt_size?: string | null
+          source: string
+          source_id?: string | null
+          stripe_fee_cents?: number | null
+          subject?: string | null
+          tax_rate_name?: string | null
+          tax_rate_percent?: number | null
+          transaction_date: string
+          type: string
+          updated_at?: string
+          user_id: string
+          vat_amount_cents?: number | null
+          vat_collected_cents?: number | null
+          vat_eur_cents?: number | null
+          vat_treatment?: string | null
+        }
+        Update: {
+          accounting_category?: string | null
+          amount_cents?: number
+          amount_eur_cents?: number | null
+          category?: string | null
+          counterparty_country?: string | null
+          counterparty_email?: string | null
+          counterparty_name?: string | null
+          counterparty_vat_number?: string | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          drive_url?: string | null
+          gmail_url?: string | null
+          id?: string
+          is_reconciled?: boolean | null
+          mailbox?: string | null
+          net_cents?: number | null
+          notes?: string | null
+          raw_data?: Json | null
+          receipt_filename?: string | null
+          receipt_size?: string | null
+          source?: string
+          source_id?: string | null
+          stripe_fee_cents?: number | null
+          subject?: string | null
+          tax_rate_name?: string | null
+          tax_rate_percent?: number | null
+          transaction_date?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+          vat_amount_cents?: number | null
+          vat_collected_cents?: number | null
+          vat_eur_cents?: number | null
+          vat_treatment?: string | null
+        }
+        Relationships: []
+      }
+      finance_vat_returns: {
+        Row: {
+          created_at: string
+          filed_input_vat_cents: number | null
+          filed_net_cents: number | null
+          filed_output_vat_cents: number | null
+          id: string
+          notes: string | null
+          period_end: string
+          period_start: string
+          status: string
+          submitted_on: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          filed_input_vat_cents?: number | null
+          filed_net_cents?: number | null
+          filed_output_vat_cents?: number | null
+          id?: string
+          notes?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          submitted_on?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          filed_input_vat_cents?: number | null
+          filed_net_cents?: number | null
+          filed_output_vat_cents?: number | null
+          id?: string
+          notes?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          submitted_on?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       invoices: {
         Row: {
@@ -1255,6 +1562,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
           },
           {
             foreignKeyName: "invoices_project_id_fkey"
@@ -1351,6 +1665,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
           },
           {
             foreignKeyName: "leads_contact_id_fkey"
@@ -1452,6 +1773,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "linkedin_connections_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
             foreignKeyName: "linkedin_connections_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
@@ -1525,6 +1853,62 @@ export type Database = {
           },
         ]
       }
+      list_members: {
+        Row: {
+          added_at: string
+          company_id: string | null
+          contact_id: string | null
+          id: string
+          list_id: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          company_id?: string | null
+          contact_id?: string | null
+          id?: string
+          list_id: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          company_id?: string | null
+          contact_id?: string | null
+          id?: string
+          list_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "list_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "list_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
+            foreignKeyName: "list_members_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "list_members_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lists: {
         Row: {
           color: string | null
@@ -1563,55 +1947,6 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
-      }
-      list_members: {
-        Row: {
-          added_at: string
-          company_id: string | null
-          contact_id: string | null
-          id: string
-          list_id: string
-          user_id: string
-        }
-        Insert: {
-          added_at?: string
-          company_id?: string | null
-          contact_id?: string | null
-          id?: string
-          list_id: string
-          user_id: string
-        }
-        Update: {
-          added_at?: string
-          company_id?: string | null
-          contact_id?: string | null
-          id?: string
-          list_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "list_members_list_id_fkey"
-            columns: ["list_id"]
-            isOneToOne: false
-            referencedRelation: "lists"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "list_members_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "list_members_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       lms_leads: {
         Row: {
@@ -1698,6 +2033,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "lms_leads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
             foreignKeyName: "lms_leads_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
@@ -1777,6 +2119,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_notes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
           },
           {
             foreignKeyName: "meeting_notes_contact_id_fkey"
@@ -1934,6 +2283,48 @@ export type Database = {
         }
         Relationships: []
       }
+      peak_focus_push_runs: {
+        Row: {
+          detail: string | null
+          dry_run: boolean
+          excluded: number
+          id: string
+          inserted: number
+          ok: boolean
+          ran_at: string
+          report: Json | null
+          scoped: number
+          unchanged: number
+          updated: number
+        }
+        Insert: {
+          detail?: string | null
+          dry_run?: boolean
+          excluded?: number
+          id?: string
+          inserted?: number
+          ok: boolean
+          ran_at?: string
+          report?: Json | null
+          scoped?: number
+          unchanged?: number
+          updated?: number
+        }
+        Update: {
+          detail?: string | null
+          dry_run?: boolean
+          excluded?: number
+          id?: string
+          inserted?: number
+          ok?: boolean
+          ran_at?: string
+          report?: Json | null
+          scoped?: number
+          unchanged?: number
+          updated?: number
+        }
+        Relationships: []
+      }
       peak_focus_sync_runs: {
         Row: {
           companies_upserted: number
@@ -1972,7 +2363,6 @@ export type Database = {
           pipeline_id: string | null
           position: number
           user_id: string | null
-          wiki_content: string | null
         }
         Insert: {
           color?: string | null
@@ -1984,7 +2374,6 @@ export type Database = {
           pipeline_id?: string | null
           position: number
           user_id?: string | null
-          wiki_content?: string | null
         }
         Update: {
           color?: string | null
@@ -1996,7 +2385,6 @@ export type Database = {
           pipeline_id?: string | null
           position?: number
           user_id?: string | null
-          wiki_content?: string | null
         }
         Relationships: [
           {
@@ -2151,6 +2539,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "projects_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
         ]
       }
       proposal_items: {
@@ -2257,6 +2652,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "proposals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
         ]
       }
       sales_opportunities: {
@@ -2309,6 +2711,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_opportunities_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
           },
           {
             foreignKeyName: "sales_opportunities_contact_id_fkey"
@@ -2630,11 +3039,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
             foreignKeyName: "tasks_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
           },
           {
             foreignKeyName: "tasks_contact_id_fkey"
@@ -2939,6 +3362,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "website_visits_matched_company_id_fkey"
+            columns: ["matched_company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
             foreignKeyName: "website_visits_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
@@ -2976,6 +3406,20 @@ export type Database = {
           provider?: string | null
           updated_at?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      peak_focus_client_scope: {
+        Row: {
+          arr: number | null
+          contact_name: string | null
+          crm_company_id: string | null
+          email: string | null
+          name: string | null
+          peak_focus_client_id: string | null
+          stage: string | null
+          user_id: string | null
+          website: string | null
         }
         Relationships: []
       }
