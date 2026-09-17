@@ -1,10 +1,8 @@
-import { Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { Table } from "@/components/ui/table";
 import { BarChart3, Layers } from "lucide-react";
 import { useSequences, Sequence } from "@/hooks/useSequences";
 import { useAllSequencesAnalytics } from "@/hooks/useSequenceAnalytics";
@@ -62,6 +60,86 @@ export function SequenceListTab({ onSelectSequence }: SequenceListTabProps) {
 
   const sortedGroups = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
 
+  /**
+   * One row per sequence, carrying its category.
+   *
+   * This was a bare <Table> with a colSpan header row per category. That gave
+   * the grouping but nothing else: no frame, no paging, no sorting, and a
+   * header that scrolled away. The shared DataTable — the one the Abandonment
+   * page uses — cannot render group heads, so the category becomes a sortable
+   * column instead and the table opens sorted by it. Same information, and
+   * every other column is sortable too, which the grouped version blocked.
+   */
+  const rows = sortedGroups.flatMap(([category, seqs]) =>
+    seqs.map(seq => {
+      const steps = seq.steps ?? [];
+      return {
+        seq,
+        category,
+        steps: steps.length,
+        duration: steps.length ? steps[steps.length - 1].day : 0,
+        // A sequence that has never sent gets a dash, not a zero: "0% open
+        // rate" reads as copy that failed, when nothing went out at all.
+        stats: allStats?.bySequence?.[seq.id],
+      };
+    }),
+  );
+  type Row = typeof rows[number];
+
+  const num = (v: React.ReactNode | undefined, has: boolean) =>
+    has ? <span className="tabular-nums">{v}</span>
+        : <span className="tabular-nums text-muted-foreground">—</span>;
+
+  const columns: DataTableColumn<Row>[] = [
+    {
+      accessorKey: "category", header: "Category",
+      sortValue: r => r.category,
+      cell: r => <span className="text-sm text-muted-foreground">{r.category}</span>,
+    },
+    {
+      accessorKey: "name", header: "Sequence",
+      sortValue: r => r.seq.name ?? "",
+      cell: r => (
+        <div>
+          <div className="font-medium">{r.seq.name}</div>
+          {r.seq.description && (
+            <div className="line-clamp-1 text-xs text-muted-foreground">{r.seq.description}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "status", header: "Status",
+      sortValue: r => r.seq.status ?? "",
+      cell: r => (
+        <Badge className={statusStyles[r.seq.status] ?? statusStyles.draft}>{r.seq.status}</Badge>
+      ),
+    },
+    { accessorKey: "steps", header: "Steps", align: "right",
+      sortValue: r => r.steps, cell: r => num(r.steps, true) },
+    { accessorKey: "duration", header: "Duration", align: "right",
+      sortValue: r => r.duration,
+      cell: r => num(`${r.duration} ${r.duration === 1 ? "day" : "days"}`, true) },
+    { accessorKey: "sent", header: "Sent", align: "right",
+      sortValue: r => r.stats?.sent ?? null, cell: r => num(r.stats?.sent, !!r.stats) },
+    { accessorKey: "opened", header: "Opened", align: "right",
+      sortValue: r => r.stats?.opened ?? null, cell: r => num(r.stats?.opened, !!r.stats) },
+    { accessorKey: "openRate", header: "Open rate", align: "right",
+      sortValue: r => r.stats?.openRate ?? null,
+      cell: r => num(r.stats ? `${r.stats.openRate}%` : undefined, !!r.stats) },
+    { accessorKey: "clicked", header: "Clicked", align: "right",
+      sortValue: r => r.stats?.clicked ?? null, cell: r => num(r.stats?.clicked, !!r.stats) },
+    {
+      accessorKey: "actions", header: "", align: "right",
+      cell: r => (
+        <Button variant="ghost" size="sm" onClick={() => onSelectSequence(r.seq.id)}>
+          <BarChart3 className="mr-1 h-4 w-4" />
+          Analytics
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
@@ -69,89 +147,12 @@ export function SequenceListTab({ onSelectSequence }: SequenceListTabProps) {
         more than one sequence are the ones the single-sequence view above cannot compare.
       </p>
 
-      <div className="border rounded-lg overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Sequence</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Steps</TableHead>
-              <TableHead className="text-right">Duration</TableHead>
-              <TableHead className="text-right">Sent</TableHead>
-              <TableHead className="text-right">Opened</TableHead>
-              <TableHead className="text-right">Open rate</TableHead>
-              <TableHead className="text-right">Clicked</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedGroups.map(([category, seqs]) => (
-              <Fragment key={category}>
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={9} className="font-medium text-sm">
-                    {category}
-                    <span className="ml-2 text-muted-foreground font-normal">
-                      {seqs.length} {seqs.length === 1 ? "sequence" : "sequences"}
-                    </span>
-                  </TableCell>
-                </TableRow>
-                {seqs.map((seq) => {
-                  const steps = seq.steps ?? [];
-                  const duration = steps.length ? steps[steps.length - 1].day : 0;
-                  // A sequence that has never sent gets a dash, not a zero: "0% open
-                  // rate" reads as copy that failed, when nothing went out at all.
-                  const stats = allStats?.bySequence?.[seq.id];
-                  return (
-                    <TableRow key={seq.id}>
-                      <TableCell>
-                        <div className="font-medium">{seq.name}</div>
-                        {seq.description && (
-                          <div className="text-xs text-muted-foreground line-clamp-1">
-                            {seq.description}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={statusStyles[seq.status] ?? statusStyles.draft}>
-                          {seq.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{steps.length}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {duration} {duration === 1 ? "day" : "days"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {stats ? stats.sent : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {stats ? stats.opened : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {stats
-                          ? `${stats.openRate}%`
-                          : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {stats ? stats.clicked : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onSelectSequence(seq.id)}
-                        >
-                          <BarChart3 className="h-4 w-4 mr-1" />
-                          Analytics
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </Fragment>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        columns={columns}
+        data={rows}
+        initialSort={{ key: "category", direction: "asc" }}
+        emptyMessage="No sequences yet."
+      />
 
       {allStats && (
         <p className="text-xs text-muted-foreground">

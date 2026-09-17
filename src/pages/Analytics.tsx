@@ -12,23 +12,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table } from "@/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Mail, MousePointerClick, Eye, AlertTriangle, Clock, ExternalLink } from "lucide-react";
 import { useSequences } from "@/hooks/useSequences";
-import { useSequenceAnalytics, useAllSequencesAnalytics, RecipientData } from "@/hooks/useSequenceAnalytics";
+import { useSequenceAnalytics, useAllSequencesAnalytics, RecipientData, LinkStats } from "@/hooks/useSequenceAnalytics";
 import { NewslettersTab } from "@/components/analytics/NewslettersTab";
 import { SequenceListTab } from "@/components/analytics/SequenceListTab";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import PageShell from "@/components/layout/PageShell";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 function SelectSequencePrompt() {
   return (
@@ -97,6 +91,87 @@ export default function Analytics() {
     unsubscribed: analytics?.recipients.filter((r: RecipientData) => r.status === "unsubscribed").length || 0,
     unopened: analytics?.recipients.filter((r: RecipientData) => r.status === "unopened" || r.status === "delivered").length || 0,
   };
+
+  // ── Table columns ────────────────────────────────────────────────────────
+  // Typed for the shared DataTable, which is what the Abandonment page uses:
+  // it brings the frame, 25-row paging, sortable headers and a header that
+  // stays put, none of which the hand-rolled <Table> blocks had.
+  const linkColumns: DataTableColumn<LinkStats>[] = [
+    {
+      accessorKey: "url", header: "Link",
+      sortValue: l => l.url,
+      cell: l => (
+        <a href={l.url} target="_blank" rel="noopener noreferrer"
+           className="flex max-w-md items-center gap-2 truncate text-primary hover:underline">
+          {l.url}
+          <ExternalLink className="h-3 w-3 flex-shrink-0" />
+        </a>
+      ),
+    },
+    {
+      accessorKey: "uniqueClicks", header: "Unique clicks", align: "right",
+      sortValue: l => l.uniqueClicks,
+      cell: l => <span className="font-medium">{l.uniqueClicks}</span>,
+    },
+    {
+      accessorKey: "percentage", header: "% of all clicks", align: "right",
+      sortValue: l => Number(l.percentage),
+      cell: l => <span className="text-muted-foreground">{l.percentage}%</span>,
+    },
+  ];
+
+  // The old markup showed Opens/Clicks only on the delivered, opened and
+  // clicked filters, and a Bounce type column only on bounced. Kept.
+  const showEngagement =
+    recipientFilter === "opened" || recipientFilter === "clicked" || recipientFilter === "delivered";
+
+  const recipientColumns: DataTableColumn<RecipientData>[] = [
+    {
+      accessorKey: "name", header: "Name",
+      sortValue: r => r.name ?? "",
+      cell: r => <span className="font-medium">{r.name}</span>,
+    },
+    {
+      accessorKey: "email", header: "Email",
+      sortValue: r => r.email ?? "",
+      cell: r => <span className="text-muted-foreground">{r.email}</span>,
+    },
+    ...(showEngagement ? [
+      {
+        accessorKey: "opens", header: "Opens", align: "right" as const,
+        sortValue: (r: RecipientData) => r.opens ?? 0,
+        cell: (r: RecipientData) => <>{r.opens}</>,
+      },
+      {
+        accessorKey: "clicks", header: "Clicks", align: "right" as const,
+        sortValue: (r: RecipientData) => r.clicks ?? 0,
+        cell: (r: RecipientData) => <>{r.clicks}</>,
+      },
+    ] : []),
+    ...(recipientFilter === "bounced" ? [
+      {
+        accessorKey: "bounceType", header: "Bounce type",
+        sortValue: (r: RecipientData) => r.bounceType ?? "",
+        cell: (r: RecipientData) => (
+          <Badge variant="outline" className="capitalize">{r.bounceType || "unknown"}</Badge>
+        ),
+      },
+    ] : []),
+    {
+      accessorKey: "lastActivity", header: "Last activity", align: "right",
+      sortValue: r => r.lastOpened || r.lastClicked || "",
+      cell: r => (
+        <span className="text-muted-foreground">
+          {r.lastOpened || r.lastClicked ? (
+            <span className="flex items-center justify-end gap-1">
+              <Clock className="h-3 w-3" />
+              {formatDistanceToNow(new Date(r.lastOpened || r.lastClicked!), { addSuffix: true })}
+            </span>
+          ) : "-"}
+        </span>
+      ),
+    },
+  ];
 
   // Rate chart data
   const rateChartData = analytics ? [
@@ -337,46 +412,16 @@ export default function Analytics() {
                   </CardContent>
                 </Card>
 
-                {/* Links Performance */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Links performance</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {analytics.linkStats.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Link</TableHead>
-                            <TableHead className="text-right">Unique Clicks</TableHead>
-                            <TableHead className="text-right">% of all clicks</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {analytics.linkStats.map((link, idx) => (
-                            <TableRow key={idx}>
-                              <TableCell>
-                                <a 
-                                  href={link.url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 text-primary hover:underline max-w-md truncate"
-                                >
-                                  {link.url}
-                                  <ExternalLink className="h-3 w-3 flex-shrink-0" />
-                                </a>
-                              </TableCell>
-                              <TableCell className="text-right font-medium">{link.uniqueClicks}</TableCell>
-                              <TableCell className="text-right text-muted-foreground">{link.percentage}%</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    ) : (
-                      <p className="text-muted-foreground text-center py-8">No link clicks recorded yet</p>
-                    )}
-                  </CardContent>
-                </Card>
+                {/* Links performance. Was a Card wrapping a bare <Table> —
+                    a box inside a box, with no frame of its own, no paging and
+                    a header that scrolled away. The shared DataTable is what
+                    Abandonment uses; this is the same table now. */}
+                <DataTable
+                  columns={linkColumns}
+                  data={analytics.linkStats}
+                  emptyMessage="No link clicks recorded yet"
+                  toolbar={<span className="text-sm font-medium">Links performance</span>}
+                />
               </>
             ) : null}
           </TabsContent>
@@ -437,68 +482,21 @@ export default function Analytics() {
                 </div>
               )}
 
-              {/* Recipients Table */}
-              <Card>
-                <CardContent className="pt-6">
-                  {isLoadingAnalytics ? (
-                    <div className="space-y-2">
-                      {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-12 w-full" />
-                      ))}
-                    </div>
-                  ) : filteredRecipients.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          {(recipientFilter === "opened" || recipientFilter === "clicked" || recipientFilter === "delivered") && (
-                            <>
-                              <TableHead className="text-right">Opens</TableHead>
-                              <TableHead className="text-right">Clicks</TableHead>
-                            </>
-                          )}
-                          {recipientFilter === "bounced" && <TableHead>Bounce Type</TableHead>}
-                          <TableHead className="text-right">Last Activity</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredRecipients.map((recipient: RecipientData) => (
-                          <TableRow key={recipient.id}>
-                            <TableCell className="font-medium">{recipient.name}</TableCell>
-                            <TableCell className="text-muted-foreground">{recipient.email}</TableCell>
-                            {(recipientFilter === "opened" || recipientFilter === "clicked" || recipientFilter === "delivered") && (
-                              <>
-                                <TableCell className="text-right">{recipient.opens}</TableCell>
-                                <TableCell className="text-right">{recipient.clicks}</TableCell>
-                              </>
-                            )}
-                            {recipientFilter === "bounced" && (
-                              <TableCell>
-                                <Badge variant="outline" className="capitalize">
-                                  {recipient.bounceType || "unknown"}
-                                </Badge>
-                              </TableCell>
-                            )}
-                            <TableCell className="text-right text-muted-foreground">
-                              {recipient.lastOpened || recipient.lastClicked ? (
-                                <span className="flex items-center justify-end gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  {formatDistanceToNow(new Date(recipient.lastOpened || recipient.lastClicked!), { addSuffix: true })}
-                                </span>
-                              ) : (
-                                "-"
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-muted-foreground text-center py-8">No recipients found</p>
-                  )}
-                </CardContent>
-              </Card>
+              {/* Recipients. Same swap as the links table above. */}
+              {isLoadingAnalytics ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <DataTable
+                  columns={recipientColumns}
+                  data={filteredRecipients as RecipientData[]}
+                  emptyMessage="No recipients found"
+                  toolbar={<span className="text-sm font-medium">Recipients</span>}
+                />
+              )}
               </>
             )}
           </TabsContent>

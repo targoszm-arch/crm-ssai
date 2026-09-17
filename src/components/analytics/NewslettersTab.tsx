@@ -1,13 +1,12 @@
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { Table } from "@/components/ui/table";
 import { Mail, Users, Send, Info } from "lucide-react";
-import { useNewsletters, useNewsletterTotals } from "@/hooks/useNewsletters";
+import { useNewsletters, useNewsletterTotals, type NewsletterSend } from "@/hooks/useNewsletters";
 
 const statusStyles: Record<string, string> = {
   sent: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
@@ -39,6 +38,58 @@ export function NewslettersTab() {
       </div>
     );
   }
+
+  const newsletterColumns: DataTableColumn<NewsletterSend>[] = [
+    {
+      accessorKey: "subject_line", header: "Subject", width: "420px",
+      sortValue: n => n.subject_line ?? "",
+      cell: n => (
+        <div className="max-w-[420px]">
+          <div className="truncate font-medium">{n.subject_line || "(no subject)"}</div>
+          {n.preview_text && (
+            <div className="truncate text-xs text-muted-foreground">{n.preview_text}</div>
+          )}
+          {n.error_message && (
+            <div className="truncate text-xs text-red-600">{n.error_message}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "status", header: "Status",
+      sortValue: n => n.status ?? "",
+      cell: n => (
+        <Badge className={statusStyles[(n.status ?? "").toLowerCase()] ?? statusStyles.cancelled}>
+          {n.status ?? "unknown"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "recipient_count", header: "Recipients", align: "right",
+      sortValue: n => n.recipient_count ?? 0,
+      cell: n => (
+        <span className="tabular-nums">{n.recipient_count?.toLocaleString() ?? "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "sent_at", header: "Sent",
+      sortValue: n => n.sent_at ?? "",
+      cell: n => (
+        <span className="text-sm text-muted-foreground">
+          {n.sent_at ? format(new Date(n.sent_at), "d MMM yyyy, HH:mm") : "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "scheduled_at", header: "Scheduled for",
+      sortValue: n => n.scheduled_at ?? "",
+      cell: n => (
+        <span className="text-sm text-muted-foreground">
+          {n.scheduled_at ? format(new Date(n.scheduled_at), "d MMM yyyy, HH:mm") : "—"}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -97,48 +148,15 @@ export function NewslettersTab() {
         </Card>
       </div>
 
-      <div className="border rounded-lg overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Subject</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Recipients</TableHead>
-              <TableHead>Sent</TableHead>
-              <TableHead>Scheduled for</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {newsletters.map((n) => (
-              <TableRow key={n.id}>
-                <TableCell className="max-w-[420px]">
-                  <div className="font-medium truncate">{n.subject_line || "(no subject)"}</div>
-                  {n.preview_text && (
-                    <div className="text-xs text-muted-foreground truncate">{n.preview_text}</div>
-                  )}
-                  {n.error_message && (
-                    <div className="text-xs text-red-600 truncate">{n.error_message}</div>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Badge className={statusStyles[(n.status ?? "").toLowerCase()] ?? statusStyles.cancelled}>
-                    {n.status ?? "unknown"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {n.recipient_count?.toLocaleString() ?? "—"}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {n.sent_at ? format(new Date(n.sent_at), "d MMM yyyy, HH:mm") : "—"}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {n.scheduled_at ? format(new Date(n.scheduled_at), "d MMM yyyy, HH:mm") : "—"}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      {/* Was a bordered div wrapping a bare <Table>: no paging, and a header
+          that scrolled away with the page. The shared DataTable — the one the
+          Abandonment page uses — brings the frame, 25-row paging, sortable
+          headers and a header that stays put. */}
+      <DataTable
+        columns={newsletterColumns}
+        data={newsletters}
+        emptyMessage="No newsletters yet."
+      />
     </div>
   );
 }
