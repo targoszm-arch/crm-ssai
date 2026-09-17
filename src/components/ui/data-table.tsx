@@ -164,13 +164,28 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="scroll-visible relative w-full overflow-x-auto">
-        {/* The Table primitive sets w-full, which makes a wide table squeeze its columns
-            down to the container instead of overflowing it — so the horizontal scrollbar
-            never appears and the right-hand columns get crushed or clipped. min-w-full
-            with auto layout lets it fill a narrow table and overflow a wide one. */}
-        <Table className="min-w-full">
-          <TableHeader className="sticky top-0 z-10 bg-muted/50 backdrop-blur">
+      {/* ONE scrollport, and it is the Table primitive's own wrapper.
+          There used to be two: a div here with overflow, and Table's own
+          `relative w-full overflow-auto` nested inside it. `sticky top-0` on
+          the header pins to the NEAREST scrollport, so it pinned to the inner
+          box — which had no height cap and therefore never scrolled — while
+          the page scrolled the header away. Which is the one thing a header
+          must not do.
+
+          `containerClassName` exists for exactly this: put the cap on the
+          real scrollport. Bounded at 70svh so rows scroll under the header
+          rather than the page scrolling past it; a short list is unaffected,
+          because max-height only caps.
+
+          Table also sets w-full, which squeezes a wide table's columns into
+          the container instead of overflowing it — so the horizontal bar never
+          appears and the right-hand columns get crushed. min-w-full lets it
+          fill a narrow table and overflow a wide one. */}
+        <Table
+          className="min-w-full"
+          containerClassName="max-h-[70svh]"
+        >
+          <TableHeader className="sticky top-0 z-20 bg-muted shadow-[inset_0_-1px_0_hsl(var(--border))]">
             <TableRow className="hover:bg-transparent">
               {columns.map((column) => {
                 const active = sort?.key === column.accessorKey;
@@ -243,7 +258,6 @@ export function DataTable<T>({
             )}
           </TableBody>
         </Table>
-      </div>
 
       {footer && footer.total > 0 && (
         <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">

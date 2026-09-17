@@ -65,7 +65,7 @@ const rows = [];
 for (const path of PATHS) {
   await page.goto(BASE + path, { waitUntil: "load" });
   await page.waitForTimeout(2500);
-  const m = await page.evaluate(() => {
+  const m = await page.evaluate(async () => {
     const main = document.querySelector("main");
     const inset = main?.parentElement;
     const grid = document.querySelector(".ag-root-wrapper") || document.querySelector("table");
@@ -80,6 +80,21 @@ for (const path of PATHS) {
       insetRadius: cs?.borderTopLeftRadius ?? "n/a",
       tableTop: r ? Math.round(r.top) : null,
       tableH: r ? Math.round(r.height) : null,
+      // Does the column header actually stay put? A sticky thead pins to its
+      // NEAREST scrollport, so a second nested overflow box silently breaks
+      // it — which is how the headers ended up scrolling away with the page.
+      headerSticks: await (async () => {
+        const head = document.querySelector("thead");
+        const box = head?.closest("div.overflow-auto");
+        if (!head || !box) return "n/a";
+        if (box.scrollHeight <= box.clientHeight) return "short";
+        const before = head.getBoundingClientRect().top;
+        box.scrollTop = 150;
+        await new Promise(r => requestAnimationFrame(r));
+        const after = head.getBoundingClientRect().top;
+        box.scrollTop = 0;
+        return Math.abs(after - before) < 2 ? "yes" : "NO";
+      })(),
     };
   });
   const file = `${OUT}/${path === "/" ? "dashboard" : path.slice(1).replace(/\//g, "-")}.png`;

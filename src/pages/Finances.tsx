@@ -503,24 +503,7 @@ export default function FinancePage() {
         <PageHeader
           title="Finance & Tax"
           description="Reconcile income, expenses and VAT for your Irish tax return"
-        >
-          {/* The filter stays on the page: it changes what you are looking at
-              rather than doing something, and reads as part of the report. */}
-          {/* MultiSelectFilter was already in the codebase, built on Command +
-              Popover + Checkbox, with search, select-all and a clear button —
-              and used by nothing. YearFilter was a worse copy of it. */}
-          <MultiSelectFilter
-            label="years"
-            placeholder="All years"
-            className="w-[180px]"
-            options={availableYears.map(y => ({
-              value: String(y.year),
-              label: `${y.year} (${y.count})`,
-            }))}
-            selectedValues={[...selectedYears].map(String)}
-            onChange={vals => setSelectedYears(new Set(vals.map(Number)))}
-          />
-        </PageHeader>
+        />
 
         {/* Data Sources status bar. Folded into the summary toggle: it is
             sync status, not something you work in, and on a fill-height page
@@ -659,10 +642,23 @@ export default function FinancePage() {
             <TabsTrigger value="reconcile">Reconcile</TabsTrigger>
             <TabsTrigger value="vat">VAT Report</TabsTrigger>
           </TabsList>
+          <div className="flex items-center gap-2">
+          <MultiSelectFilter
+              label="years"
+              placeholder="All years"
+              className="w-[180px]"
+              options={availableYears.map(y => ({
+                value: String(y.year),
+                label: `${y.year} (${y.count})`,
+              }))}
+              selectedValues={[...selectedYears].map(String)}
+              onChange={vals => setSelectedYears(new Set(vals.map(Number)))}
+            />
           <Button variant="ghost" size="sm" onClick={toggleSummary} className="gap-1.5">
             {summaryOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             {summaryOpen ? "Hide summary" : "Show summary"}
           </Button>
+          </div>
         </div>
 
         {/* ── Transactions tab ──────────────────────────────────────────── */}

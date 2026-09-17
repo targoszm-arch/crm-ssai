@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { PageTitlePortal } from "./PageActions";
 
 interface PageHeaderProps {
   title: string;
@@ -20,19 +21,24 @@ interface PageHeaderProps {
  */
 export function PageHeader({ title, description, children, className }: PageHeaderProps) {
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between",
-        className,
-      )}
-    >
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+    <>
+      {/* Title and description go to the top bar. The description is hidden on
+          narrow screens rather than wrapping the bar onto a second line. */}
+      <PageTitlePortal>
+        <h1 className="truncate text-base font-semibold tracking-tight">{title}</h1>
         {description && (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="hidden truncate text-sm text-muted-foreground lg:block">
+            {description}
+          </p>
         )}
-      </div>
-      {children}
-    </div>
+      </PageTitlePortal>
+
+      {/* Only the page's own controls stay in the page. When there are none
+          this renders nothing at all, so a page costs no vertical space just
+          for having a name. */}
+      {children ? (
+        <div className={cn("flex flex-wrap items-center gap-3", className)}>{children}</div>
+      ) : null}
+    </>
   );
 }
