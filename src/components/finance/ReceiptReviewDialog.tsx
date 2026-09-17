@@ -48,12 +48,32 @@ function getNotesText(tx: FinanceTransaction): string {
 
 function PdfViewer({ pdfPath }: { pdfPath: string | null }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  // A failed signature is a state, not the absence of one. Without this the
+  // component could not tell "still signing" from "signing failed" and showed
+  // the spinner for both — which is exactly what an unreadable bucket looked
+  // like: 82 PDFs present, none viewable, and a spinner that never resolved.
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!pdfPath) { setPdfUrl(null); return; }
-    supabase.storage.from("receipt-pdfs").createSignedUrl(pdfPath, 3600).then(({ data }) => {
-      setPdfUrl(data?.signedUrl ?? null);
-    });
+    if (!pdfPath) { setPdfUrl(null); setError(null); return; }
+    let cancelled = false;
+    setPdfUrl(null);
+    setError(null);
+    supabase.storage.from("receipt-pdfs").createSignedUrl(pdfPath, 3600)
+      .then(({ data, error: signErr }) => {
+        if (cancelled) return;
+        // The error was being discarded. Storage reports a real reason here —
+        // a missing object, a bucket with no read policy — and throwing it
+        // away turned every one of them into an infinite spinner.
+        if (signErr || !data?.signedUrl) {
+          setError(signErr?.message ?? "Could not produce a link for this file.");
+          return;
+        }
+        setPdfUrl(data.signedUrl);
+      });
+    // Paging through receipts faster than signing completes would otherwise
+    // let an earlier response overwrite a later one.
+    return () => { cancelled = true; };
   }, [pdfPath]);
 
   if (!pdfPath) {
@@ -61,6 +81,17 @@ function PdfViewer({ pdfPath }: { pdfPath: string | null }) {
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
         <FileText className="h-12 w-12 opacity-30" />
         <p className="text-sm">No PDF attachment</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 px-6 text-center">
+        <FileText className="h-12 w-12 opacity-30" />
+        <p className="text-sm font-medium text-foreground">Receipt could not be loaded</p>
+        <p className="text-xs">{error}</p>
+        <p className="text-xs opacity-70 break-all">{pdfPath}</p>
       </div>
     );
   }

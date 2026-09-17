@@ -689,7 +689,16 @@ export default function FinancePage() {
   };
 
   return (
-    <div className="flex w-full shrink-0 flex-col gap-6 pb-12">
+    // One scrollbar, not two. This page used to grow past the viewport (the
+    // page scrolled) AND cap the table at 70vh (the table scrolled), so
+    // reaching the bottom of the page meant scrolling the table first — the
+    // scroll wheel did different things depending on where the pointer was.
+    //
+    // Now the page fills the shell and does not scroll; the table is the only
+    // thing that does. That is also what lets the header stick: a sticky thead
+    // pins against its NEAREST scrollport, so with two of them it pinned to the
+    // inner one and appeared not to work at all.
+    <div className="flex h-full min-h-0 w-full flex-col gap-6">
       {/* Header */}
       <div className="flex shrink-0 flex-col gap-4">
         <PageActions>
@@ -844,7 +853,7 @@ export default function FinancePage() {
       </Card>
 
       {/* Tabs */}
-      <Tabs defaultValue="transactions">
+      <Tabs defaultValue="transactions" className="flex min-h-0 flex-1 flex-col">
         <TabsList className="shrink-0 self-start">
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
           <TabsTrigger value="reconcile">Reconcile</TabsTrigger>
@@ -852,7 +861,7 @@ export default function FinancePage() {
         </TabsList>
 
         {/* ── Transactions tab ──────────────────────────────────────────── */}
-        <TabsContent value="transactions" className="mt-4 space-y-4">
+        <TabsContent value="transactions" className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
           {/* Filter + Group row */}
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <div className="relative">
@@ -926,11 +935,11 @@ export default function FinancePage() {
             </span>
           </div>
 
-          <Card className="overflow-hidden">
+          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {/* The cap goes on the Table's own scrollport rather than a wrapper
                 around it. Nesting a second scrolling div would anchor the
                 sticky header to the inner box, which never scrolls. */}
-            <Table containerClassName="max-h-[70vh] min-h-[280px]">
+            <Table containerClassName="h-full">
                 {/* Twenty columns is too many to hold in your head while
                     scrolling 894 rows. bg-background is not decoration: a
                     transparent sticky header shows the rows sliding under it. */}
