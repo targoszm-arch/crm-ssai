@@ -4,13 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, RefreshCw, Download,
   Receipt, Percent, DollarSign, Info, Check, Trash2, Search,
-  ChevronUp, ChevronDown, ChevronsUpDown, Layers, CreditCard, Mail, Building2, Copy
+  CreditCard, Mail, Building2, Copy
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +17,11 @@ import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, use
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { ImportStatementDialog } from "@/components/finance/ImportStatementDialog";
 import { DuplicateReviewDialog, DuplicateReviewItem } from "@/components/finance/DuplicateReviewDialog";
+// Lazily loaded: AG Grid is ~800KB raw, and eagerly importing it put it in
+// the main bundle, so every page — the login screen included — paid for a grid
+// only Finances renders. Split out, it arrives when this tab does.
+const FinanceGrid = lazy(() =>
+  import("@/components/finance/FinanceGrid").then(m => ({ default: m.FinanceGrid })));
 import { ReconcilePanel } from "@/components/finance/ReconcilePanel";
 import { AccountantPack } from "@/components/finance/AccountantPack";
 import { findDuplicateGroups, evidenceLostIfDeleted } from "@/components/finance/duplicateUtils";
@@ -85,34 +89,8 @@ function MetricCard({
 }
 
 // ── VAT summary row ────────────────────────────────────────────────────────
-type SortField = "date" | "amount" | "customer" | "category" | "type";
-type SortDir = "asc" | "desc";
-type GroupBy = "none" | "category" | "type" | "customer" | "month";
 
 // ── Sortable column header ─────────────────────────────────────────────────
-function SortHead({
-  field, label, sortField, sortDir, onSort, className,
-}: {
-  field: SortField; label: string; sortField: SortField; sortDir: SortDir;
-  onSort: (f: SortField) => void; className?: string;
-}) {
-  const active = sortField === field;
-  return (
-    <TableHead
-      className={cn("cursor-pointer select-none whitespace-nowrap", className)}
-      onClick={() => onSort(field)}
-    >
-      <span className="flex items-center gap-1">
-        {label}
-        {active ? (
-          sortDir === "asc" ? <ChevronUp className="h-3.5 w-3.5 text-primary" /> : <ChevronDown className="h-3.5 w-3.5 text-primary" />
-        ) : (
-          <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground/50" />
-        )}
-      </span>
-    </TableHead>
-  );
-}
 
 // ── Last-sync formatter ────────────────────────────────────────────────────
 function formatLastSync(isoString: string | undefined): string {
@@ -161,199 +139,6 @@ function SourceChip({
 }
 
 // ── Transaction row ────────────────────────────────────────────────────────
-function TxRow({ tx, updateTx, deleteTx, taxRates }: {
-  tx: FinanceTransaction;
-  updateTx: ReturnType<typeof useUpdateTransaction>;
-  deleteTx: ReturnType<typeof useDeleteTransaction>;
-  taxRates: FinanceTaxRate[];
-}) {
-  const statement = tx.accounting_category
-    ? ACCOUNTING_CATEGORY_STATEMENT[tx.accounting_category]
-    : undefined;
-
-  // Picking a rate stores the name *and* the percentage as it stands today.
-  const setTaxRate = (name: string) => {
-    const rate = taxRates.find(r => r.name === name);
-    updateTx.mutate({
-      id: tx.id,
-      tax_rate_name: name,
-      tax_rate_percent: rate ? Number(rate.percent) : null,
-    });
-  };
-
-  const money = (cents: number | null | undefined, dash = true) =>
-    cents == null || (cents === 0 && dash) ? "—" : centsToEur(cents);
-
-  return (
-    <TableRow>
-      <TableCell className="text-sm font-medium whitespace-nowrap">{tx.transaction_date}</TableCell>
-
-      <TableCell className="max-w-[160px]">
-        <span className="text-sm truncate block">{tx.counterparty_name ?? "—"}</span>
-        {tx.counterparty_country && (
-          <span className="text-xs text-muted-foreground">{tx.counterparty_country}</span>
-        )}
-      </TableCell>
-
-      <TableCell className="max-w-[260px]">
-        <span className="text-sm truncate block" title={tx.subject ?? tx.description ?? ""}>
-          {tx.subject ?? tx.description ?? "—"}
-        </span>
-      </TableCell>
-
-      {/* Accounting category — fixed chart of accounts, so a Select, not an input. */}
-      <TableCell>
-        <Select
-          value={tx.accounting_category ?? ""}
-          onValueChange={v => updateTx.mutate({ id: tx.id, accounting_category: v })}
-        >
-          <SelectTrigger className="h-8 w-[190px] text-xs">
-            <SelectValue placeholder="Unposted" />
-          </SelectTrigger>
-          <SelectContent className="max-h-80">
-            {ACCOUNTING_CATEGORIES.map(g => (
-              <SelectGroup key={g.group}>
-                <SelectLabel className="text-xs">{g.group}</SelectLabel>
-                {g.options.map(o => (
-                  <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-                ))}
-              </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
-        {statement && (
-          <Badge variant="secondary" className={cn("mt-1 text-[10px]", STATEMENT_COLORS[statement])}>
-            {statement === "pl" ? "P&L" : statement === "cogs" ? "COGS" : statement}
-          </Badge>
-        )}
-      </TableCell>
-
-      {/* Tax rate — name is chosen here, the percentage is edited in Settings. */}
-      <TableCell>
-        <Select value={tx.tax_rate_name ?? ""} onValueChange={setTaxRate}>
-          <SelectTrigger className="h-8 w-[170px] text-xs">
-            <SelectValue placeholder="No rate" />
-          </SelectTrigger>
-          <SelectContent>
-            {taxRates.map(r => (
-              <SelectItem key={r.id} value={r.name} className="text-xs">
-                {r.name} ({Number(r.percent)}%)
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {tx.tax_rate_name && (
-          <span className="mt-1 block text-[10px] text-muted-foreground">
-            posted at {Number(tx.tax_rate_percent ?? 0)}%
-          </span>
-        )}
-      </TableCell>
-
-      <TableCell className={cn("text-right text-sm font-semibold whitespace-nowrap", TYPE_COLORS[tx.type])}>
-        {tx.type === "expense" || tx.type === "fee" ? "-" : ""}{money(tx.amount_cents)}
-      </TableCell>
-      <TableCell className="text-right text-sm whitespace-nowrap">{money(tx.amount_eur_cents)}</TableCell>
-      <TableCell className="text-right text-sm whitespace-nowrap">{money(tx.vat_amount_cents)}</TableCell>
-      <TableCell className="text-right text-sm whitespace-nowrap">{money(tx.vat_eur_cents)}</TableCell>
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{tx.currency}</TableCell>
-      <TableCell className="text-right text-sm whitespace-nowrap text-emerald-700">
-        {money(tx.vat_collected_cents)}
-      </TableCell>
-
-      <TableCell>
-        <span className={cn("text-sm font-medium capitalize", TYPE_COLORS[tx.type])}>{tx.type}</span>
-      </TableCell>
-      <TableCell>
-        <Badge variant="secondary" className={cn("capitalize text-xs", SOURCE_COLORS[tx.source])}>
-          {tx.source === "receipt_log" ? "receipt log" : tx.source}
-        </Badge>
-      </TableCell>
-
-      <TableCell className="max-w-[180px]">
-        <span className="text-xs truncate block" title={tx.receipt_filename ?? ""}>
-          {tx.receipt_filename ?? "—"}
-        </span>
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{tx.receipt_size ?? "—"}</TableCell>
-
-      {/* The two links are the whole point of the log: reconciling a row means
-          opening the document, so they are one click from the row. */}
-      <TableCell>
-        {tx.drive_url ? (
-          <a href={tx.drive_url} target="_blank" rel="noreferrer"
-             className="text-xs text-primary hover:underline whitespace-nowrap">Drive ↗</a>
-        ) : <span className="text-muted-foreground text-xs">—</span>}
-      </TableCell>
-      <TableCell>
-        {tx.gmail_url ? (
-          <a href={tx.gmail_url} target="_blank" rel="noreferrer"
-             className="text-xs text-primary hover:underline whitespace-nowrap">Gmail ↗</a>
-        ) : <span className="text-muted-foreground text-xs">—</span>}
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{tx.mailbox ?? "—"}</TableCell>
-
-      <TableCell className="max-w-[200px]">
-        <span className="text-xs text-muted-foreground truncate block" title={tx.notes ?? ""}>
-          {tx.notes ?? "—"}
-        </span>
-      </TableCell>
-
-      <TableCell>
-        <div className="flex items-center gap-1">
-          {!tx.is_reconciled ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7"
-                  onClick={() => updateTx.mutate({ id: tx.id, is_reconciled: true })}>
-                  <Check className="h-3.5 w-3.5 text-emerald-600" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Mark reconciled</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 text-xs">Reconciled</Badge>
-          )}
-          {/* AlertDialog, like every other destructive action in this app.
-              A native confirm() is a different dialog from a different era,
-              it cannot say what is being deleted, and some browsers suppress
-              it outright — which would delete the row with no prompt at all. */}
-          <AlertDialog>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </AlertDialogTrigger>
-              </TooltipTrigger>
-              <TooltipContent>Delete</TooltipContent>
-            </Tooltip>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this transaction?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {tx.transaction_date} · {tx.counterparty_name ?? tx.description ?? "—"} ·{" "}
-                  {centsToEur(tx.amount_eur_cents ?? tx.amount_cents)}.
-                  This cannot be undone, and if the row came from a sync it will
-                  reappear on the next run.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => deleteTx.mutate(tx.id)}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-}
 
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function FinancePage() {
@@ -365,9 +150,6 @@ export default function FinancePage() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [groupBy, setGroupBy] = useState<GroupBy>("none");
-  const [sortField, setSortField] = useState<SortField>("date");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [syncing, setSyncing] = useState(false);
   const [syncingGmail, setSyncingGmail] = useState(false);
   const [syncingRevolut, setSyncingRevolut] = useState(false);
@@ -486,11 +268,6 @@ export default function FinancePage() {
     },
   });
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortField(field); setSortDir("asc"); }
-  };
-
   // ── Summary metrics ────────────────────────────────────────────────────
   const metrics = useMemo(() => {
     const income = txs.filter(t => t.type === "income");
@@ -557,44 +334,10 @@ export default function FinancePage() {
         (t.counterparty_email ?? "").toLowerCase().includes(q)
       );
     }
-    // sort
-    rows = [...rows].sort((a, b) => {
-      let av: string | number, bv: string | number;
-      switch (sortField) {
-        case "date":     av = a.transaction_date; bv = b.transaction_date; break;
-        case "amount":   av = a.amount_eur_cents ?? a.amount_cents; bv = b.amount_eur_cents ?? b.amount_cents; break;
-        case "customer": av = (a.counterparty_name ?? "").toLowerCase(); bv = (b.counterparty_name ?? "").toLowerCase(); break;
-        case "category": av = (a.accounting_category ?? "").toLowerCase(); bv = (b.accounting_category ?? "").toLowerCase(); break;
-        case "type":     av = a.type; bv = b.type; break;
-      }
-      if (av < bv) return sortDir === "asc" ? -1 : 1;
-      if (av > bv) return sortDir === "asc" ? 1 : -1;
-      return 0;
-    });
+    // No sort here. The grid owns sorting now, on every column rather than the
+    // five this switch handled, and sorting in both places would fight.
     return rows;
-  }, [txs, search, dateRange, typeFilter, sourceFilter, categoryFilter, sortField, sortDir]);
-
-  // ── Grouped rows ──────────────────────────────────────────────────────────
-  const groupedRows = useMemo(() => {
-    if (groupBy === "none") return null;
-    const getKey = (t: FinanceTransaction) => {
-      switch (groupBy) {
-        case "category": return t.accounting_category
-          ? (ACCOUNTING_CATEGORY_LABELS[t.accounting_category] ?? t.accounting_category)
-          : "Unposted";
-        case "type":     return t.type.charAt(0).toUpperCase() + t.type.slice(1);
-        case "customer": return t.counterparty_name ?? "Unknown";
-        case "month":    return t.transaction_date.slice(0, 7); // YYYY-MM
-      }
-    };
-    const map = new Map<string, FinanceTransaction[]>();
-    for (const t of filteredTxs) {
-      const k = getKey(t)!;
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(t);
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredTxs, groupBy]);
+  }, [txs, search, dateRange, typeFilter, sourceFilter, categoryFilter]);
 
   // ── Stripe sync ────────────────────────────────────────────────────────
   const handleStripeSync = async () => {
@@ -933,136 +676,25 @@ export default function FinancePage() {
               </SelectContent>
             </Select>
 
-            <div className="flex items-center gap-1.5 ml-auto">
-              <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Select value={groupBy} onValueChange={v => setGroupBy(v as GroupBy)}>
-                <SelectTrigger className="w-40"><SelectValue placeholder="Group by…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No grouping</SelectItem>
-                  <SelectItem value="category">Category</SelectItem>
-                  <SelectItem value="type">Type</SelectItem>
-                  <SelectItem value="customer">Customer</SelectItem>
-                  <SelectItem value="month">Month</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* The "Group by" control is gone, not hidden. Row grouping is an
+                AG Grid Enterprise feature; on Community the dropdown would sit
+                there doing nothing, which is worse than its absence. With a
+                licence it returns as `rowGroup: true` on the column plus a
+                grouping panel — a few lines, not a rebuild. */}
 
-            <span className="text-sm text-muted-foreground whitespace-nowrap">
+            <span className="ml-auto text-sm text-muted-foreground whitespace-nowrap">
               {filteredTxs.length} row{filteredTxs.length !== 1 ? "s" : ""}
             </span>
           </div>
 
           <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {/* The cap goes on the Table's own scrollport rather than a wrapper
-                around it. Nesting a second scrolling div would anchor the
-                sticky header to the inner box, which never scrolls. */}
-            <Table containerClassName="h-full">
-                {/* Twenty columns is too many to hold in your head while
-                    scrolling 894 rows. bg-background is not decoration: a
-                    transparent sticky header shows the rows sliding under it. */}
-                <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background shadow-[inset_0_-1px_0_hsl(var(--border))]">
-                  <TableRow>
-                    <SortHead field="date"     label="Date"     sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <SortHead field="customer" label="Supplier" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <TableHead>Subject</TableHead>
-                    <SortHead field="category" label="Accounting Category" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <TableHead>Tax Rate</TableHead>
-                    <SortHead field="amount" label="Invoice Amount" sortField={sortField} sortDir={sortDir} onSort={handleSort} className="text-right" />
-                    <TableHead className="text-right whitespace-nowrap">Invoices Paid</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">VAT Paid</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">VAT – Curr conv</TableHead>
-                    <TableHead>Currency</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">VAT Collected</TableHead>
-                    <SortHead field="type"     label="Type"     sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <TableHead>Source</TableHead>
-                    <TableHead>Filename</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Drive link</TableHead>
-                    <TableHead>Gmail link</TableHead>
-                    <TableHead>Mailbox</TableHead>
-                    <TableHead>Notes</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={COLUMN_COUNT} className="h-48 text-muted-foreground">
-                        <div className="sticky left-0 w-[min(100vw,60rem)] text-center">Loading…</div>
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredTxs.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={COLUMN_COUNT} className="h-48 text-muted-foreground">
-                        {/* An empty table caused by a filter is not the same
-                            as an empty table, and saying "import a statement"
-                            when 894 rows are simply being hidden sends you to
-                            fix the wrong thing. */}
-                        <div className="sticky left-0 w-[min(100vw,60rem)] space-y-2 text-center">
-                          {txs.length > 0 ? (
-                            <>
-                              <p>
-                                No transactions match these filters
-                                {(dateRange.from || dateRange.to) && <> ({rangeLabel(dateRange)})</>}.
-                              </p>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setDateRange(EMPTY_RANGE);
-                                  setTypeFilter("all");
-                                  setSourceFilter("all");
-                                  setCategoryFilter("all");
-                                  setSearch("");
-                                }}
-                              >
-                                Clear filters ({txs.length} rows)
-                              </Button>
-                            </>
-                          ) : (
-                            <p>No transactions found. Sync Stripe, import a statement, or add one manually.</p>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : groupedRows ? (
-                    // ── Grouped view ──────────────────────────────────────
-                    groupedRows.map(([groupKey, groupTxs]) => {
-                      const groupTotal = groupTxs.reduce((s, t) => {
-                        const amt = t.amount_eur_cents ?? t.amount_cents;
-                        // A pocket transfer nets to nothing: the same money
-                        // leaves one account and arrives in another, both hers.
-                        // Counting it as money in made a group of transfers
-                        // look like earnings.
-                        if (t.type === "transfer") return s;
-                        return s + (t.type === "expense" || t.type === "fee" ? -amt : amt);
-                      }, 0);
-                      return (
-                        <>
-                          <TableRow key={`g-${groupKey}`} className="bg-muted/60 hover:bg-muted/70">
-                            <TableCell colSpan={5} className="py-2 font-semibold text-sm">
-                              {groupBy === "month"
-                                ? new Date(groupKey + "-01").toLocaleString("en-IE", { month: "long", year: "numeric" })
-                                : groupKey}
-                              <span className="ml-2 text-muted-foreground font-normal text-xs">
-                                ({groupTxs.length} transaction{groupTxs.length !== 1 ? "s" : ""})
-                              </span>
-                            </TableCell>
-                            <TableCell className={cn("text-right font-bold text-sm py-2", groupTotal >= 0 ? "text-emerald-700" : "text-rose-700")}>
-                              {groupTotal >= 0 ? "" : "-"}{centsToEur(Math.abs(groupTotal))}
-                            </TableCell>
-                            <TableCell colSpan={COLUMN_COUNT - 6} />
-                          </TableRow>
-                          {groupTxs.map(tx => <TxRow key={tx.id} tx={tx} updateTx={updateTx} deleteTx={deleteTx} taxRates={taxRates} />)}
-                        </>
-                      );
-                    })
-                  ) : (
-                    // ── Flat view ─────────────────────────────────────────
-                    filteredTxs.map(tx => <TxRow key={tx.id} tx={tx} updateTx={updateTx} deleteTx={deleteTx} taxRates={taxRates} />)
-                  )}
-                </TableBody>
-            </Table>
+            <Suspense fallback={
+              <div className="flex h-full items-center justify-center">
+                <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            }>
+              <FinanceGrid rows={filteredTxs} taxRates={taxRates} search={search} />
+            </Suspense>
           </Card>
         </TabsContent>
 
