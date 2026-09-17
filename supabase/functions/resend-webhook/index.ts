@@ -6,6 +6,70 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/**
+ * The addresses this CRM sends from, comma-separated.
+ *
+ * This Resend account is shared with Content Lab, which sends its Supabase Auth
+ * mail ("Your Magic Link", "Confirm Your Signup") from team@skillstudio.ai —
+ * the SAME DOMAIN this CRM sends campaigns from (magda@skillstudio.ai). So a
+ * domain check does not separate them and never could; only the full address
+ * does.
+ *
+ * Without this gate the recipient fallback below recorded every Content Lab
+ * auth click as CRM email activity, stored the single-use sign-in token from
+ * the URL, and attributed two of them to a campaign send. That is another
+ * product's credentials in this database, and it is the CRM reading Content
+ * Lab's traffic — the coupling CLAUDE.md forbids.
+ *
+ * Fails CLOSED: unset means the fallback records nothing. Losing an open is a
+ * worse outcome than it sounds, but storing someone else's login tokens is far
+ * worse, and a silent capture is exactly what went unnoticed for a day.
+ */
+const CRM_SENDER_ADDRESSES = new Set(
+  (Deno.env.get("CRM_SENDER_ADDRESSES") ?? "")
+    .split(",")
+    .map((a: string) => a.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+/** `"Magda Targosz <magda@skillstudio.ai>"` → `magda@skillstudio.ai`. */
+function senderAddress(from: unknown): string {
+  const raw = String(from ?? "");
+  const angled = raw.match(/<([^>]+)>/);
+  return (angled ? angled[1] : raw).trim().toLowerCase();
+}
+
+/**
+ * Remove credential-bearing query parameters before a URL is stored anywhere.
+ *
+ * Belt and braces alongside the sender gate: the gate decides whose mail we
+ * record, this decides that no click URL we record can carry a secret even if
+ * one of our own emails ever links to a tokenised URL. Redacting rather than
+ * dropping keeps the link's identity intact, so segmentation by destination
+ * still works.
+ */
+const CREDENTIAL_PARAMS =
+  /^(token|token_hash|access_token|refresh_token|id_token|code|secret|api[-_]?key|password|signature|sig)$/i;
+
+function redactLinkUrl(url: string | null): string | null {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    let redacted = false;
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (CREDENTIAL_PARAMS.test(key)) {
+        parsed.searchParams.set(key, "REDACTED");
+        redacted = true;
+      }
+    }
+    return redacted ? parsed.toString() : url;
+  } catch {
+    // Not a parseable URL. Returning it unchanged is safe: the gate above has
+    // already established this is our own mail.
+    return url;
+  }
+}
+
 async function verifyResendSignature(req: Request, body: string): Promise<boolean> {
   const webhookSecret = Deno.env.get("RESEND_WEBHOOK_SECRET");
   if (!webhookSecret) {
@@ -129,6 +193,29 @@ Deno.serve(async (req) => {
       // email.delivered routinely arrive before any row exists to match.
       //
       // So fall back to the address. Anything we can tie to a contact gets recorded.
+      //
+      // ...but ONLY for mail this CRM sent. The fallback keys on the recipient,
+      // and a recipient is not ours exclusively: this Resend account also
+      // carries Content Lab's auth mail, and any address that exists in
+      // `contacts` matched it. Check the sender before going any further —
+      // before the contact lookup, so a foreign event costs one comparison and
+      // touches no table.
+      const fromAddress = senderAddress(data?.from);
+      if (!CRM_SENDER_ADDRESSES.has(fromAddress)) {
+        if (CRM_SENDER_ADDRESSES.size === 0) {
+          console.error(
+            "CRM_SENDER_ADDRESSES is not configured, so no event can be attributed by " +
+            "recipient. Set it to the addresses this CRM sends from.",
+          );
+        } else {
+          console.log(`Not a CRM sender (${fromAddress || "unknown"}), ignoring event`);
+        }
+        return new Response(
+          JSON.stringify({ success: true, message: "Not a CRM sender", from: fromAddress }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
       const recipient = Array.isArray(data?.to) ? String(data.to[0] ?? "").toLowerCase() : "";
       if (!recipient) {
         return new Response(JSON.stringify({ success: true, message: "No recipient to match" }), {
@@ -203,7 +290,7 @@ Deno.serve(async (req) => {
         .limit(1);
       const attributedSequenceEmailId: string | null = recentSend?.[0]?.id ?? null;
 
-      const linkUrl: string | null = data?.click?.link ?? null;
+      const linkUrl: string | null = redactLinkUrl(data?.click?.link ?? null);
       const { error: eventError } = await supabase.from("email_tracking_events").insert({
         sequence_email_id: attributedSequenceEmailId,
         contact_id: contact.id,
@@ -302,7 +389,7 @@ Deno.serve(async (req) => {
         // indoctrination email's four cards actually take.
         const enrollment = (sequenceEmail as any).sequence_enrollments;
         const contactId = enrollment?.contact_id ?? null;
-        const linkUrl: string | null = data?.click?.link ?? null;
+        const linkUrl: string | null = redactLinkUrl(data?.click?.link ?? null);
 
         if (contactId && linkUrl) {
           // email_tracking_events is where clicks are read from for reporting. Write it

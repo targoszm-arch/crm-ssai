@@ -10,8 +10,14 @@ export interface RecipientData {
   clicks: number;
   lastOpened: string | null;
   lastClicked: string | null;
-  status: "delivered" | "opened" | "clicked" | "bounced" | "unsubscribed" | "unopened";
+  // Ordered by how much each says about intent. "replied" outranks "clicked"
+  // because a reply is a person choosing to talk to you; a click can be a mail
+  // scanner. The trial-nudge copy asks for a reply outright, so this is the
+  // status the campaign was written to produce.
+  status: "delivered" | "opened" | "clicked" | "replied" | "bounced" | "unsubscribed" | "unopened";
   bounceType?: string;
+  repliedAt: string | null;
+  replyEmailId: string | null;
 }
 
 export interface LinkStats {
@@ -44,8 +50,10 @@ export interface SequenceAnalytics {
   totalOpens: number;
   uniqueClicks: number;
   totalClicks: number;
+  totalReplied: number;
   openRate: number;
   clickRate: number;
+  replyRate: number;
   clickThroughRate: number;
   // Per-recipient data
   recipients: RecipientData[];
@@ -88,6 +96,8 @@ export function useSequenceAnalytics(sequenceId?: string) {
           total_opens,
           unique_clicks,
           total_clicks,
+          replied_at,
+          replied_email_id,
           subject,
           sequence_enrollments!inner (
             id,
@@ -119,6 +129,7 @@ export function useSequenceAnalytics(sequenceId?: string) {
       const bouncedEmails = (emails || []).filter(e => e.bounced_at);
       const openedEmails = (emails || []).filter(e => e.opened_at);
       const clickedEmails = (emails || []).filter(e => e.clicked_at);
+      const repliedEmails = (emails || []).filter(e => e.replied_at);
       const unsubscribedEmails = (emails || []).filter(e => e.unsubscribed_at);
       const spamEmails = (emails || []).filter(e => e.spam_reported_at);
 
@@ -138,6 +149,7 @@ export function useSequenceAnalytics(sequenceId?: string) {
       const totalDelivered = deliveredEmails.length;
       const openRate = totalDelivered > 0 ? Math.round((uniqueOpens / totalDelivered) * 100) : 0;
       const clickRate = totalDelivered > 0 ? Math.round((uniqueClicks / totalDelivered) * 100) : 0;
+      const replyRate = totalDelivered > 0 ? Math.round((repliedEmails.length / totalDelivered) * 100) : 0;
       const clickThroughRate = uniqueOpens > 0 ? Math.round((uniqueClicks / uniqueOpens) * 100) : 0;
 
       // Build recipients data
@@ -154,6 +166,9 @@ export function useSequenceAnalytics(sequenceId?: string) {
         let status: RecipientData["status"] = "delivered";
         if (email.bounced_at) status = "bounced";
         else if (email.unsubscribed_at) status = "unsubscribed";
+        // Above clicked: someone who replied has done the thing the email asked
+        // for, and showing them as merely "clicked" buries the lead.
+        else if (email.replied_at) status = "replied";
         else if (email.clicked_at) status = "clicked";
         else if (email.opened_at) status = "opened";
         else if (!email.opened_at) status = "unopened";
@@ -169,6 +184,8 @@ export function useSequenceAnalytics(sequenceId?: string) {
           lastClicked: email.clicked_at || existing?.lastClicked || null,
           status,
           bounceType: email.bounce_type || undefined,
+          repliedAt: email.replied_at || existing?.repliedAt || null,
+          replyEmailId: email.replied_email_id || existing?.replyEmailId || null,
         });
       }
 
@@ -221,8 +238,10 @@ export function useSequenceAnalytics(sequenceId?: string) {
         totalOpens,
         uniqueClicks,
         totalClicks,
+        totalReplied: repliedEmails.length,
         openRate,
         clickRate,
+        replyRate,
         clickThroughRate,
         recipients: Array.from(recipientsMap.values()),
         performanceOverTime,
@@ -240,9 +259,11 @@ export interface SequenceRollup {
   sent: number;
   opened: number;
   clicked: number;
+  replied: number;
   bounced: number;
   openRate: number;
   clickRate: number;
+  replyRate: number;
 }
 
 export function useAllSequencesAnalytics() {
@@ -264,6 +285,7 @@ export function useAllSequencesAnalytics() {
           opened_at,
           clicked_at,
           bounced_at,
+          replied_at,
           total_opens,
           total_clicks,
           sequence_enrollments!inner (
@@ -275,6 +297,7 @@ export function useAllSequencesAnalytics() {
       const totalSent = emailStats?.length || 0;
       const totalOpened = emailStats?.filter(e => e.opened_at).length || 0;
       const totalClicked = emailStats?.filter(e => e.clicked_at).length || 0;
+      const totalReplied = emailStats?.filter(e => e.replied_at).length || 0;
       const totalBounced = emailStats?.filter(e => e.bounced_at).length || 0;
       const aggregateOpens = emailStats?.reduce((sum, e) => sum + (e.total_opens || 0), 0) || 0;
       const aggregateClicks = emailStats?.reduce((sum, e) => sum + (e.total_clicks || 0), 0) || 0;
@@ -288,11 +311,13 @@ export function useAllSequencesAnalytics() {
         const sequenceId = embedded?.sequence_id;
         if (!sequenceId) continue;
         const r = bySequence[sequenceId] ??= {
-          sent: 0, opened: 0, clicked: 0, bounced: 0, openRate: 0, clickRate: 0,
+          sent: 0, opened: 0, clicked: 0, replied: 0, bounced: 0,
+          openRate: 0, clickRate: 0, replyRate: 0,
         };
         r.sent++;
         if (e.opened_at) r.opened++;
         if (e.clicked_at) r.clicked++;
+        if (e.replied_at) r.replied++;
         if (e.bounced_at) r.bounced++;
       }
       // Rate against delivered, not sent: a bounce never had the chance to be opened,
@@ -301,6 +326,7 @@ export function useAllSequencesAnalytics() {
         const delivered = r.sent - r.bounced;
         r.openRate = delivered > 0 ? Math.round((r.opened / delivered) * 100) : 0;
         r.clickRate = delivered > 0 ? Math.round((r.clicked / delivered) * 100) : 0;
+        r.replyRate = delivered > 0 ? Math.round((r.replied / delivered) * 100) : 0;
       }
 
       return {
@@ -309,11 +335,13 @@ export function useAllSequencesAnalytics() {
         totalSent,
         totalOpened,
         totalClicked,
+        totalReplied,
         totalBounced,
         aggregateOpens,
         aggregateClicks,
         openRate: totalSent > 0 ? Math.round((totalOpened / totalSent) * 100) : 0,
         clickRate: totalSent > 0 ? Math.round((totalClicked / totalSent) * 100) : 0,
+        replyRate: totalSent > 0 ? Math.round((totalReplied / totalSent) * 100) : 0,
       };
     },
   });

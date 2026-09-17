@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
-import { Mail, MousePointerClick, Eye, AlertTriangle, Clock, ExternalLink } from "lucide-react";
+import { Mail, MousePointerClick, Eye, AlertTriangle, Clock, ExternalLink, Reply } from "lucide-react";
 import { useSequences } from "@/hooks/useSequences";
 import { useSequenceAnalytics, useAllSequencesAnalytics, RecipientData } from "@/hooks/useSequenceAnalytics";
 import { NewslettersTab } from "@/components/analytics/NewslettersTab";
@@ -77,8 +77,10 @@ export default function Analytics() {
   // Filter recipients based on selected filter
   const filteredRecipients = analytics?.recipients.filter((r: RecipientData) => {
     switch (recipientFilter) {
-      case "opened": return r.status === "opened" || r.status === "clicked";
+      // A reply or a click means they opened it, whatever the pixel did or didn't record.
+      case "opened": return r.status === "opened" || r.status === "clicked" || r.status === "replied";
       case "clicked": return r.status === "clicked";
+      case "replied": return r.status === "replied";
       case "bounced": return r.status === "bounced";
       case "unsubscribed": return r.status === "unsubscribed";
       case "unopened": return r.status === "unopened" || r.status === "delivered";
@@ -89,8 +91,9 @@ export default function Analytics() {
   // Get recipient counts for filter badges
   const recipientCounts = {
     delivered: analytics?.recipients.length || 0,
-    opened: analytics?.recipients.filter((r: RecipientData) => r.status === "opened" || r.status === "clicked").length || 0,
+    opened: analytics?.recipients.filter((r: RecipientData) => r.status === "opened" || r.status === "clicked" || r.status === "replied").length || 0,
     clicked: analytics?.recipients.filter((r: RecipientData) => r.status === "clicked").length || 0,
+    replied: analytics?.recipients.filter((r: RecipientData) => r.status === "replied").length || 0,
     bounced: analytics?.recipients.filter((r: RecipientData) => r.status === "bounced").length || 0,
     unsubscribed: analytics?.recipients.filter((r: RecipientData) => r.status === "unsubscribed").length || 0,
     unopened: analytics?.recipients.filter((r: RecipientData) => r.status === "unopened" || r.status === "delivered").length || 0,
@@ -100,6 +103,7 @@ export default function Analytics() {
   const rateChartData = analytics ? [
     { name: "Open rate", value: analytics.openRate, fill: "hsl(var(--primary))" },
     { name: "Click rate", value: analytics.clickRate, fill: "hsl(var(--chart-2))" },
+    { name: "Reply rate", value: analytics.replyRate, fill: "hsl(var(--chart-3))" },
   ] : [];
 
   return (
@@ -127,7 +131,7 @@ export default function Analytics() {
 
       {/* Overview Stats Cards */}
       {!selectedSequenceId && (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
@@ -163,6 +167,19 @@ export default function Analytics() {
                 <div>
                   <p className="text-2xl font-bold">{allStats?.clickRate || 0}%</p>
                   <p className="text-sm text-muted-foreground">Click Rate</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                  <Reply className="h-5 w-5 text-violet-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{allStats?.totalReplied || 0}</p>
+                  <p className="text-sm text-muted-foreground">Replied</p>
                 </div>
               </div>
             </CardContent>
@@ -236,8 +253,19 @@ export default function Analytics() {
                   </CardContent>
                 </Card>
 
-                {/* Engagement Section */}
-                <div className="grid gap-4 md:grid-cols-3 md:gap-6">
+                {/* Engagement Section. Replies lead: the trial-nudge copy ends "Reply to
+                    this email with one document", so a reply is the campaign working, not a
+                    proxy for it. */}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 md:gap-6">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-4xl font-bold text-violet-600">{analytics.totalReplied}</p>
+                      <p className="text-violet-600 font-medium">Replies</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {analytics.replyRate}% of delivered
+                      </p>
+                    </CardContent>
+                  </Card>
                   <Card>
                     <CardContent className="pt-6">
                       <p className="text-4xl font-bold text-primary">{analytics.uniqueOpens}</p>
@@ -393,6 +421,7 @@ export default function Analytics() {
                   { key: "delivered", label: "Delivered", count: recipientCounts.delivered },
                   { key: "opened", label: "Opened", count: recipientCounts.opened },
                   { key: "clicked", label: "Clicked", count: recipientCounts.clicked },
+                  { key: "replied", label: "Replied", count: recipientCounts.replied },
                   { key: "bounced", label: "Bounced", count: recipientCounts.bounced },
                   { key: "unsubscribed", label: "Unsubscribed", count: recipientCounts.unsubscribed },
                   { key: "unopened", label: "Unopened", count: recipientCounts.unopened },
@@ -460,6 +489,7 @@ export default function Analytics() {
                             </>
                           )}
                           {recipientFilter === "bounced" && <TableHead>Bounce Type</TableHead>}
+                          {recipientFilter === "replied" && <TableHead>Replied</TableHead>}
                           <TableHead className="text-right">Last Activity</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -481,11 +511,26 @@ export default function Analytics() {
                                 </Badge>
                               </TableCell>
                             )}
+                            {recipientFilter === "replied" && (
+                              <TableCell>
+                                {recipient.repliedAt ? (
+                                  <span className="flex items-center gap-1 text-violet-600">
+                                    <Reply className="h-3 w-3" />
+                                    {formatDistanceToNow(new Date(recipient.repliedAt), { addSuffix: true })}
+                                  </span>
+                                ) : (
+                                  "-"
+                                )}
+                              </TableCell>
+                            )}
                             <TableCell className="text-right text-muted-foreground">
-                              {recipient.lastOpened || recipient.lastClicked ? (
+                              {recipient.repliedAt || recipient.lastOpened || recipient.lastClicked ? (
                                 <span className="flex items-center justify-end gap-1">
                                   <Clock className="h-3 w-3" />
-                                  {formatDistanceToNow(new Date(recipient.lastOpened || recipient.lastClicked!), { addSuffix: true })}
+                                  {formatDistanceToNow(
+                                    new Date(recipient.repliedAt || recipient.lastOpened || recipient.lastClicked!),
+                                    { addSuffix: true },
+                                  )}
                                 </span>
                               ) : (
                                 "-"

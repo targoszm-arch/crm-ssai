@@ -391,6 +391,24 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`Sync complete: ${syncedEmails.length} new, ${skippedCount} skipped (already synced), ${errorCount} errors`);
 
+    // A reply is the outcome the sequence copy asks for, and Resend cannot report
+    // one: it sends, it does not receive. The reply arrives here, in the mailbox,
+    // so this is the only place that can notice it. Runs after the inserts so the
+    // messages it matches against are already in the table.
+    //
+    // Idempotent and cheap — it only fills nulls — so a failure is logged and the
+    // sync still reports success. Losing a reply stamp until the next sync is a
+    // smaller problem than failing a sync that did import the mail correctly.
+    if (syncedEmails.length > 0) {
+      const { data: repliesMatched, error: replyMatchError } = await supabase
+        .rpc("match_sequence_replies");
+      if (replyMatchError) {
+        console.error("match_sequence_replies failed:", replyMatchError);
+      } else if (repliesMatched) {
+        console.log(`Matched ${repliesMatched} sequence ${repliesMatched === 1 ? "reply" : "replies"}`);
+      }
+    }
+
     // Stamped with when the sync STARTED, not finished: anything that arrived while it
     // was running must still be picked up next time.
     await supabase
