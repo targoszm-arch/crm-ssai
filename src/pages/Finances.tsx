@@ -30,7 +30,12 @@ import {
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as ChartTooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
 import { PageActions } from "@/components/layout/PageActions";
-import { YearFilter } from "@/components/finance/YearFilter";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { MultiSelectFilter } from "@/components/customers/MultiSelectFilter";
 import { DateRangeFilter } from "@/components/finance/DateRangeFilter";
 
 // Kept next to the header so adding a column and forgetting the colSpans is
@@ -307,15 +312,42 @@ function TxRow({ tx, updateTx, deleteTx, taxRates }: {
           ) : (
             <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 text-xs">Reconciled</Badge>
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                onClick={() => { if (confirm("Delete this transaction?")) deleteTx.mutate(tx.id); }}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Delete</TooltipContent>
-          </Tooltip>
+          {/* AlertDialog, like every other destructive action in this app.
+              A native confirm() is a different dialog from a different era,
+              it cannot say what is being deleted, and some browsers suppress
+              it outright — which would delete the row with no prompt at all. */}
+          <AlertDialog>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </AlertDialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Delete</TooltipContent>
+            </Tooltip>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this transaction?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {tx.transaction_date} · {tx.counterparty_name ?? tx.description ?? "—"} ·{" "}
+                  {centsToEur(tx.amount_eur_cents ?? tx.amount_cents)}.
+                  This cannot be undone, and if the row came from a sync it will
+                  reappear on the next run.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => deleteTx.mutate(tx.id)}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </TableCell>
     </TableRow>
@@ -693,10 +725,19 @@ export default function FinancePage() {
           </div>
           {/* The filter stays on the page: it changes what you are looking at
               rather than doing something, and reads as part of the report. */}
-          <YearFilter
-            years={availableYears}
-            selected={selectedYears}
-            onChange={setSelectedYears}
+          {/* MultiSelectFilter was already in the codebase, built on Command +
+              Popover + Checkbox, with search, select-all and a clear button —
+              and used by nothing. YearFilter was a worse copy of it. */}
+          <MultiSelectFilter
+            label="years"
+            placeholder="All years"
+            className="w-[180px]"
+            options={availableYears.map(y => ({
+              value: String(y.year),
+              label: `${y.year} (${y.count})`,
+            }))}
+            selectedValues={[...selectedYears].map(String)}
+            onChange={vals => setSelectedYears(new Set(vals.map(Number)))}
           />
         </div>
 

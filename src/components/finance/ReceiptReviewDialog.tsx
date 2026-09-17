@@ -1,4 +1,9 @@
 import { useState, useEffect } from "react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -176,7 +181,7 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
   });
 
   const handleDelete = async () => {
-    if (!tx || !confirm("Delete this receipt?")) return;
+    if (!tx) return;
     const { error } = await supabase.from("finance_transactions").delete().eq("id", tx.id);
     if (error) { toast.error(String(error.message)); return; }
     toast.success("Receipt deleted");
@@ -308,7 +313,33 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
         {total > 0 && (
           <div className="flex items-center justify-between px-6 py-4 border-t bg-background shrink-0">
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete}>Delete this receipt</Button>
+            {/* AlertDialog rather than a native confirm(): it can name the
+                receipt being deleted, and it matches every other destructive
+                action in the app. */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">Delete this receipt</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this receipt?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {tx?.subject ?? tx?.description ?? "This receipt"} will be removed,
+                    along with the VAT and classification recorded on it. This cannot
+                    be undone, though re-running the Gmail harvest would fetch it again.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <Button onClick={onSave} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save and next
