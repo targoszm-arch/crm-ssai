@@ -219,3 +219,49 @@ export function useRemoveFromList() {
       toast({ title: "Could not remove", description: error.message, variant: "destructive" }),
   });
 }
+
+/**
+ * Contact ids for a set of email addresses.
+ *
+ * The LMS leads tab selects people by EMAIL — it is a live read-through of the
+ * LMS, so those rows have no CRM id of their own until the backfill has run.
+ * Adding them to a list needs contact ids, so this resolves what it can and
+ * the caller reports the rest.
+ *
+ * Matched case-insensitively on both sides: contacts holds addresses in
+ * whatever case they arrived in.
+ */
+export function useContactIdsByEmail(emails: string[]) {
+  const wanted = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  return useQuery({
+    queryKey: ["contact-ids-by-email", wanted.sort().join(",")],
+    enabled: wanted.length > 0,
+    queryFn: async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error("Not signed in");
+
+      // NOT `.in("email", wanted)`: that is case-SENSITIVE, so a contact
+      // stored as "John@X.com" would not match "john@x.com" and would look
+      // absent. Read the column and match lowercased on both sides.
+      const found = new Map<string, string>();
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+          .from("contacts")
+          .select("id, email")
+          .eq("user_id", auth.user.id)
+          .not("email", "is", null)
+          .order("id")
+          .range(from, from + 999);
+        if (error) throw error;
+        for (const row of data ?? []) {
+          if (row.email) found.set(row.email.trim().toLowerCase(), row.id);
+        }
+        if (!data || data.length < 1000) break;
+      }
+      return {
+        contactIds: wanted.map((e) => found.get(e)).filter(Boolean) as string[],
+        missing: wanted.filter((e) => !found.has(e)),
+      };
+    },
+  });
+}

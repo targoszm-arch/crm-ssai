@@ -159,85 +159,136 @@ Deno.serve(async (req) => {
       errors: [] as string[],
     };
 
-    for (const c of customers) {
-      const email = (c.email ?? "").trim().toLowerCase();
-      if (!email) {
-        report.skipped_no_email++;
-        continue;
+    // ── Look everything up first, in two queries ─────────────────────────
+    //
+    // This loop used to do FOUR sequential round-trips per customer — find the
+    // contact, write it, find the lead, write it. At 252 customers that is
+    // ~1,000 serial queries and the button took thirty seconds, which reads as
+    // a hang rather than as work.
+    //
+    // Two lookups now, then chunked writes. Matching still happens per row and
+    // the rules below are unchanged; only the number of network trips is.
+    const rows = customers
+      .map(c => ({ c, email: (c.email ?? "").trim().toLowerCase() }))
+      .filter(({ email }) => {
+        if (!email) { report.skipped_no_email++; return false; }
+        return true;
+      });
+    /**
+     * Every row this owner has, paged, matched in memory.
+     *
+     * NOT `.in("email", emails)`: that is case-SENSITIVE, where the per-row
+     * lookup it replaces used `ilike`. A contact stored as "John@X.com" would
+     * silently fail to match "john@x.com" and the backfill would insert a
+     * duplicate of someone it already had. Reading the column and lowercasing
+     * on both sides keeps the old matching exactly, and 2,837 rows of four
+     * small fields is a handful of queries, not a thousand.
+     */
+    async function lookup<T>(table: string, select: string): Promise<T[]> {
+      const out: T[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+          .from(table)
+          .select(select)
+          .eq("user_id", user.id)
+          .not("email", "is", null)
+          .order("id")
+          .range(from, from + 999);
+        if (error) throw error;
+        out.push(...((data ?? []) as T[]));
+        if (!data || data.length < 1000) break;
       }
+      return out;
+    }
 
+    // Lower-cased on both sides, matching the ilike this replaces: contacts
+    // holds addresses in whatever case they arrived in.
+    const contactRows = await lookup<{ id: string; email: string | null; marketing_status: string | null; source: string | null }>(
+      "contacts", "id, email, marketing_status, source",
+    );
+    const contactByEmail = new Map(
+      contactRows.filter(r => r.email).map(r => [r.email!.trim().toLowerCase(), r]),
+    );
+    const leadRows = await lookup<{ id: string; email: string | null }>("lms_leads", "id, email");
+    const leadByEmail = new Map(
+      leadRows.filter(r => r.email).map(r => [r.email!.trim().toLowerCase(), r]),
+    );
+
+    const contactInserts: Record<string, unknown>[] = [];
+    const contactUpdates: { id: string; patch: Record<string, unknown> }[] = [];
+    const leadInserts: Record<string, unknown>[] = [];
+    const leadUpdates: { id: string; row: Record<string, unknown> }[] = [];
+    // Email -> contact id, filled in after the inserts come back.
+    const resolvedContactId = new Map<string, string>();
+
+    for (const { c, email } of rows) {
       const consented = c.marketing_emails_consent === true;
       if (consented) report.marketing_consented++;
 
-      // ── Contact ─────────────────────────────────────────────────────────
-      // Match on email so an LMS signup who is already a Meet Alfred contact is not
-      // duplicated. contacts has no unique index on email, so this is an explicit lookup.
-      // Scoped to this owner: the service role bypasses RLS, so an unscoped lookup could
-      // match — and then modify — another tenant's contact with the same address.
-      // Escaped, because ilike treats _ and % as wildcards and real addresses contain _:
-      // "john_doe@x.com" would otherwise match "johnXdoe@x.com".
-      const emailPattern = email.replace(/([\\%_])/g, "\\$1");
-      const { data: existing } = await supabase
-        .from("contacts")
-        .select("id, marketing_status, source")
-        .eq("user_id", user.id)
-        .ilike("email", emailPattern)
-        .limit(1)
-        .maybeSingle();
-
-      let contactId = existing?.id ?? null;
-
-      if (contactId) {
+      const existing = contactByEmail.get(email);
+      if (existing) {
         report.contacts_matched++;
+        resolvedContactId.set(email, existing.id);
         if (apply) {
           // Only fill gaps. An existing marketing_status was set by a human or by another
           // system and must not be silently rewritten by a backfill — least of all
           // upgraded to Subscribed.
           const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-          if (!existing?.source) patch.source = "lms";
-          if (!existing?.marketing_status) {
+          if (!existing.source) patch.source = "lms";
+          if (!existing.marketing_status) {
             patch.marketing_status = consented ? "Subscribed" : "No consent";
           }
-          const { error } = await supabase.from("contacts").update(patch).eq("id", contactId);
-          if (error) report.errors.push(`contact update ${email}: ${error.message}`);
+          contactUpdates.push({ id: existing.id, patch });
         }
       } else {
         report.contacts_created++;
         if (apply) {
           const { first, last } = splitName(c.full_name, email);
-          const { data: created, error } = await supabase
-            .from("contacts")
-            .insert({
-              user_id: user.id,
-              first_name: first,
-              last_name: last,
-              name: c.full_name?.trim() || `${first}${last ? " " + last : ""}`,
-              email,
-              title: c.role_type ?? null,
-              source: "lms",
-              // Absence of consent is never recorded as a granted-false anything; it is
-              // simply "No consent", which is what the CRM's own vocabulary calls it.
-              marketing_status: consented ? "Subscribed" : "No consent",
-            })
-            .select("id")
-            .single();
-          if (error) {
-            report.errors.push(`contact insert ${email}: ${error.message}`);
-            continue;
-          }
-          contactId = created.id;
+          contactInserts.push({
+            user_id: user.id,
+            first_name: first,
+            last_name: last,
+            name: c.full_name?.trim() || `${first}${last ? " " + last : ""}`,
+            email,
+            title: c.role_type ?? null,
+            source: "lms",
+            // Absence of consent is never recorded as a granted-false anything; it is
+            // simply "No consent", which is what the CRM's own vocabulary calls it.
+            marketing_status: consented ? "Subscribed" : "No consent",
+          });
         }
       }
+    }
 
-      // ── lms_leads ───────────────────────────────────────────────────────
-      const { data: existingLead } = await supabase
-        .from("lms_leads")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("email", email)
-        .limit(1)
-        .maybeSingle();
+    /** Writes in chunks, collecting per-chunk errors rather than failing the run. */
+    async function chunked<T>(items: T[], size: number, fn: (batch: T[]) => Promise<void>) {
+      for (let i = 0; i < items.length; i += size) {
+        try { await fn(items.slice(i, i + size)); }
+        catch (e) { report.errors.push(String(e)); }
+      }
+    }
 
+    if (apply) {
+      await chunked(contactInserts, 200, async batch => {
+        const { data, error } = await supabase.from("contacts").insert(batch).select("id, email");
+        if (error) throw new Error(`contact insert: ${error.message}`);
+        for (const row of data ?? []) {
+          if (row.email) resolvedContactId.set(row.email.trim().toLowerCase(), row.id);
+        }
+      });
+
+      // Updates differ per row, so they cannot be one statement — but they can
+      // at least run concurrently instead of one after another.
+      await chunked(contactUpdates, 25, async batch => {
+        const results = await Promise.all(batch.map(u =>
+          supabase.from("contacts").update(u.patch).eq("id", u.id),
+        ));
+        for (const r of results) if (r.error) report.errors.push(`contact update: ${r.error.message}`);
+      });
+    }
+
+    // ── lms_leads ─────────────────────────────────────────────────────────
+    for (const { c, email } of rows) {
       const leadRow = {
         user_id: user.id,
         lms_user_id: c.user_id ?? null,
@@ -253,26 +304,33 @@ Deno.serve(async (req) => {
         credits_used: c.used_credits ?? null,
         credits_total: c.total_credits ?? null,
         lms_created_at: c.created_at ?? null,
-        contact_id: contactId,
+        contact_id: resolvedContactId.get(email) ?? null,
         source: "backfill",
         raw_payload: c as unknown as Record<string, unknown>,
         updated_at: new Date().toISOString(),
       };
 
+      const existingLead = leadByEmail.get(email);
       if (existingLead) {
         report.lms_leads_updated++;
-        if (apply) {
-          const { error } = await supabase
-            .from("lms_leads").update(leadRow).eq("id", existingLead.id);
-          if (error) report.errors.push(`lead update ${email}: ${error.message}`);
-        }
+        if (apply) leadUpdates.push({ id: existingLead.id, row: leadRow });
       } else {
         report.lms_leads_created++;
-        if (apply) {
-          const { error } = await supabase.from("lms_leads").insert(leadRow);
-          if (error) report.errors.push(`lead insert ${email}: ${error.message}`);
-        }
+        if (apply) leadInserts.push(leadRow);
       }
+    }
+
+    if (apply) {
+      await chunked(leadInserts, 200, async batch => {
+        const { error } = await supabase.from("lms_leads").insert(batch);
+        if (error) throw new Error(`lead insert: ${error.message}`);
+      });
+      await chunked(leadUpdates, 25, async batch => {
+        const results = await Promise.all(batch.map(u =>
+          supabase.from("lms_leads").update(u.row).eq("id", u.id),
+        ));
+        for (const r of results) if (r.error) report.errors.push(`lead update: ${r.error.message}`);
+      });
     }
 
     return json({

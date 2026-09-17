@@ -16,6 +16,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
+import { AddToListMenu } from "./AddToListMenu";
+import { useContactIdsByEmail } from "@/hooks/useLists";
 import {
   Tooltip,
   TooltipContent,
@@ -222,6 +224,10 @@ export function ExternalLMSLeadsTab() {
   };
 
   const selectedUsers = filteredCustomers.filter(c => selectedIds.has(c.email));
+  // Lists hold contact ids; this tab selects emails. Resolve, and report what
+  // has no CRM row yet rather than quietly adding fewer people than selected.
+  const { data: listTargets, isLoading: resolvingTargets } =
+    useContactIdsByEmail(selectedUsers.map(u => u.email));
 
   if (isError) {
     return (
@@ -362,13 +368,31 @@ export function ExternalLMSLeadsTab() {
       {selectedIds.size > 0 && (
         <Card className="border-primary bg-primary/5">
           <CardContent className="p-4 flex items-center justify-between">
-            <span className="text-sm font-medium">
-              {selectedIds.size} customer{selectedIds.size !== 1 ? "s" : ""} selected
-            </span>
+            <div className="text-sm">
+              <span className="font-medium">
+                {selectedIds.size} customer{selectedIds.size !== 1 ? "s" : ""} selected
+              </span>
+              {(listTargets?.missing.length ?? 0) > 0 && (
+                <span className="ml-2 text-muted-foreground">
+                  · {listTargets!.missing.length} not in the CRM yet — Save to CRM first to
+                  add {listTargets!.missing.length === 1 ? "them" : "those"} to a list
+                </span>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
                 Clear Selection
               </Button>
+              {/* Lists were reachable from Customers and Organisations and not
+                  from here, so LMS people could be selected and enrolled but
+                  never segmented. Selection here is by EMAIL — this tab is a
+                  live read-through of the LMS — so the ids are resolved
+                  against contacts, and anyone not yet saved to the CRM is
+                  named rather than silently dropped. */}
+              <AddToListMenu
+                contactIds={listTargets?.contactIds ?? []}
+                disabled={resolvingTargets || (listTargets?.contactIds.length ?? 0) === 0}
+              />
               <Button size="sm" onClick={() => setEnrollModalOpen(true)}>
                 <Mail className="h-4 w-4 mr-2" />
                 Enroll in Sequence
