@@ -26,13 +26,12 @@ import {
   centsToEur, centsToNum, VAT_TREATMENT_LABELS, VAT_TREATMENT_COLORS,
   SOURCE_COLORS, TYPE_COLORS, CATEGORIES, getVatPeriods, exportToCsv,
   ACCOUNTING_CATEGORIES, ACCOUNTING_CATEGORY_LABELS, ACCOUNTING_CATEGORY_STATEMENT,
-  STATEMENT_COLORS
-} from "@/components/finance/financeUtils";
+  STATEMENT_COLORS, DateRange, EMPTY_RANGE, inRange, rangeLabel } from "@/components/finance/financeUtils";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as ChartTooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
 import { PageActions } from "@/components/layout/PageActions";
 import { YearFilter } from "@/components/finance/YearFilter";
-import { DateRangeFilter, DateRange, EMPTY_RANGE, inRange, rangeLabel } from "@/components/finance/DateRangeFilter";
+import { DateRangeFilter } from "@/components/finance/DateRangeFilter";
 
 // Kept next to the header so adding a column and forgetting the colSpans is
 // a one-line fix rather than three silently mismatched numbers.

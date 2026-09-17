@@ -1,3 +1,5 @@
+import { format, startOfMonth, endOfMonth, addMonths } from "date-fns";
+
 export function centsToEur(cents: number): string {
   return (cents / 100).toLocaleString("en-IE", {
     style: "currency",
@@ -206,4 +208,44 @@ export function formatTaxRate(name: string | null, percent: number | null): stri
   if (!name) return "—";
   const pct = percent == null ? null : Number(percent);
   return pct == null ? name : `${name} (${pct % 1 === 0 ? pct.toFixed(0) : pct}%)`;
+}
+
+// ── Date ranges ────────────────────────────────────────────────────────────
+// Used by the transactions date filter. They live here rather than in the
+// component because they are pure functions about dates, and a component file
+// that also exports helpers breaks fast refresh.
+
+/** A filter range: ISO dates, either end optional. */
+export interface DateRange {
+  from: string | null;
+  to: string | null;
+}
+
+export const EMPTY_RANGE: DateRange = { from: null, to: null };
+
+export const isoDate = (d: Date): string => format(d, "yyyy-MM-dd");
+
+/** Parses an ISO date as local midnight, so no timezone shifts the day. */
+export const toLocalDate = (s: string | null): Date | undefined =>
+  s ? new Date(s + "T00:00:00") : undefined;
+
+/** The bi-monthly VAT3 period containing `d`: Jan-Feb, Mar-Apr, and so on. */
+export function vatPeriodOf(d: Date): DateRange {
+  const start = startOfMonth(addMonths(d, -(d.getMonth() % 2)));
+  return { from: isoDate(start), to: isoDate(endOfMonth(addMonths(start, 1))) };
+}
+
+/** Does a transaction date fall inside the range? An open end is unbounded. */
+export function inRange(date: string, r: DateRange): boolean {
+  if (r.from && date < r.from) return false;
+  if (r.to && date > r.to) return false;
+  return true;
+}
+
+export function rangeLabel(r: DateRange): string {
+  const f = (s: string) => format(new Date(s + "T00:00:00"), "d MMM yyyy");
+  if (!r.from && !r.to) return "All dates";
+  if (r.from && !r.to) return `From ${f(r.from)}`;
+  if (!r.from && r.to) return `Until ${f(r.to)}`;
+  return `${f(r.from)} - ${f(r.to)}`;
 }
