@@ -1,4 +1,5 @@
 import { Copy, Check, Webhook, Key, FileJson } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -104,30 +105,30 @@ export default function Settings() {
               <label className="text-sm font-medium">Accepted Fields</label>
             </div>
             <div className="rounded-md border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left px-3 py-2 font-medium">Field</th>
-                    <th className="text-left px-3 py-2 font-medium">Required</th>
-                    <th className="text-left px-3 py-2 font-medium">Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ACCEPTED_FIELDS.map((field) =>
-                  <tr key={field.name} className="border-b last:border-0">
-                      <td className="px-3 py-2 font-mono text-xs">{field.name}</td>
-                      <td className="px-3 py-2">
-                        {field.required ?
-                      <Badge variant="destructive" className="text-[10px]">Required</Badge> :
-
-                      <Badge variant="outline" className="text-[10px]">Optional</Badge>
-                      }
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">{field.description}</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>Field</TableHead>
+                    <TableHead>Required</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ACCEPTED_FIELDS.map((field) => (
+                    <TableRow key={field.name}>
+                      <TableCell className="font-mono text-xs">{field.name}</TableCell>
+                      <TableCell>
+                        {field.required ? (
+                          <Badge variant="destructive" className="text-[10px]">Required</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]">Optional</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{field.description}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           </div>
 

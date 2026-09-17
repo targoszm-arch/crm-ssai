@@ -18,6 +18,7 @@ import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, use
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { ImportStatementDialog } from "@/components/finance/ImportStatementDialog";
 import { DuplicateReviewDialog, DuplicateReviewItem } from "@/components/finance/DuplicateReviewDialog";
+import { ReconcilePanel } from "@/components/finance/ReconcilePanel";
 import { AccountantPack } from "@/components/finance/AccountantPack";
 import { findDuplicateGroups, evidenceLostIfDeleted } from "@/components/finance/duplicateUtils";
 import { ReceiptReviewDialog } from "@/components/finance/ReceiptReviewDialog";
@@ -30,7 +31,12 @@ import {
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as ChartTooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
 import { PageActions } from "@/components/layout/PageActions";
-import { YearFilter } from "@/components/finance/YearFilter";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { MultiSelectFilter } from "@/components/customers/MultiSelectFilter";
 import { DateRangeFilter } from "@/components/finance/DateRangeFilter";
 
 // Kept next to the header so adding a column and forgetting the colSpans is
@@ -307,15 +313,42 @@ function TxRow({ tx, updateTx, deleteTx, taxRates }: {
           ) : (
             <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 text-xs">Reconciled</Badge>
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                onClick={() => { if (confirm("Delete this transaction?")) deleteTx.mutate(tx.id); }}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Delete</TooltipContent>
-          </Tooltip>
+          {/* AlertDialog, like every other destructive action in this app.
+              A native confirm() is a different dialog from a different era,
+              it cannot say what is being deleted, and some browsers suppress
+              it outright — which would delete the row with no prompt at all. */}
+          <AlertDialog>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </AlertDialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Delete</TooltipContent>
+            </Tooltip>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this transaction?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {tx.transaction_date} · {tx.counterparty_name ?? tx.description ?? "—"} ·{" "}
+                  {centsToEur(tx.amount_eur_cents ?? tx.amount_cents)}.
+                  This cannot be undone, and if the row came from a sync it will
+                  reappear on the next run.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => deleteTx.mutate(tx.id)}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </TableCell>
     </TableRow>
@@ -693,10 +726,19 @@ export default function FinancePage() {
           </div>
           {/* The filter stays on the page: it changes what you are looking at
               rather than doing something, and reads as part of the report. */}
-          <YearFilter
-            years={availableYears}
-            selected={selectedYears}
-            onChange={setSelectedYears}
+          {/* MultiSelectFilter was already in the codebase, built on Command +
+              Popover + Checkbox, with search, select-all and a clear button —
+              and used by nothing. YearFilter was a worse copy of it. */}
+          <MultiSelectFilter
+            label="years"
+            placeholder="All years"
+            className="w-[180px]"
+            options={availableYears.map(y => ({
+              value: String(y.year),
+              label: `${y.year} (${y.count})`,
+            }))}
+            selectedValues={[...selectedYears].map(String)}
+            onChange={vals => setSelectedYears(new Set(vals.map(Number)))}
           />
         </div>
 
@@ -805,6 +847,7 @@ export default function FinancePage() {
       <Tabs defaultValue="transactions">
         <TabsList className="shrink-0 self-start">
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
+          <TabsTrigger value="reconcile">Reconcile</TabsTrigger>
           <TabsTrigger value="vat">VAT Report</TabsTrigger>
         </TabsList>
 
@@ -832,6 +875,7 @@ export default function FinancePage() {
                 <SelectItem value="expense">Expense</SelectItem>
                 <SelectItem value="refund">Refund</SelectItem>
                 <SelectItem value="fee">Fee</SelectItem>
+                <SelectItem value="transfer">Transfer</SelectItem>
               </SelectContent>
             </Select>
 
@@ -883,9 +927,14 @@ export default function FinancePage() {
           </div>
 
           <Card className="overflow-hidden">
-            <div className="max-h-[70vh] min-h-[280px] overflow-auto">
-              <Table>
-                <TableHeader>
+            {/* The cap goes on the Table's own scrollport rather than a wrapper
+                around it. Nesting a second scrolling div would anchor the
+                sticky header to the inner box, which never scrolls. */}
+            <Table containerClassName="max-h-[70vh] min-h-[280px]">
+                {/* Twenty columns is too many to hold in your head while
+                    scrolling 894 rows. bg-background is not decoration: a
+                    transparent sticky header shows the rows sliding under it. */}
+                <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background shadow-[inset_0_-1px_0_hsl(var(--border))]">
                   <TableRow>
                     <SortHead field="date"     label="Date"     sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     <SortHead field="customer" label="Supplier" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
@@ -955,6 +1004,11 @@ export default function FinancePage() {
                     groupedRows.map(([groupKey, groupTxs]) => {
                       const groupTotal = groupTxs.reduce((s, t) => {
                         const amt = t.amount_eur_cents ?? t.amount_cents;
+                        // A pocket transfer nets to nothing: the same money
+                        // leaves one account and arrives in another, both hers.
+                        // Counting it as money in made a group of transfers
+                        // look like earnings.
+                        if (t.type === "transfer") return s;
                         return s + (t.type === "expense" || t.type === "fee" ? -amt : amt);
                       }, 0);
                       return (
@@ -982,12 +1036,20 @@ export default function FinancePage() {
                     filteredTxs.map(tx => <TxRow key={tx.id} tx={tx} updateTx={updateTx} deleteTx={deleteTx} taxRates={taxRates} />)
                   )}
                 </TableBody>
-              </Table>
-            </div>
+            </Table>
           </Card>
         </TabsContent>
 
         {/* ── VAT Report tab ─────────────────────────────────────────────── */}
+        {/* Reconcile: the two passes that still need a person's eye — which
+            supplier a row belongs to, and which receipt documents it. Fed the
+            unfiltered ledger on purpose; the toolbar filters above belong to
+            the transactions table, and a filtered view here would silently
+            hide half the work. */}
+        <TabsContent value="reconcile" className="mt-4">
+          <ReconcilePanel txs={allTxs} />
+        </TabsContent>
+
         <TabsContent value="vat" className="mt-4 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-5">

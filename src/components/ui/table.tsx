@@ -4,9 +4,19 @@ import { cn } from "@/lib/utils"
 
 const Table = React.forwardRef<
   HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
+  React.HTMLAttributes<HTMLTableElement> & {
+    /**
+     * Classes for the scroll container, not the table.
+     *
+     * This wrapper is the scrollport. Capping its height from outside means
+     * wrapping it in a second scrolling div, and a sticky header then anchors
+     * to this inner box — which never scrolls — so it does not stick. Handing
+     * the cap to the real scrollport is what makes `sticky top-0` work.
+     */
+    containerClassName?: string
+  }
+>(({ className, containerClassName, ...props }, ref) => (
+  <div className={cn("relative w-full overflow-auto", containerClassName)}>
     <table
       ref={ref}
       className={cn("w-full caption-bottom text-sm", className)}
