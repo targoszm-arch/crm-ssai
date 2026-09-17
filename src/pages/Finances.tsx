@@ -853,7 +853,24 @@ export default function FinancePage() {
       </Card>
 
       {/* Tabs */}
-      <Tabs defaultValue="transactions" className="flex min-h-0 flex-1 flex-col">
+      {/* min-h is load-bearing, not padding. Everything above this — header,
+          metric cards, chart, tab strip — is shrink-0, so the tabs region is
+          the only thing that can absorb a short viewport, and `flex-1
+          min-h-0` lets it absorb all the way to zero. On a laptop that put the
+          table at zero height: the shell would still scroll the cards into
+          view, but there were no rows left to reveal.
+
+          With a floor, a viewport too short to fit everything overflows the
+          shell and the page scrolls — which is the honest outcome, since
+          something has to scroll when the content genuinely does not fit.
+          Above that height there is still exactly one scrollbar: the table's.
+
+          Note this element does NOT also carry min-h-0, unlike its children:
+          the two are contradictory, and Tailwind would resolve the conflict by
+          CSS source order rather than by the order written here. The children
+          keep min-h-0 so the table can still scroll inside whatever height
+          this resolves to. */}
+      <Tabs defaultValue="transactions" className="flex min-h-[22rem] flex-1 flex-col">
         <TabsList className="shrink-0 self-start">
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
           <TabsTrigger value="reconcile">Reconcile</TabsTrigger>
