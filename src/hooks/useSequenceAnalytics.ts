@@ -152,6 +152,26 @@ export function useSequenceAnalytics(sequenceId?: string) {
       const replyRate = totalDelivered > 0 ? Math.round((repliedEmails.length / totalDelivered) * 100) : 0;
       const clickThroughRate = uniqueOpens > 0 ? Math.round((uniqueClicks / uniqueOpens) * 100) : 0;
 
+      // One row per person, but a person in a multi-step sequence has several
+      // sends. The row must describe the FURTHEST they got, not whichever send
+      // this loop happened to read last — otherwise someone who replied to step
+      // one and ignored step three reads as "unopened" while their repliedAt is
+      // set, and the Replied filter drops a person the Replied count includes.
+      //
+      // Unsubscribed outranks replied deliberately: if both are true, the
+      // compliance signal is the one that must not be hidden. Replied outranks
+      // bounced because a bounce on a later step does not undo a reply to an
+      // earlier one.
+      const STATUS_RANK: Record<RecipientData["status"], number> = {
+        unsubscribed: 6,
+        replied: 5,
+        clicked: 4,
+        opened: 3,
+        bounced: 2,
+        delivered: 1,
+        unopened: 0,
+      };
+
       // Build recipients data
       const recipientsMap = new Map<string, RecipientData>();
       for (const email of emails || []) {
@@ -173,6 +193,10 @@ export function useSequenceAnalytics(sequenceId?: string) {
         else if (email.opened_at) status = "opened";
         else if (!email.opened_at) status = "unopened";
 
+        const mergedStatus = existing && STATUS_RANK[existing.status] > STATUS_RANK[status]
+          ? existing.status
+          : status;
+
         recipientsMap.set(contact.id, {
           id: email.id,
           contactId: contact.id,
@@ -182,8 +206,8 @@ export function useSequenceAnalytics(sequenceId?: string) {
           clicks,
           lastOpened: email.opened_at || existing?.lastOpened || null,
           lastClicked: email.clicked_at || existing?.lastClicked || null,
-          status,
-          bounceType: email.bounce_type || undefined,
+          status: mergedStatus,
+          bounceType: email.bounce_type || existing?.bounceType || undefined,
           repliedAt: email.replied_at || existing?.repliedAt || null,
           replyEmailId: email.replied_email_id || existing?.replyEmailId || null,
         });
