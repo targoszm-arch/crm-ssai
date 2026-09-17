@@ -107,17 +107,50 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    // Whose ledger this touches. The service-role client bypasses RLS, so
+    // without resolving the caller every signed-in user would convert every
+    // other user's transactions. Same shape as sync-revolut, deliberately:
+    // one function skipping the check is how a single-tenant assumption
+    // becomes a cross-tenant write.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) throw new Error("Missing Authorization header");
+    const { data: { user }, error: authError } =
+      await sb.auth.getUser(authHeader.replace("Bearer ", ""));
+    if (authError || !user) throw new Error("Unauthorized");
+
     const result: Record<string, unknown> = { mode, dry_run: dryRun };
 
     // Which currencies matter here. Read from the data rather than hardcoded,
     // so a first PLN invoice next year needs no code change.
-    const { data: ccyRows, error: ccyErr } = await sb
-      .from("finance_transactions")
-      .select("currency")
-      .neq("currency", "EUR");
-    if (ccyErr) throw ccyErr;
-    const wanted = new Set<string>((ccyRows ?? []).map(r => r.currency));
+    //
+    // Paged explicitly: PostgREST caps an unordered select at 1000 rows, and
+    // past that a currency could silently drop out of `wanted` — the rate
+    // would never be fetched and its transactions would stay unconverted,
+    // with nothing in the output saying so.
+    const wanted = new Set<string>();
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await sb
+        .from("finance_transactions")
+        .select("currency")
+        .eq("user_id", user.id)
+        .neq("currency", "EUR")
+        .order("currency")
+        .range(from, from + 999);
+      if (error) throw error;
+      for (const r of data ?? []) wanted.add(r.currency);
+      if (!data || data.length < 1000) break;
+    }
     result.currencies = [...wanted].sort();
+
+    // No foreign currency means nothing to fetch. Without this, an empty
+    // `wanted` makes parseEcbXml keep every currency the ECB publishes and
+    // store ~1.5M rows to convert nothing.
+    if (wanted.size === 0) {
+      return new Response(
+        JSON.stringify({ ...result, parsed_rates: 0, converted: 0, note: "no foreign-currency transactions" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // ---- rates ----------------------------------------------------------
     if (mode === "rates" || mode === "all") {
@@ -150,6 +183,7 @@ Deno.serve(async (req: Request) => {
       const { data: txs, error: txErr } = await sb
         .from("finance_transactions")
         .select("id, transaction_date, currency, amount_cents, vat_amount_cents, vat_eur_cents")
+        .eq("user_id", user.id)
         .neq("currency", "EUR")
         .is("amount_eur_cents", null);
       if (txErr) throw txErr;
@@ -217,6 +251,7 @@ Deno.serve(async (req: Request) => {
             .from("finance_transactions")
             .update(c.patch)
             .eq("id", c.id)
+            .eq("user_id", user.id)
             // Belt and braces: only ever fills a hole. If something else set a
             // euro figure between the read and this write, that one wins.
             .is("amount_eur_cents", null);

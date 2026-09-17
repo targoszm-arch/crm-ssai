@@ -101,7 +101,12 @@ export function proposeFromRules(
     for (const f of RULE_FIELDS) {
       const asserted = rule[f];
       const current = tx[f as keyof FinanceTransaction];
-      if (asserted && (current === null || current === undefined || current === "")) {
+      // Null and undefined only — NOT empty string. The write filters
+      // `.is(field, null)`, so proposing for an empty string produced an
+      // update that matched zero rows, was counted as applied, and came back
+      // on the next run. The proposal has to ask the same question the write
+      // asks or the two disagree forever.
+      if (asserted && (current === null || current === undefined)) {
         patch[f] = asserted;
       }
     }

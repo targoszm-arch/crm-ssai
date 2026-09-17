@@ -78,7 +78,15 @@ const MAX_DAYS = 7;
  * agreeing name cannot reach the floor, which is the intended outcome.
  */
 export function scorePair(bank: FinanceTransaction, receipt: FinanceTransaction): MatchCandidate | null {
-  if (bank.currency !== receipt.currency && !bank.amount_eur_cents) return null;
+  // Both sides must be in euro before they can be compared.
+  //
+  // `eurOf` falls back to amount_cents when amount_eur_cents is null, which is
+  // correct only when the row is already in euro. The guard used to check the
+  // bank row alone, so a USD receipt with no euro figure had its *dollar*
+  // minor units compared against euro cents — inventing confident pairs at a
+  // ~15% error and hiding the genuine ones. Every row needs its own check.
+  const comparable = (t: FinanceTransaction) => t.currency === "EUR" || t.amount_eur_cents != null;
+  if (!comparable(bank) || !comparable(receipt)) return null;
 
   const bankEur = eurOf(bank);
   const recEur = eurOf(receipt);

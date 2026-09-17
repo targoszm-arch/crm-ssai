@@ -37,33 +37,54 @@ export function ReconcilePanel({ txs }: { txs: FinanceTransaction[] }) {
     [txs, rules]);
 
   // ── Matching ────────────────────────────────────────────────────────────
-  // Rows already decided are out of scope entirely: re-proposing a pair
-  // someone rejected is how a review queue becomes noise people stop reading.
-  const decided = useMemo(() => {
+  // A CONFIRMED pair takes both its rows out of play — they are spoken for.
+  //
+  // A REJECTED pair must not. Rejecting "this Anthropic charge is not that
+  // Anthropic receipt" says nothing about either row's real partner, and
+  // blacklisting both ids meant one wrong rejection permanently hid the
+  // correct pairing from ever being offered. Only the pair is dead.
+  const confirmedRowIds = useMemo(() => {
     const s = new Set<string>();
-    for (const m of savedMatches as { bank_transaction_id: string; receipt_transaction_id: string }[]) {
+    for (const m of savedMatches as { bank_transaction_id: string; receipt_transaction_id: string; status: string }[]) {
+      if (m.status !== "confirmed") continue;
       s.add(m.bank_transaction_id);
       s.add(m.receipt_transaction_id);
     }
     return s;
   }, [savedMatches]);
 
-  const candidates = useMemo(() => proposeMatches(txs, decided), [txs, decided]);
-  const [rejected, setRejected] = useState<Set<string>>(new Set());
-  const key = (c: MatchCandidate) => `${c.bank.id}:${c.receipt.id}`;
-
-  const confirmedBankIds = useMemo(() => {
+  const rejectedPairs = useMemo(() => {
     const s = new Set<string>();
-    for (const m of savedMatches as { bank_transaction_id: string; status: string }[]) {
-      if (m.status === "confirmed") s.add(m.bank_transaction_id);
+    for (const m of savedMatches as { bank_transaction_id: string; receipt_transaction_id: string; status: string }[]) {
+      if (m.status === "rejected") s.add(`${m.bank_transaction_id}:${m.receipt_transaction_id}`);
     }
     return s;
   }, [savedMatches]);
 
-  const gap = useMemo(() => unreceiptedSpend(txs, confirmedBankIds), [txs, confirmedBankIds]);
+  const candidates = useMemo(
+    () => proposeMatches(txs, confirmedRowIds)
+      .filter(c => !rejectedPairs.has(`${c.bank.id}:${c.receipt.id}`)),
+    [txs, confirmedRowIds, rejectedPairs]);
+  const key = (c: MatchCandidate) => `${c.bank.id}:${c.receipt.id}`;
+
+  // Anything below CONFIDENT starts UNTICKED. Pre-ticking every candidate
+  // meant "Confirm N" wrote a score of 46 — an amount within 2% and a week
+  // apart, with no agreeing name — as an accepted fact about which receipt
+  // documents which payment. The badge showed the score but nothing acted on
+  // it. A weak pair is a question, and a question should not be pre-answered.
+  //
+  // Stored as overrides rather than a ticked set so the default survives the
+  // list being recomputed, and so an untouched pair always reflects its score.
+  const [overrides, setOverrides] = useState<Map<string, boolean>>(new Map());
+  const isTicked = (c: MatchCandidate) => overrides.get(key(c)) ?? c.score >= CONFIDENT;
+  const setTicked = (c: MatchCandidate, v: boolean) =>
+    setOverrides(m => new Map(m).set(key(c), v));
+
+  const gap = useMemo(() => unreceiptedSpend(txs, confirmedRowIds), [txs, confirmedRowIds]);
 
   const toApply = proposals.filter(p => !skippedRules.has(p.tx.id));
-  const toConfirm = candidates.filter(c => !rejected.has(key(c)));
+  const toConfirm = candidates.filter(isTicked);
+  const toReject = candidates.filter(c => !isTicked(c));
 
   if (rulesLoading) {
     return <Card className="p-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin" /></Card>;
@@ -180,16 +201,22 @@ export function ReconcilePanel({ txs }: { txs: FinanceTransaction[] }) {
               {centsToEur(gap.eurCents)} still have none — input VAT needs a document.
             </span>
           </div>
+          {/* Enabled whenever there is anything to record, not only when
+              something is ticked. Gating on toConfirm meant a reviewer who
+              went through the list and rejected every pair could not save that
+              work, and the same wrong pairs came back next time. A rejection
+              is a decision and deserves to persist. */}
           <Button
-            disabled={!toConfirm.length || saveMatches.isPending}
+            disabled={!candidates.length || saveMatches.isPending}
             onClick={() => saveMatches.mutate([
               ...toConfirm.map(c => ({ candidate: c, status: "confirmed" as const })),
-              ...candidates.filter(c => rejected.has(key(c)))
-                .map(c => ({ candidate: c, status: "rejected" as const })),
+              ...toReject.map(c => ({ candidate: c, status: "rejected" as const })),
             ])}
           >
             {saveMatches.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Confirm {toConfirm.length}
+            {toConfirm.length > 0
+              ? `Confirm ${toConfirm.length}${toReject.length ? `, reject ${toReject.length}` : ""}`
+              : `Reject ${toReject.length}`}
           </Button>
         </Card>
 
@@ -210,12 +237,8 @@ export function ReconcilePanel({ txs }: { txs: FinanceTransaction[] }) {
                   <TableRow key={key(c)}>
                     <TableCell>
                       <Checkbox
-                        checked={!rejected.has(key(c))}
-                        onCheckedChange={v => setRejected(s => {
-                          const n = new Set(s);
-                          if (v) n.delete(key(c)); else n.add(key(c));
-                          return n;
-                        })}
+                        checked={isTicked(c)}
+                        onCheckedChange={v => setTicked(c, v === true)}
                       />
                     </TableCell>
                     <TableCell className="max-w-[220px]">
