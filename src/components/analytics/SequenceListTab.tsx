@@ -81,6 +81,7 @@ export function SequenceListTab({ onSelectSequence }: SequenceListTabProps) {
               <TableHead className="text-right">Opened</TableHead>
               <TableHead className="text-right">Open rate</TableHead>
               <TableHead className="text-right">Clicked</TableHead>
+              <TableHead className="text-right">Replied</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -88,7 +89,7 @@ export function SequenceListTab({ onSelectSequence }: SequenceListTabProps) {
             {sortedGroups.map(([category, seqs]) => (
               <Fragment key={category}>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={9} className="font-medium text-sm">
+                  <TableCell colSpan={10} className="font-medium text-sm">
                     {category}
                     <span className="ml-2 text-muted-foreground font-normal">
                       {seqs.length} {seqs.length === 1 ? "sequence" : "sequences"}
@@ -134,6 +135,13 @@ export function SequenceListTab({ onSelectSequence }: SequenceListTabProps) {
                       <TableCell className="text-right tabular-nums">
                         {stats ? stats.clicked : <span className="text-muted-foreground">—</span>}
                       </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {stats
+                          ? (stats.replied > 0
+                              ? <span className="font-medium text-violet-600">{stats.replied}</span>
+                              : stats.replied)
+                          : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
@@ -156,7 +164,8 @@ export function SequenceListTab({ onSelectSequence }: SequenceListTabProps) {
       {allStats && (
         <p className="text-xs text-muted-foreground">
           Across all sequences: {allStats.totalSent ?? 0} sent, {allStats.openRate ?? 0}% open
-          rate, {allStats.clickRate ?? 0}% click rate.
+          rate, {allStats.clickRate ?? 0}% click rate, {allStats.totalReplied ?? 0}{" "}
+          {allStats.totalReplied === 1 ? "reply" : "replies"}.
         </p>
       )}
     </div>
