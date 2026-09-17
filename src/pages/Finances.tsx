@@ -1,4 +1,5 @@
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useState, useMemo, useRef, lazy, Suspense } from "react";
+import type { GridApi } from "ag-grid-community";
 import PageShell from "@/components/layout/PageShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -321,25 +322,29 @@ export default function FinancePage() {
     return buckets;
   }, [txs, selectedYears, availableYears]);
 
-  // ── Filtered + searched + sorted rows ────────────────────────────────────
+  // The grid hands its API up so the row count and the CSV reflect what is
+  // actually on screen — the same rows, in the same order.
+  const gridApiRef = useRef<GridApi<FinanceTransaction> | null>(null);
+  const [displayedCount, setDisplayedCount] = useState<number | null>(null);
+
+  // ── Filtered rows handed to the grid ─────────────────────────────────────
   const filteredTxs = useMemo(() => {
     let rows = txs;
     if (dateRange.from || dateRange.to) rows = rows.filter(t => inRange(t.transaction_date, dateRange));
     if (typeFilter !== "all") rows = rows.filter(t => t.type === typeFilter);
     if (sourceFilter !== "all") rows = rows.filter(t => t.source === sourceFilter);
     if (categoryFilter !== "all") rows = rows.filter(t => t.accounting_category === categoryFilter);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      rows = rows.filter(t =>
-        (t.description ?? "").toLowerCase().includes(q) ||
-        (t.counterparty_name ?? "").toLowerCase().includes(q) ||
-        (t.counterparty_email ?? "").toLowerCase().includes(q)
-      );
-    }
-    // No sort here. The grid owns sorting now, on every column rather than the
-    // five this switch handled, and sorting in both places would fight.
+    // Search is NOT applied here. It used to be — over description, counterparty
+    // name and email — while the grid ALSO applied it as a quick filter across
+    // every column, so two different predicates ran in series: the toolbar
+    // counted this array and the grid displayed a subset of it, and the two
+    // numbers disagreed. The grid's filter is the wider of the two and it is
+    // the one that decides what you can see, so it is the only one now.
+    //
+    // No sort here either. The grid owns sorting, on every column rather than
+    // the five the old switch handled, and sorting in both places would fight.
     return rows;
-  }, [txs, search, dateRange, typeFilter, sourceFilter, categoryFilter]);
+  }, [txs, dateRange, typeFilter, sourceFilter, categoryFilter]);
 
   // ── Stripe sync ────────────────────────────────────────────────────────
   const handleStripeSync = async () => {
@@ -404,7 +409,16 @@ export default function FinancePage() {
 
   // ── CSV export ─────────────────────────────────────────────────────────
   const handleExport = () => {
-    const rows = filteredTxs.map(t => ({
+    // Walk the grid's displayed nodes rather than `filteredTxs`: the grid owns
+    // sorting and the quick filter, so the array the page holds is neither in
+    // the order on screen nor the same set of rows. Exporting it produced a
+    // file that did not match what the person was looking at.
+    const api = gridApiRef.current;
+    const source: FinanceTransaction[] = [];
+    if (api) {
+      api.forEachNodeAfterFilterAndSort(n => { if (n.data) source.push(n.data); });
+    }
+    const rows = (source.length ? source : filteredTxs).map(t => ({
       Date: t.transaction_date,
       Supplier: t.counterparty_name ?? "",
       Subject: t.subject ?? t.description ?? "",
@@ -682,7 +696,8 @@ export default function FinancePage() {
                 grouping panel — a few lines, not a rebuild. */}
 
             <span className="ml-auto text-sm text-muted-foreground whitespace-nowrap">
-              {filteredTxs.length} row{filteredTxs.length !== 1 ? "s" : ""}
+              {(displayedCount ?? filteredTxs.length).toLocaleString()} row
+              {(displayedCount ?? filteredTxs.length) !== 1 ? "s" : ""}
             </span>
           </div>
 
@@ -692,7 +707,13 @@ export default function FinancePage() {
                 <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             }>
-              <FinanceGrid rows={filteredTxs} taxRates={taxRates} search={search} />
+              <FinanceGrid
+                rows={filteredTxs}
+                taxRates={taxRates}
+                search={search}
+                onGridReady={api => { gridApiRef.current = api; }}
+                onDisplayedRowsChanged={setDisplayedCount}
+              />
             </Suspense>
           </Card>
         </TabsContent>

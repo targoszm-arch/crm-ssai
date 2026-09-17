@@ -5,12 +5,16 @@ import {
   ModuleRegistry,
   type CellValueChangedEvent,
   type ColDef,
+  type GridApi,
+  type GridReadyEvent,
   type ICellRendererParams,
   type ValueFormatterParams,
 } from "ag-grid-community";
 import { format } from "date-fns";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -73,9 +77,14 @@ interface Props {
   taxRates: FinanceTaxRate[];
   /** Quick-filter text from the page toolbar. */
   search: string;
+  /** Hands the grid's API up so the page can count and export what is
+   *  actually displayed, rather than filtering a second time itself. */
+  onGridReady?: (api: GridApi<FinanceTransaction>) => void;
+  /** Fires whenever the displayed row count could have changed. */
+  onDisplayedRowsChanged?: (count: number) => void;
 }
 
-export function FinanceGrid({ rows, taxRates, search }: Props) {
+export function FinanceGrid({ rows, taxRates, search, onGridReady, onDisplayedRowsChanged }: Props) {
   const updateTx = useUpdateTransaction();
   const deleteTx = useDeleteTransaction();
   const isDark = useIsDark();
@@ -87,31 +96,76 @@ export function FinanceGrid({ rows, taxRates, search }: Props) {
   );
 
   /**
-   * Only these two columns are editable, and both write through to Postgres on
-   * change. `oldValue` is restored on failure so the cell never shows a value
-   * the database rejected — the grid has already repainted by the time the
-   * request comes back.
+   * The editable columns write straight through to Postgres.
+   *
+   * The grid repaints optimistically the moment the editor closes, long before
+   * the request comes back, so a rejected write left the new value on screen
+   * with nothing stored behind it. Worse for the tax rate, which writes two
+   * fields: a failure could leave a rate NAME visible next to a percentage
+   * that was never saved, which is a number someone files a return on.
+   *
+   * Every edit therefore restores `oldValue` in `onError` and says so.
    */
   const onCellValueChanged = useCallback((e: CellValueChangedEvent<FinanceTransaction>) => {
     const tx = e.data;
     if (!tx) return;
     const field = e.colDef.field;
+    const node = e.node;
+
+    const revert = (label: string) => (err: unknown) => {
+      // setDataValue rather than refreshCells: it puts the old value back in
+      // the row data the grid is reading from, so a later repaint cannot
+      // resurrect the rejected one.
+      node?.setDataValue(field!, e.oldValue);
+      toast.error(`Could not save ${label}`, {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    };
 
     if (field === "accounting_category") {
-      updateTx.mutate({ id: tx.id, accounting_category: e.newValue || null });
+      updateTx.mutate(
+        { id: tx.id, accounting_category: e.newValue || null },
+        { onError: revert("the accounting category") },
+      );
       return;
     }
     if (field === "tax_rate_name") {
       // Store the percentage as it stands today alongside the name, so editing
       // a rate later cannot restate a period that has already been filed.
       const rate = taxRates.find(r => r.name === e.newValue);
-      updateTx.mutate({
-        id: tx.id,
-        tax_rate_name: e.newValue || null,
-        tax_rate_percent: rate ? Number(rate.percent) : null,
-      });
+      const oldPercent = tx.tax_rate_percent;
+      updateTx.mutate(
+        {
+          id: tx.id,
+          tax_rate_name: e.newValue || null,
+          tax_rate_percent: rate ? Number(rate.percent) : null,
+        },
+        {
+          onError: (err) => {
+            // Both fields go back, not just the one that was edited.
+            node?.setDataValue("tax_rate_percent", oldPercent);
+            revert("the tax rate")(err);
+          },
+        },
+      );
     }
   }, [updateTx, taxRates]);
+
+  /** Sign-off. Available on every row, not only the ones a dialog covers. */
+  const toggleReconciled = useCallback(
+    (tx: FinanceTransaction, next: boolean) => {
+      updateTx.mutate(
+        { id: tx.id, is_reconciled: next },
+        {
+          onError: (err) =>
+            toast.error("Could not change the reconciled flag", {
+              description: err instanceof Error ? err.message : String(err),
+            }),
+        },
+      );
+    },
+    [updateTx],
+  );
 
   const columnDefs = useMemo<ColDef<FinanceTransaction>[]>(() => [
     {
@@ -154,8 +208,13 @@ export function FinanceGrid({ rows, taxRates, search }: Props) {
         const v = p.data?.amount_cents ?? 0;
         return p.data?.type === "expense" || p.data?.type === "fee" ? -v : v;
       },
-      cellClass: p => (typeof p.value === "number" && p.value < 0
-        ? "text-rose-600" : "text-emerald-600"),
+      // Transfers between pockets are excluded from the P&L, so colouring one
+      // green reads as income the business never earned. Neutral for those.
+      cellClass: p => {
+        if (p.data?.type === "transfer") return "text-muted-foreground";
+        return typeof p.value === "number" && p.value < 0
+          ? "text-rose-600" : "text-emerald-600";
+      },
     },
     { field: "amount_eur_cents", headerName: "Invoices Paid", width: 130, type: "rightAligned", valueFormatter: money },
     { field: "vat_amount_cents", headerName: "VAT Paid", width: 110, type: "rightAligned", valueFormatter: money },
@@ -185,6 +244,21 @@ export function FinanceGrid({ rows, taxRates, search }: Props) {
     { field: "mailbox", headerName: "Mailbox", width: 150 },
     { field: "notes", headerName: "Notes", width: 200 },
     {
+      field: "is_reconciled", headerName: "Signed off", width: 105, pinned: "right",
+      // The old table had a "mark reconciled" action and the grid dropped it,
+      // which left every non-Gmail row with no way to be signed off at all —
+      // the receipt review dialog only ever covered source = 'gmail'.
+      cellRenderer: (p: ICellRendererParams<FinanceTransaction>) => (
+        <div className="flex h-full items-center justify-center">
+          <Checkbox
+            checked={p.value === true}
+            onCheckedChange={c => p.data && toggleReconciled(p.data, c === true)}
+            aria-label="Reconciled"
+          />
+        </div>
+      ),
+    },
+    {
       headerName: "", width: 60, pinned: "right",
       sortable: false, filter: false, resizable: false,
       cellRenderer: (p: ICellRendererParams<FinanceTransaction>) => (
@@ -198,7 +272,7 @@ export function FinanceGrid({ rows, taxRates, search }: Props) {
         </Button>
       ),
     },
-  ], [taxRateNames]);
+  ], [taxRateNames, toggleReconciled]);
 
   const defaultColDef = useMemo<ColDef>(() => ({
     sortable: true,
@@ -222,6 +296,15 @@ export function FinanceGrid({ rows, taxRates, search }: Props) {
         getRowId={p => p.data.id}
         quickFilterText={search}
         onCellValueChanged={onCellValueChanged}
+        onGridReady={(e: GridReadyEvent<FinanceTransaction>) => {
+          onGridReady?.(e.api);
+          onDisplayedRowsChanged?.(e.api.getDisplayedRowCount());
+        }}
+        // The page used to count its own filtered array while the grid applied
+        // a quick filter across every column on top of it, so the toolbar count
+        // and the visible rows disagreed. The grid is the only filter now, and
+        // it reports what it is showing.
+        onModelUpdated={e => onDisplayedRowsChanged?.(e.api.getDisplayedRowCount())}
         animateRows={false}
         suppressCellFocus={false}
         stopEditingWhenCellsLoseFocus
