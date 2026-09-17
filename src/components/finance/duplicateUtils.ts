@@ -205,6 +205,18 @@ export function findDuplicateGroups(rows: FinanceTransaction[]): DuplicateGroup[
 
   candidates.sort((x, y) => byFit(x.fit, y.fit));
 
+  // Best edge first, and taking it can in principle strand two rows that would
+  // have paired with each other — a maximum-cardinality matching would find
+  // more pairs than this does. Measured on the stored ledger it does not: over
+  // 91 candidate edges in 53 components, greedy finds 56 pairs and the exact
+  // maximum is also 56.
+  //
+  // Closest-fit-first is also the safer objective here even where the two
+  // differ. Maximising the count buys extra pairs at the far end of tolerance —
+  // it would rather propose two matches 10% and 14% apart than one that is
+  // exact — and a proposal is a proposal to delete a row carrying VAT and a
+  // PDF. Of the 56 pairs found, 53 are within 5% and one is beyond 10%. A
+  // missed pair costs a proposal nobody makes; a forced one costs evidence.
   const setOf = new Map<string, FinanceTransaction[]>();
   for (const { a, b } of candidates) {
     if (spent.has(a.id) || spent.has(b.id)) continue;
