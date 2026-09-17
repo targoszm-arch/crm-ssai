@@ -164,7 +164,7 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="relative w-full overflow-x-auto">
+      <div className="scroll-visible relative w-full overflow-x-auto">
         {/* The Table primitive sets w-full, which makes a wide table squeeze its columns
             down to the container instead of overflowing it — so the horizontal scrollbar
             never appears and the right-hand columns get crushed or clipped. min-w-full
