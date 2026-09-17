@@ -47,7 +47,17 @@ function proposeTreatment(f: ReturnType<typeof parseReceiptText>): {
   if (f.vatCents && f.vatCents > 0) {
     if (c === "IE") return { treatment: "standard_23", note: "Irish supplier charging VAT" };
     if (c && EU_COUNTRIES.includes(c)) {
-      return { treatment: "standard_23", note: `${c} supplier charging VAT — check it is Irish VAT before reclaiming` };
+      // Deliberately unclassified. A German supplier charging German VAT is
+      // not Irish input VAT and cannot go in T2 — it is reclaimed, if at all,
+      // through a cross-border refund. Returning standard_23 with a note
+      // saying "check this" was worse than returning nothing, because the
+      // caller applies any treatment the arithmetic confirms and the pack
+      // then counts it. Confidence in the *number* is not permission to
+      // decide the *treatment*.
+      return {
+        treatment: null,
+        note: `${c} supplier charging ${c} VAT — not Irish input VAT; needs a decision`,
+      };
     }
     return { treatment: null, note: "VAT charged by a supplier with no EU VAT number — needs a look" };
   }
@@ -80,7 +90,14 @@ Deno.serve(async (req: Request) => {
     const dryRun: boolean = body.dry_run === true;
     const ids: string[] | null = body.ids ?? null;
 
-    // Candidates: a stored PDF, and nobody has classified the row yet.
+    // Candidates: a row that could actually have a stored PDF, and that
+    // nobody has classified yet.
+    //
+    // Without the source filter this selected every unclassified Revolut,
+    // Stripe and manual row too. None of them has a receipt, each one failed
+    // the download, and nothing recorded the attempt — so once they filled
+    // the first `limit` rows the genuine Gmail receipts behind them were
+    // never reached, however many times it was run.
     let q = sb
       .from("finance_transactions")
       .select("id, source, source_id, notes, currency, vat_treatment, is_reconciled, raw_data")
@@ -88,7 +105,12 @@ Deno.serve(async (req: Request) => {
       .is("vat_treatment", null)
       .eq("is_reconciled", false)
       .limit(limit);
+    // `notes` carries the storage path the harvest wrote, so this is exactly
+    // "has a PDF in the bucket". Receipt-log rows are excluded on purpose:
+    // their PDFs are in Drive, not storage, so including them would re-create
+    // the same clog with a different set of rows.
     if (ids) q = q.in("id", ids);
+    else q = q.eq("source", "gmail").like("notes", "%pdf_path%");
 
     const { data: rows, error } = await q;
     if (error) throw error;

@@ -262,18 +262,36 @@ export function AccountantPack({
             <TableBody>
               {periods.filter(p => p.hasData || p.isPast).map(p => {
                 const filed = p.filed?.status === "submitted";
+                // A filed row shows what was sent to Revenue, not what the
+                // transactions say today. Storing the snapshot and then
+                // rendering the live figure would have defeated the point:
+                // classify one old receipt and a row still marked "Filed"
+                // quietly shows a number nobody ever submitted.
+                const shownOutput = filed ? (p.filed?.filed_output_vat_cents ?? p.outputVat) : p.outputVat;
+                const shownInput = filed ? (p.filed?.filed_input_vat_cents ?? p.inputVat) : p.inputVat;
+                const shownNet = filed ? (p.filed?.filed_net_cents ?? p.net) : p.net;
+                // Drift matters — it is the case for a corrective return.
+                const drift = filed ? p.net - shownNet : 0;
                 return (
                   <TableRow key={p.label} className={cn(p === current && "bg-muted/40")}>
-                    <TableCell className="font-medium whitespace-nowrap">{p.label}</TableCell>
-                    <TableCell className="text-right tabular-nums">{centsToEur(p.outputVat)}</TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">
+                      {p.label}
+                      {filed && <span className="ml-1 text-xs text-muted-foreground">as filed</span>}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{centsToEur(shownOutput)}</TableCell>
                     <TableCell className="text-right tabular-nums text-emerald-600">
-                      -{centsToEur(p.inputVat)}
+                      -{centsToEur(shownInput)}
                     </TableCell>
                     <TableCell className={cn(
                       "text-right font-semibold tabular-nums",
-                      p.net > 0 ? "text-rose-600" : p.net < 0 ? "text-emerald-600" : "",
+                      shownNet > 0 ? "text-rose-600" : shownNet < 0 ? "text-emerald-600" : "",
                     )}>
-                      {centsToEur(p.net)}
+                      {centsToEur(shownNet)}
+                      {drift !== 0 && (
+                        <span className="block text-xs font-normal text-amber-600">
+                          now {centsToEur(p.net)} ({drift > 0 ? "+" : ""}{centsToEur(drift)})
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {filed ? (

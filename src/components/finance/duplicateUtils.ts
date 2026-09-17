@@ -48,10 +48,52 @@ export function isMatchable(tx: DupRow): boolean {
 
 export interface DuplicateGroup {
   key: string;
-  /** Oldest row, treated as the one to keep. */
+  /** The row to keep: the one carrying the most evidence. */
   keep: FinanceTransaction;
-  /** Later rows proposed for removal. */
+  /** The others, proposed for removal. */
   extras: FinanceTransaction[];
+}
+
+/**
+ * What a row carries that a tax return depends on.
+ *
+ * Keeping the oldest row was wrong. The common cross-source pair is a bare
+ * bank line from a statement and, days later, the Gmail receipt for the same
+ * payment — carrying the VAT, the treatment, the PDF and the Gmail link. The
+ * bank line is always the older one, so "keep the oldest" deleted the
+ * document and changed the VAT figure while keeping the emptier row.
+ */
+const EVIDENCE: { field: keyof FinanceTransaction; label: string }[] = [
+  { field: "vat_treatment", label: "VAT treatment" },
+  { field: "vat_eur_cents", label: "VAT amount" },
+  { field: "vat_collected_cents", label: "VAT collected" },
+  { field: "accounting_category", label: "accounting category" },
+  { field: "drive_url", label: "Drive link" },
+  { field: "gmail_url", label: "Gmail link" },
+  { field: "receipt_filename", label: "receipt file" },
+  { field: "counterparty_vat_number", label: "supplier VAT number" },
+  { field: "notes", label: "notes" },
+];
+
+function carries(tx: FinanceTransaction, field: keyof FinanceTransaction): boolean {
+  const v = tx[field];
+  return v !== null && v !== undefined && v !== "" && v !== 0;
+}
+
+export function evidenceScore(tx: FinanceTransaction): number {
+  let n = EVIDENCE.reduce((s, e) => s + (carries(tx, e.field) ? 1 : 0), 0);
+  if (tx.is_reconciled) n += 2;   // someone has signed this row off
+  return n;
+}
+
+/** Fields the candidate has and the row being kept does not. */
+export function evidenceLostIfDeleted(
+  candidate: FinanceTransaction,
+  keep: FinanceTransaction,
+): string[] {
+  return EVIDENCE
+    .filter(e => carries(candidate, e.field) && !carries(keep, e.field))
+    .map(e => e.label);
 }
 
 /** Groups of existing rows that look like the same transaction recorded twice. */
@@ -68,9 +110,10 @@ export function findDuplicateGroups(rows: FinanceTransaction[]): DuplicateGroup[
   const groups: DuplicateGroup[] = [];
   for (const [key, members] of byKey) {
     if (members.length < 2) continue;
-    // Keep the earliest-created row: it is the one that has most likely been
-    // classified or reconciled already.
-    const sorted = [...members].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    // Richest row first, oldest as the tie-break. Never the other way round:
+    // the emptier row is usually the older one.
+    const sorted = [...members].sort((a, b) =>
+      evidenceScore(b) - evidenceScore(a) || a.created_at.localeCompare(b.created_at));
     groups.push({ key, keep: sorted[0], extras: sorted.slice(1) });
   }
 

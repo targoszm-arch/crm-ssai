@@ -19,7 +19,7 @@ import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog"
 import { ImportStatementDialog } from "@/components/finance/ImportStatementDialog";
 import { DuplicateReviewDialog, DuplicateReviewItem } from "@/components/finance/DuplicateReviewDialog";
 import { AccountantPack } from "@/components/finance/AccountantPack";
-import { findDuplicateGroups } from "@/components/finance/duplicateUtils";
+import { findDuplicateGroups, evidenceLostIfDeleted } from "@/components/finance/duplicateUtils";
 import { ReceiptReviewDialog } from "@/components/finance/ReceiptReviewDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -343,7 +343,13 @@ export default function FinancePage() {
   const [dupWorking, setDupWorking] = useState(false);
   const qc = useQueryClient();
 
-  const { data: allTxs = [], isLoading } = useFinanceTransactions({ type: typeFilter, source: sourceFilter });
+  // Unfiltered on purpose. Type and source are a way of looking at the
+  // transactions table, not a statement about which money exists, and a VAT
+  // return computed from a filtered ledger is simply wrong: pick "Expenses"
+  // in the tab below and output VAT silently becomes zero. Worse, "Mark
+  // filed" would then snapshot that as what was sent to Revenue. Both
+  // filters are applied to the table and nowhere else.
+  const { data: allTxs = [], isLoading } = useFinanceTransactions();
   const { data: lastSynced = {} } = useLastSynced();
   const { data: taxRates = [] } = useTaxRates();
   const { data: vatReturns = [] } = useVatReturns();
@@ -359,7 +365,7 @@ export default function FinancePage() {
       .map(([year, count]) => ({ year, count }));
   }, [allTxs]);
 
-  // Everything downstream — metrics, chart, VAT, table — reads this.
+  // The ledger for the selected years: metrics, chart and the filing pack.
   const txs = useMemo(
     () => allTxs.filter(t =>
       selectedYears.size === 0 || selectedYears.has(Number(t.transaction_date.slice(0, 4)))),
@@ -386,7 +392,13 @@ export default function FinancePage() {
         currency: extra.currency,
         type: extra.type,
         note: `From ${extra.source}, added ${extra.created_at.slice(0, 10)}`
-          + (extra.is_reconciled ? " · reconciled" : ""),
+          + (extra.is_reconciled ? " · reconciled" : "")
+          // Deleting is only safe when the row carries nothing the kept row
+          // lacks. When it does, say so — the usual case is a Gmail receipt
+          // holding the VAT and the PDF for a bank line that holds neither.
+          + (evidenceLostIfDeleted(extra, g.keep).length
+            ? ` · deleting loses its ${evidenceLostIfDeleted(extra, g.keep).join(", ")}`
+            : ""),
       },
       matches: [{
         date: g.keep.transaction_date,
@@ -448,12 +460,16 @@ export default function FinancePage() {
     const expenses = txs.filter(t => t.type === "expense");
     const totalIncome = income.reduce((s, t) => s + (t.amount_eur_cents ?? t.amount_cents), 0);
     const totalExpenses = expenses.reduce((s, t) => s + (t.amount_eur_cents ?? t.amount_cents), 0);
+    // Euro, for the same reason the period table uses it: `vat_amount_cents`
+    // is VAT as the receipt states it, so summing it across a USD invoice and
+    // a EUR one adds dollars to euro. These cards sat above a period table
+    // that had already been fixed and quietly disagreed with it.
     const outputVat = income
       .filter(t => t.vat_treatment === "standard_23")
-      .reduce((s, t) => s + (t.vat_amount_cents ?? 0), 0);
+      .reduce((s, t) => s + (t.vat_collected_cents || t.vat_eur_cents || t.vat_amount_cents || 0), 0);
     const inputVat = expenses
       .filter(t => t.vat_treatment === "standard_23" || t.vat_treatment === "reduced_135")
-      .reduce((s, t) => s + (t.vat_amount_cents ?? 0), 0);
+      .reduce((s, t) => s + (t.vat_eur_cents || t.vat_amount_cents || 0), 0);
     const vatDue = outputVat - inputVat;
     const netProfit = totalIncome - totalExpenses;
     return { totalIncome, totalExpenses, vatDue, netProfit, outputVat, inputVat };
@@ -492,6 +508,8 @@ export default function FinancePage() {
   // ── Filtered + searched + sorted rows ────────────────────────────────────
   const filteredTxs = useMemo(() => {
     let rows = txs;
+    if (typeFilter !== "all") rows = rows.filter(t => t.type === typeFilter);
+    if (sourceFilter !== "all") rows = rows.filter(t => t.source === sourceFilter);
     if (categoryFilter !== "all") rows = rows.filter(t => t.accounting_category === categoryFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -516,7 +534,7 @@ export default function FinancePage() {
       return 0;
     });
     return rows;
-  }, [txs, search, categoryFilter, sortField, sortDir]);
+  }, [txs, search, typeFilter, sourceFilter, categoryFilter, sortField, sortDir]);
 
   // ── Grouped rows ──────────────────────────────────────────────────────────
   const groupedRows = useMemo(() => {
