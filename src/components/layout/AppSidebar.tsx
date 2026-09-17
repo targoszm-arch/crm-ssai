@@ -66,7 +66,10 @@ const settingsNavItems = [{
 export function AppSidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
-  return <Sidebar collapsible="icon">
+  // variant="inset": SidebarInset already carries the matching m-2/rounded-xl/
+  // shadow classes, they were simply never switched on. This is what puts a
+  // visible edge around the content instead of letting it run into the chrome.
+  return <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader className="border-b border-sidebar-border h-14 flex items-center px-4">
         <Link to="/" className="flex items-center gap-2 font-semibold">
           <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary shrink-0">
