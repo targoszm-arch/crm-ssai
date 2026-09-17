@@ -1,4 +1,5 @@
 import { useState, useMemo, lazy, Suspense } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -469,13 +470,10 @@ export default function FinancePage() {
           </Button>
         </PageActions>
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Finance & Tax</h1>
-            <p className="text-muted-foreground mt-1">
-              Reconcile income, expenses and VAT for your Irish tax return
-            </p>
-          </div>
+        <PageHeader
+          title="Finance & Tax"
+          description="Reconcile income, expenses and VAT for your Irish tax return"
+        >
           {/* The filter stays on the page: it changes what you are looking at
               rather than doing something, and reads as part of the report. */}
           {/* MultiSelectFilter was already in the codebase, built on Command +
@@ -492,7 +490,7 @@ export default function FinancePage() {
             selectedValues={[...selectedYears].map(String)}
             onChange={vals => setSelectedYears(new Set(vals.map(Number)))}
           />
-        </div>
+        </PageHeader>
 
         {/* Data Sources status bar */}
         <div className="flex flex-wrap items-center gap-2">

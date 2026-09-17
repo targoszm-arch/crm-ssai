@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageActions } from "@/components/layout/PageActions";
 import { StageWikiSheet } from "@/components/deals/StageWikiSheet";
 import PageShell from "@/components/layout/PageShell";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 type ViewMode = "kanban" | "list" | "table" | "forecast";
 
@@ -91,7 +92,7 @@ export default function Deals() {
   return (
     <PageShell variant="fill">
       {/* Header */}
-      <div className="border-b bg-background px-4 md:px-6 py-4">
+      <div className="flex flex-col gap-4">
         <PageActions>
           <Button size="sm" onClick={() => handleAddDeal()} className="gap-2">
             <Plus className="h-4 w-4" />
@@ -99,14 +100,12 @@ export default function Deals() {
           </Button>
         </PageActions>
 
-        <div className="mb-4">
-          <h1 className="text-xl md:text-2xl font-semibold">Deals</h1>
-          <p className="text-sm text-muted-foreground">
-            {totalDeals} deals · {formatValue(totalValue)} total value
-          </p>
-        </div>
+        <PageHeader
+          title="Deals"
+          description={`${totalDeals} deals · ${formatValue(totalValue)} total value`}
+        />
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+        <div className="flex flex-col gap-3 rounded-lg border bg-card px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center">
           {/* Pipeline Selector */}
           <Select
             value={activePipelineId}
