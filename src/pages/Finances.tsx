@@ -32,6 +32,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as ChartToolt
 import { cn } from "@/lib/utils";
 import { PageActions } from "@/components/layout/PageActions";
 import { YearFilter } from "@/components/finance/YearFilter";
+import { DateRangeFilter, DateRange, EMPTY_RANGE, inRange, rangeLabel } from "@/components/finance/DateRangeFilter";
 
 // Kept next to the header so adding a column and forgetting the colSpans is
 // a one-line fix rather than three silently mismatched numbers.
@@ -341,6 +342,10 @@ export default function FinancePage() {
   const [receiptReviewOpen, setReceiptReviewOpen] = useState(false);
   const [dupReviewOpen, setDupReviewOpen] = useState(false);
   const [dupWorking, setDupWorking] = useState(false);
+  // Filters the table only, like type/source/category beside it. The year
+  // filter in the header scopes the report; this answers "show me the rows
+  // between these two dates" while looking at the list.
+  const [dateRange, setDateRange] = useState<DateRange>(EMPTY_RANGE);
   const qc = useQueryClient();
 
   // Unfiltered on purpose. Type and source are a way of looking at the
@@ -508,6 +513,7 @@ export default function FinancePage() {
   // ── Filtered + searched + sorted rows ────────────────────────────────────
   const filteredTxs = useMemo(() => {
     let rows = txs;
+    if (dateRange.from || dateRange.to) rows = rows.filter(t => inRange(t.transaction_date, dateRange));
     if (typeFilter !== "all") rows = rows.filter(t => t.type === typeFilter);
     if (sourceFilter !== "all") rows = rows.filter(t => t.source === sourceFilter);
     if (categoryFilter !== "all") rows = rows.filter(t => t.accounting_category === categoryFilter);
@@ -534,7 +540,7 @@ export default function FinancePage() {
       return 0;
     });
     return rows;
-  }, [txs, search, typeFilter, sourceFilter, categoryFilter, sortField, sortDir]);
+  }, [txs, search, dateRange, typeFilter, sourceFilter, categoryFilter, sortField, sortDir]);
 
   // ── Grouped rows ──────────────────────────────────────────────────────────
   const groupedRows = useMemo(() => {
@@ -817,6 +823,8 @@ export default function FinancePage() {
               />
             </div>
 
+            <DateRangeFilter value={dateRange} onChange={setDateRange} />
+
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="w-32"><SelectValue placeholder="Type" /></SelectTrigger>
               <SelectContent>
@@ -912,8 +920,34 @@ export default function FinancePage() {
                   ) : filteredTxs.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={COLUMN_COUNT} className="h-48 text-muted-foreground">
-                        <div className="sticky left-0 w-[min(100vw,60rem)] text-center">
-                          No transactions found. Sync Stripe, import a statement, or add one manually.
+                        {/* An empty table caused by a filter is not the same
+                            as an empty table, and saying "import a statement"
+                            when 894 rows are simply being hidden sends you to
+                            fix the wrong thing. */}
+                        <div className="sticky left-0 w-[min(100vw,60rem)] space-y-2 text-center">
+                          {txs.length > 0 ? (
+                            <>
+                              <p>
+                                No transactions match these filters
+                                {(dateRange.from || dateRange.to) && <> ({rangeLabel(dateRange)})</>}.
+                              </p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setDateRange(EMPTY_RANGE);
+                                  setTypeFilter("all");
+                                  setSourceFilter("all");
+                                  setCategoryFilter("all");
+                                  setSearch("");
+                                }}
+                              >
+                                Clear filters ({txs.length} rows)
+                              </Button>
+                            </>
+                          ) : (
+                            <p>No transactions found. Sync Stripe, import a statement, or add one manually.</p>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
