@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 
 export interface FinanceTransaction {
@@ -28,7 +29,11 @@ export interface FinanceTransaction {
   vat_amount_cents: number;
   is_reconciled: boolean;
   notes: string | null;
-  raw_data: Record<string, unknown> | null;
+  // Json, not Record<string, unknown>: this column round-trips through
+  // PostgREST, and a Record is not assignable to the generated Json union —
+  // which is what made every insert and update of a transaction fail to
+  // typecheck.
+  raw_data: Json | null;
   created_at: string;
 
   // Receipt-log columns. `subject` is the receipt email's subject and is what
@@ -88,10 +93,23 @@ export function useFinanceTransactions(filters?: {
   });
 }
 
+/**
+ * What an insert actually has to supply.
+ *
+ * `Omit<FinanceTransaction, "id" | "created_at" | "is_reconciled">` required
+ * every other column, including the twenty-odd nullable ones — so the only
+ * caller that inserts a transaction by hand could not typecheck without
+ * naming fields it has no value for. The DB requires exactly these five
+ * (user_id is added below); everything else is nullable.
+ */
+export type NewFinanceTransaction =
+  Pick<FinanceTransaction, "source" | "type" | "amount_cents" | "transaction_date"> &
+  Partial<Omit<FinanceTransaction, "id" | "created_at" | "is_reconciled">>;
+
 export function useAddTransaction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (tx: Omit<FinanceTransaction, "id" | "created_at" | "is_reconciled">) => {
+    mutationFn: async (tx: NewFinanceTransaction) => {
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("finance_transactions")

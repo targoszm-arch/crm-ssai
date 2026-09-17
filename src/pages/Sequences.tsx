@@ -23,6 +23,8 @@ import { SequenceEnrollmentsSheet } from "@/components/sequences/SequenceEnrollm
 import { TemplateListModal } from "@/components/templates/TemplateListModal";
 import { ClickRoutesPanel } from "@/components/sequences/ClickRoutesPanel";
 import { PageActions } from "@/components/layout/PageActions";
+import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 
 const triggerTypeLabels: Record<string, string> = {
   new_customer: "New Customer",
@@ -109,7 +111,7 @@ export default function Sequences() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <PageShell>
       <PageActions>
         <Button
           variant="outline"
@@ -134,12 +136,10 @@ export default function Sequences() {
         </Button>
       </PageActions>
 
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Email Sequences</h1>
-        <p className="text-muted-foreground">
-          Automate your email campaigns with pre-built sequences.
-        </p>
-      </div>
+      <PageHeader
+        title="Email Sequences"
+        description="Automate your email campaigns with pre-built sequences."
+      />
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -368,6 +368,6 @@ export default function Sequences() {
         open={templatesOpen}
         onOpenChange={setTemplatesOpen}
       />
-    </div>
+    </PageShell>
   );
 }

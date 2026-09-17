@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,6 +28,7 @@ import { NewslettersTab } from "@/components/analytics/NewslettersTab";
 import { SequenceListTab } from "@/components/analytics/SequenceListTab";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
+import PageShell from "@/components/layout/PageShell";
 
 function SelectSequencePrompt() {
   return (
@@ -103,14 +105,11 @@ export default function Analytics() {
   ] : [];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight">Sequence Analytics</h1>
-          <p className="text-sm text-muted-foreground">
-            Track engagement and delivery metrics for your email sequences.
-          </p>
-        </div>
+    <PageShell>
+      <PageHeader
+        title="Sequence Analytics"
+        description="Track engagement and delivery metrics for your email sequences."
+      >
         <Select value={selectedSequenceId} onValueChange={showSequence}>
           <SelectTrigger className="w-full sm:w-[280px]">
             <SelectValue placeholder="Select a sequence" />
@@ -123,7 +122,7 @@ export default function Analytics() {
             ))}
           </SelectContent>
         </Select>
-      </div>
+      </PageHeader>
 
       {/* Overview Stats Cards */}
       {!selectedSequenceId && (
@@ -504,6 +503,6 @@ export default function Analytics() {
             )}
           </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

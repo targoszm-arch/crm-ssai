@@ -22,6 +22,7 @@ import {
 import { orderData, Order } from "@/data/mockData";
 import { PageActions } from "@/components/layout/PageActions";
 import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 
 export default function Orders() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -106,7 +107,7 @@ export default function Orders() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <PageShell>
       <PageActions>
         <Button variant="outline" size="sm">
           <Download className="mr-2 h-4 w-4" />
@@ -170,6 +171,6 @@ export default function Orders() {
           </>
         }
       />
-    </div>
+    </PageShell>
   );
 }

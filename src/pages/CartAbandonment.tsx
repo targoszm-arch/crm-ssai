@@ -27,6 +27,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SignupAbandonmentTab } from "@/components/recovery/SignupAbandonmentTab";
 import { RecoveryCampaignsTab } from "@/components/recovery/RecoveryCampaignsTab";
+import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 
 export default function CartAbandonment() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -118,13 +120,11 @@ export default function CartAbandonment() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Recovery Center</h1>
-        <p className="text-muted-foreground">
-          Track and recover abandoned carts and incomplete signups.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Recovery Center"
+        description="Track and recover abandoned carts and incomplete signups."
+      />
 
       <Tabs defaultValue="signups" className="w-full">
         <TabsList className="grid w-full max-w-2xl grid-cols-3">
@@ -215,6 +215,6 @@ export default function CartAbandonment() {
           <RecoveryCampaignsTab />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

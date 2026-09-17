@@ -139,7 +139,11 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
         .eq("is_reconciled", false)
         .order("transaction_date", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      // The generated row type widens every CHECK-constrained column to
+      // `string`; FinanceTransaction narrows them to the unions the CHECK
+      // actually enforces. The database is the authority on the values, so
+      // narrow here rather than widening the type the whole app reads.
+      return (data ?? []) as FinanceTransaction[];
     },
     enabled: open,
   });

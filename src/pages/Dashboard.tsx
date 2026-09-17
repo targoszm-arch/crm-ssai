@@ -12,6 +12,8 @@ import {
   ResponsiveContainer, Cell,
 } from "recharts";
 import { useDashboard } from "@/hooks/useDashboard";
+import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 
 /**
  * Every figure here is read from the CRM at load. Nothing on this page is
@@ -67,13 +69,11 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Your pipeline and activity, live from the CRM.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Dashboard"
+        description="Your pipeline and activity, live from the CRM."
+      />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <MetricCard
@@ -271,6 +271,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }

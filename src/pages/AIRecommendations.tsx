@@ -20,6 +20,8 @@ import { abandonedCartData } from "@/data/mockData";
 import { UpsellSuggestions } from "@/components/ai/UpsellSuggestions";
 import { AbandonedCartReminders } from "@/components/ai/AbandonedCartReminders";
 import { SalesPerformanceReport } from "@/components/ai/SalesPerformanceReport";
+import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 
 export default function AIRecommendations() {
   const { toast } = useToast();
@@ -45,13 +47,11 @@ export default function AIRecommendations() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">AI Recommendations</h1>
-        <p className="text-muted-foreground">
-          Leverage AI to improve sales, reduce cart abandonment, and gain insights.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="AI Recommendations"
+        description="Leverage AI to improve sales, reduce cart abandonment, and gain insights."
+      />
 
       <Card>
         <CardHeader className="pb-3">
@@ -119,6 +119,6 @@ export default function AIRecommendations() {
           <SalesPerformanceReport apiKey={openAIKey} />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

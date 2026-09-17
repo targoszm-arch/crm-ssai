@@ -1,4 +1,6 @@
 import { Copy, Check, Webhook, Key, FileJson } from "lucide-react";
+import PageShell from "@/components/layout/PageShell";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,11 +58,11 @@ export default function Settings() {
   );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">Manage integrations and webhook configuration.</p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Settings"
+        description="Manage integrations and webhook configuration."
+      />
 
       {/* Webhook Configuration */}
       <Card>
@@ -149,6 +151,6 @@ export default function Settings() {
       </Card>
 
       <FinanceSettings />
-    </div>);
+    </PageShell>);
 
 }

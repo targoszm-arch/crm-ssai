@@ -24,6 +24,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageActions } from "@/components/layout/PageActions";
 import { StageWikiSheet } from "@/components/deals/StageWikiSheet";
+import PageShell from "@/components/layout/PageShell";
 
 type ViewMode = "kanban" | "list" | "table" | "forecast";
 
@@ -88,7 +89,7 @@ export default function Deals() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <PageShell variant="fill">
       {/* Header */}
       <div className="border-b bg-background px-4 md:px-6 py-4">
         <PageActions>
@@ -360,6 +361,6 @@ export default function Deals() {
           )}
         </SheetContent>
       </Sheet>
-    </div>
+    </PageShell>
   );
 }

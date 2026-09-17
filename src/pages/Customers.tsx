@@ -11,6 +11,8 @@ import { ExternalLMSLeadsTab } from "@/components/customers/ExternalLMSLeadsTab"
 import { ImportDataButton } from "@/components/customers/ImportDataButton";
 import { AddContactModal } from "@/components/customers/AddContactModal";
 import { PageActions } from "@/components/layout/PageActions";
+import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 
 const VALID_TABS = ["customers", "organisations", "lms-leads"];
 
@@ -21,7 +23,7 @@ export default function Customers() {
   const activeTab = tabParam && VALID_TABS.includes(tabParam) ? tabParam : "organisations";
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <PageShell>
       <PageActions>
         <ImportDataButton />
         <Button size="sm" onClick={() => setAddContactOpen(true)}>
@@ -30,12 +32,10 @@ export default function Customers() {
         </Button>
       </PageActions>
 
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
-        <p className="text-muted-foreground">
-          Manage and view all your customers and organisations.
-        </p>
-      </div>
+      <PageHeader
+        title="Customers"
+        description="Manage and view all your customers and organisations."
+      />
 
       <Card>
         <CardContent className="p-6">
@@ -90,6 +90,6 @@ export default function Customers() {
         open={addContactOpen}
         onOpenChange={setAddContactOpen}
       />
-    </div>
+    </PageShell>
   );
 }

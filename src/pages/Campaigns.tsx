@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CampaignDetailSheet } from "@/components/campaigns/CampaignDetailSheet";
 import { PageActions } from "@/components/layout/PageActions";
 import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 
 export default function Campaigns() {
   const navigate = useNavigate();
@@ -153,7 +154,7 @@ export default function Campaigns() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <PageShell>
       <PageActions>
         <Button
           variant="outline"
@@ -236,6 +237,6 @@ export default function Campaigns() {
         open={!!selectedCampaign}
         onOpenChange={(open) => !open && setSelectedCampaign(null)}
       />
-    </div>
+    </PageShell>
   );
 }

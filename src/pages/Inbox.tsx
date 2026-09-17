@@ -38,6 +38,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { PageActions } from "@/components/layout/PageActions";
+import PageShell from "@/components/layout/PageShell";
 
 type InboxTab = "email" | "linkedin";
 // How stale the mailbox has to be before opening the Inbox starts a background sync.
@@ -205,7 +206,7 @@ export default function Inbox() {
   const showConnectPrompt = activeTab === "email" && !hasConnectedAccount;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-background">
+    <PageShell variant="fill">
       <PageActions>
         {activeTab === "linkedin" && (
           <Button
@@ -470,6 +471,6 @@ export default function Inbox() {
         initialTemplate={composeTemplate}
       />
       <SignatureSettings open={signatureOpen} onOpenChange={setSignatureOpen} />
-    </div>
+    </PageShell>
   );
 }
