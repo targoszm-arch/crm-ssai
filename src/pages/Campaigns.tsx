@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { SectionHeader } from "@/components/ui/section-header";
 import { DataTable } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageSquare, Mail, Plus, Search, MoreHorizontal, RefreshCw, Linkedin, Users, ExternalLink } from "lucide-react";
@@ -20,6 +19,7 @@ import { useCampaigns, useSyncCampaigns, Campaign } from "@/hooks/useCampaigns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CampaignDetailSheet } from "@/components/campaigns/CampaignDetailSheet";
 import { PageActions } from "@/components/layout/PageActions";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export default function Campaigns() {
   const navigate = useNavigate();
@@ -170,12 +170,10 @@ export default function Campaigns() {
         </Button>
       </PageActions>
 
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Marketing Campaigns</h1>
-        <p className="text-muted-foreground">
-          View and manage your Meet Alfred LinkedIn campaigns.
-        </p>
-      </div>
+      <PageHeader
+        title="Marketing Campaigns"
+        description="View and manage your Meet Alfred LinkedIn campaigns."
+      />
 
       <Tabs defaultValue="all" className="w-full" onValueChange={setStatusFilter}>
         <TabsList className="grid w-full max-w-md grid-cols-4">
@@ -185,31 +183,7 @@ export default function Campaigns() {
           <TabsTrigger value="archived">Archived</TabsTrigger>
         </TabsList>
         
-        <TabsContent value={statusFilter} className="space-y-6 mt-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="relative w-full sm:w-auto flex-1 max-w-sm">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    placeholder="Press Enter to search..."
-                    className="pl-8 w-full"
-                    value={localSearch}
-                    onChange={(e) => setLocalSearch(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && setSearchQuery(localSearch)}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <SectionHeader
-            title="Campaign List"
-            description={`Showing ${filteredCampaigns.length} campaigns`}
-            className="mt-8 mb-4"
-          />
-
+        <TabsContent value={statusFilter} className="mt-6">
           {isLoading ? (
             <Card>
               <CardContent className="p-6 space-y-4">
@@ -239,6 +213,19 @@ export default function Campaigns() {
               columns={campaignColumns}
               data={filteredCampaigns}
               emptyMessage="No campaigns found"
+              toolbar={
+                <div className="relative w-full sm:max-w-sm">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Press Enter to search..."
+                    className="w-full pl-8"
+                    value={localSearch}
+                    onChange={(e) => setLocalSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && setSearchQuery(localSearch)}
+                  />
+                </div>
+              }
             />
           )}
         </TabsContent>
