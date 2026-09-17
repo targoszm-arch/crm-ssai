@@ -1,4 +1,5 @@
 import { useState, useMemo, lazy, Suspense } from "react";
+import PageShell from "@/components/layout/PageShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -442,7 +443,7 @@ export default function FinancePage() {
     // thing that does. That is also what lets the header stick: a sticky thead
     // pins against its NEAREST scrollport, so with two of them it pinned to the
     // inner one and appeared not to work at all.
-    <div className="flex h-full min-h-0 w-full flex-col gap-6">
+    <PageShell variant="fill">
       {/* Header */}
       <div className="flex shrink-0 flex-col gap-4">
         <PageActions>
@@ -752,6 +753,6 @@ export default function FinancePage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
