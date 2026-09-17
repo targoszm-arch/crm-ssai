@@ -33,8 +33,19 @@ export default function AppShell({ children }: AppShellProps) {
         <AppSidebar />
         <SidebarInset className="h-svh min-h-svh overflow-hidden">
           <Header />
-          <main className="flex min-h-0 flex-1 flex-col overflow-auto">
-            <div className="flex min-h-0 w-full flex-1 flex-col p-4">
+          <main className="@container/main flex min-h-0 flex-1 flex-col overflow-auto">
+            {/* Rhythm, not decoration.
+                - py-4 md:py-6 vertically, px-4 lg:px-6 horizontally: the same
+                  scale the header already uses, so content lines up with the
+                  title above it instead of sitting on its own grid.
+                - gap-4 md:gap-6 so a page never has to invent its own spacing
+                  between sections; pages that set their own gap still win.
+                - @container/main names this box so children can size against
+                  the CONTENT width. With a collapsible sidebar that is 240px
+                  different from the viewport, which is why `lg:grid-cols-4`
+                  reflows at the wrong moment and `@5xl/main:grid-cols-4`
+                  does not. */}
+            <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-4 py-4 md:gap-6 md:py-6 lg:px-6">
               {children}
             </div>
           </main>

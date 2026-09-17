@@ -104,8 +104,27 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
     : email.to_emails?.[0];
 
   const handleSendReply = () => {
-    if (!account || !replyBody.trim()) return;
-    if (!replyTo) return;
+    // These were three silent returns. The Send button is only disabled on an
+    // empty body, so with no connected mailbox — or an email with no address
+    // to reply to — the button looked live and clicking it did nothing at all,
+    // no toast, no error, nothing in the log. Say why instead.
+    if (!account) {
+      toast({
+        title: "No mailbox connected",
+        description: "Connect a Google account in Settings before sending.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!replyTo) {
+      toast({
+        title: "Nowhere to reply to",
+        description: "This message carries no sender or recipient address.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!replyBody.trim()) return;
 
     // Format reply with quoted original message and signature
     const formattedBody = formatReplyHtml(replyBody, email, signature?.signature_html);
@@ -258,8 +277,14 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
         onSuccess={handleContactCreated}
       />
 
-      {/* Reply Section - FIXED AT TOP, directly under Link to Contact */}
-      <div className="flex-shrink-0 border-b bg-muted/30 p-4">
+      {/* Reply composer and the message it replies to share ONE scroller.
+          They used to be two: the composer was flex-shrink-0 above a
+          `flex-1 overflow-auto` body, and the editor inside the composer has
+          an overflow-auto of its own — three nested scrollports inside a
+          fill-height page, so which one moved depended on where the pointer
+          happened to be. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+      <div className="shrink-0 border-b bg-muted/30 p-4">
         {isReplying ? (
           <div className="space-y-3">
             {/* Reply header */}
@@ -326,6 +351,13 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
                   size="sm"
                   onClick={handleSendReply}
                   disabled={!replyBody.trim() || sendEmail.isPending}
+                  title={
+                    !account
+                      ? "No mailbox connected — connect one in Settings"
+                      : !replyTo
+                        ? "This message has no address to reply to"
+                        : undefined
+                  }
                 >
                   <Send className="h-4 w-4 mr-1" />
                   {sendEmail.isPending ? "Sending..." : "Send"}
@@ -341,8 +373,8 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
         )}
       </div>
 
-      {/* Email Body - scrollable section at bottom */}
-      <div className="flex-1 min-h-0 overflow-auto p-4">
+      {/* Email Body — scrolls with the composer above it, not against it. */}
+      <div className="p-4">
         <div className="prose prose-sm max-w-none dark:prose-invert">
           {email.body_html ? (
             <div 
@@ -353,6 +385,7 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
             <p className="whitespace-pre-wrap">{email.snippet}</p>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

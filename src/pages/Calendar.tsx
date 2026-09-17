@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -11,6 +12,7 @@ import { CreateEventModal } from "@/components/calendar/CreateEventModal";
 import { EventCard } from "@/components/calendar/EventCard";
 import { toast } from "@/hooks/use-toast";
 import { PageActions } from "@/components/layout/PageActions";
+import PageShell from "@/components/layout/PageShell";
 
 export default function Calendar() {
   const { data: accounts, isLoading: accountsLoading } = useEmailAccounts();
@@ -95,7 +97,7 @@ export default function Calendar() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <PageShell variant="fill">
       {/* Header */}
       <PageActions>
         <Button
@@ -117,12 +119,10 @@ export default function Calendar() {
         </Button>
       </PageActions>
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Calendar</h1>
-        <p className="text-muted-foreground text-sm">
-          Connected: {connectedAccount.email_address}
-        </p>
-      </div>
+      <PageHeader
+        title="Calendar"
+        description={`Connected: ${connectedAccount.email_address}`}
+      />
 
       {/* Calendar */}
       <div className="flex-1 min-h-0">
@@ -181,6 +181,6 @@ export default function Calendar() {
           )}
         </SheetContent>
       </Sheet>
-    </div>
+    </PageShell>
   );
 }

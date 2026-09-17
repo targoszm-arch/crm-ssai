@@ -145,5 +145,9 @@ export default {
     		}
     	}
     },
-	plugins: [require("tailwindcss-animate")],
+	// container-queries: the layout responds to the CONTENT area's width, not the
+	// viewport's. With a collapsible sidebar those differ by 240px, so viewport
+	// breakpoints reflow the cards at the wrong moment — collapsing the sidebar
+	// gives a page 240px more room and nothing notices.
+	plugins: [require("tailwindcss-animate"), require("@tailwindcss/container-queries")],
 } satisfies Config;

@@ -2500,6 +2500,7 @@ export type Database = {
           pipeline_id: string | null
           position: number
           user_id: string | null
+          wiki_content: string | null
         }
         Insert: {
           color?: string | null
@@ -2511,6 +2512,7 @@ export type Database = {
           pipeline_id?: string | null
           position: number
           user_id?: string | null
+          wiki_content?: string | null
         }
         Update: {
           color?: string | null
@@ -2522,6 +2524,7 @@ export type Database = {
           pipeline_id?: string | null
           position?: number
           user_id?: string | null
+          wiki_content?: string | null
         }
         Relationships: [
           {
@@ -2924,6 +2927,8 @@ export type Database = {
           id: string
           link_url: string | null
           opened_at: string | null
+          replied_at: string | null
+          replied_email_id: string | null
           resend_message_id: string | null
           sent_at: string | null
           spam_reported_at: string | null
@@ -2948,6 +2953,8 @@ export type Database = {
           id?: string
           link_url?: string | null
           opened_at?: string | null
+          replied_at?: string | null
+          replied_email_id?: string | null
           resend_message_id?: string | null
           sent_at?: string | null
           spam_reported_at?: string | null
@@ -2972,6 +2979,8 @@ export type Database = {
           id?: string
           link_url?: string | null
           opened_at?: string | null
+          replied_at?: string | null
+          replied_email_id?: string | null
           resend_message_id?: string | null
           sent_at?: string | null
           spam_reported_at?: string | null
@@ -2991,6 +3000,13 @@ export type Database = {
             columns: ["enrollment_id"]
             isOneToOne: false
             referencedRelation: "sequence_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sequence_emails_replied_email_id_fkey"
+            columns: ["replied_email_id"]
+            isOneToOne: false
+            referencedRelation: "emails"
             referencedColumns: ["id"]
           },
         ]
@@ -3595,6 +3611,8 @@ export type Database = {
         Returns: undefined
       }
       link_newsletter_recipients_to_contacts: { Args: never; Returns: number }
+      match_sequence_replies: { Args: never; Returns: number }
+      normalise_email_subject: { Args: { subject: string }; Returns: string }
       peak_focus_connect: { Args: { p_password: string }; Returns: string }
       peak_focus_create_task: {
         Args: {
@@ -3783,4 +3801,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-"}

@@ -162,3 +162,48 @@
     @apply text-muted-foreground;
   }
 }
+/* Scrollbars you can actually hit.
+ *
+ * A table with twenty columns is navigated horizontally, so its scrollbar is
+ * a primary control — but macOS renders overlay scrollbars about 5px wide and
+ * fades them out when idle, which makes dragging one a game of precision. On
+ * a trackpad you never notice; with a mouse it is the difference between
+ * scrolling the table and not being able to.
+ *
+ * Applied to scroll containers that opt in, not globally: the page scroller
+ * and the sidebar are fine with the platform default, and overriding those
+ * makes the whole app look like a 2009 web page.
+ */
+@layer components {
+  .scroll-visible {
+    /* Firefox */
+    scrollbar-width: auto;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.45) transparent;
+  }
+
+  .scroll-visible::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  .scroll-visible::-webkit-scrollbar-track {
+    background: hsl(var(--muted) / 0.4);
+  }
+
+  .scroll-visible::-webkit-scrollbar-thumb {
+    /* border + background-clip is what gives the thumb its inset: a plain
+       border-radius on a 12px thumb reads as a fat bar, this reads as a grip. */
+    background-color: hsl(var(--muted-foreground) / 0.45);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+  }
+
+  .scroll-visible::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.7);
+  }
+
+  .scroll-visible::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}

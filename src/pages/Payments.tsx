@@ -18,6 +18,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 
 const Payments = () => {
   const [showAddPaymentMethod, setShowAddPaymentMethod] = useState(false);
@@ -161,13 +163,11 @@ const Payments = () => {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Payments</h1>
-        <p className="text-muted-foreground">
-          Manage your payment methods, view transactions, and handle refunds.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Payments"
+        description="Manage your payment methods, view transactions, and handle refunds."
+      />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -422,7 +422,7 @@ const Payments = () => {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 };
 

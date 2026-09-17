@@ -13,14 +13,19 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { PageActionsSlot } from "./PageActions";
+import { PageActionsSlot, PageTitleSlot } from "./PageActions";
 
 export default function Header() {
   const [showSearch, setShowSearch] = useState(false);
 
   return (
-    <header className="flex min-h-14 flex-wrap items-center gap-4 border-b bg-background px-4 py-2 lg:px-6">
+    <header className="sticky top-0 z-20 flex min-h-14 flex-wrap items-center gap-4 border-b bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
       <SidebarTrigger className="-ml-1" />
+
+      {/* The current page's name, in the fixed chrome. It used to be a 60px
+          h1 at the top of the scroll area, so it told you where you were and
+          then scrolled away the moment a long list made you forget. */}
+      <PageTitleSlot className="flex min-w-0 items-baseline gap-2" />
 
       <div className={cn("transition-all duration-200 flex items-center", showSearch ? "w-full md:w-auto" : "w-auto")}>
         {showSearch ? (

@@ -1,16 +1,18 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, lazy, Suspense } from "react";
+import type { GridApi } from "ag-grid-community";
+import PageShell from "@/components/layout/PageShell";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, RefreshCw, Download,
   Receipt, Percent, DollarSign, Info, Check, Trash2, Search,
-  ChevronUp, ChevronDown, ChevronsUpDown, Layers, CreditCard, Mail, Building2, Copy
+  CreditCard, Mail, Building2, Copy, ChevronUp, ChevronDown
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +20,11 @@ import { useFinanceTransactions, useDeleteTransaction, useUpdateTransaction, use
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { ImportStatementDialog } from "@/components/finance/ImportStatementDialog";
 import { DuplicateReviewDialog, DuplicateReviewItem } from "@/components/finance/DuplicateReviewDialog";
+// Lazily loaded: AG Grid is ~800KB raw, and eagerly importing it put it in
+// the main bundle, so every page — the login screen included — paid for a grid
+// only Finances renders. Split out, it arrives when this tab does.
+const FinanceGrid = lazy(() =>
+  import("@/components/finance/FinanceGrid").then(m => ({ default: m.FinanceGrid })));
 import { ReconcilePanel } from "@/components/finance/ReconcilePanel";
 import { AccountantPack } from "@/components/finance/AccountantPack";
 import { findDuplicateGroups, evidenceLostIfDeleted } from "@/components/finance/duplicateUtils";
@@ -85,34 +92,8 @@ function MetricCard({
 }
 
 // ── VAT summary row ────────────────────────────────────────────────────────
-type SortField = "date" | "amount" | "customer" | "category" | "type";
-type SortDir = "asc" | "desc";
-type GroupBy = "none" | "category" | "type" | "customer" | "month";
 
 // ── Sortable column header ─────────────────────────────────────────────────
-function SortHead({
-  field, label, sortField, sortDir, onSort, className,
-}: {
-  field: SortField; label: string; sortField: SortField; sortDir: SortDir;
-  onSort: (f: SortField) => void; className?: string;
-}) {
-  const active = sortField === field;
-  return (
-    <TableHead
-      className={cn("cursor-pointer select-none whitespace-nowrap", className)}
-      onClick={() => onSort(field)}
-    >
-      <span className="flex items-center gap-1">
-        {label}
-        {active ? (
-          sortDir === "asc" ? <ChevronUp className="h-3.5 w-3.5 text-primary" /> : <ChevronDown className="h-3.5 w-3.5 text-primary" />
-        ) : (
-          <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground/50" />
-        )}
-      </span>
-    </TableHead>
-  );
-}
 
 // ── Last-sync formatter ────────────────────────────────────────────────────
 function formatLastSync(isoString: string | undefined): string {
@@ -161,199 +142,6 @@ function SourceChip({
 }
 
 // ── Transaction row ────────────────────────────────────────────────────────
-function TxRow({ tx, updateTx, deleteTx, taxRates }: {
-  tx: FinanceTransaction;
-  updateTx: ReturnType<typeof useUpdateTransaction>;
-  deleteTx: ReturnType<typeof useDeleteTransaction>;
-  taxRates: FinanceTaxRate[];
-}) {
-  const statement = tx.accounting_category
-    ? ACCOUNTING_CATEGORY_STATEMENT[tx.accounting_category]
-    : undefined;
-
-  // Picking a rate stores the name *and* the percentage as it stands today.
-  const setTaxRate = (name: string) => {
-    const rate = taxRates.find(r => r.name === name);
-    updateTx.mutate({
-      id: tx.id,
-      tax_rate_name: name,
-      tax_rate_percent: rate ? Number(rate.percent) : null,
-    });
-  };
-
-  const money = (cents: number | null | undefined, dash = true) =>
-    cents == null || (cents === 0 && dash) ? "—" : centsToEur(cents);
-
-  return (
-    <TableRow>
-      <TableCell className="text-sm font-medium whitespace-nowrap">{tx.transaction_date}</TableCell>
-
-      <TableCell className="max-w-[160px]">
-        <span className="text-sm truncate block">{tx.counterparty_name ?? "—"}</span>
-        {tx.counterparty_country && (
-          <span className="text-xs text-muted-foreground">{tx.counterparty_country}</span>
-        )}
-      </TableCell>
-
-      <TableCell className="max-w-[260px]">
-        <span className="text-sm truncate block" title={tx.subject ?? tx.description ?? ""}>
-          {tx.subject ?? tx.description ?? "—"}
-        </span>
-      </TableCell>
-
-      {/* Accounting category — fixed chart of accounts, so a Select, not an input. */}
-      <TableCell>
-        <Select
-          value={tx.accounting_category ?? ""}
-          onValueChange={v => updateTx.mutate({ id: tx.id, accounting_category: v })}
-        >
-          <SelectTrigger className="h-8 w-[190px] text-xs">
-            <SelectValue placeholder="Unposted" />
-          </SelectTrigger>
-          <SelectContent className="max-h-80">
-            {ACCOUNTING_CATEGORIES.map(g => (
-              <SelectGroup key={g.group}>
-                <SelectLabel className="text-xs">{g.group}</SelectLabel>
-                {g.options.map(o => (
-                  <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-                ))}
-              </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
-        {statement && (
-          <Badge variant="secondary" className={cn("mt-1 text-[10px]", STATEMENT_COLORS[statement])}>
-            {statement === "pl" ? "P&L" : statement === "cogs" ? "COGS" : statement}
-          </Badge>
-        )}
-      </TableCell>
-
-      {/* Tax rate — name is chosen here, the percentage is edited in Settings. */}
-      <TableCell>
-        <Select value={tx.tax_rate_name ?? ""} onValueChange={setTaxRate}>
-          <SelectTrigger className="h-8 w-[170px] text-xs">
-            <SelectValue placeholder="No rate" />
-          </SelectTrigger>
-          <SelectContent>
-            {taxRates.map(r => (
-              <SelectItem key={r.id} value={r.name} className="text-xs">
-                {r.name} ({Number(r.percent)}%)
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {tx.tax_rate_name && (
-          <span className="mt-1 block text-[10px] text-muted-foreground">
-            posted at {Number(tx.tax_rate_percent ?? 0)}%
-          </span>
-        )}
-      </TableCell>
-
-      <TableCell className={cn("text-right text-sm font-semibold whitespace-nowrap", TYPE_COLORS[tx.type])}>
-        {tx.type === "expense" || tx.type === "fee" ? "-" : ""}{money(tx.amount_cents)}
-      </TableCell>
-      <TableCell className="text-right text-sm whitespace-nowrap">{money(tx.amount_eur_cents)}</TableCell>
-      <TableCell className="text-right text-sm whitespace-nowrap">{money(tx.vat_amount_cents)}</TableCell>
-      <TableCell className="text-right text-sm whitespace-nowrap">{money(tx.vat_eur_cents)}</TableCell>
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{tx.currency}</TableCell>
-      <TableCell className="text-right text-sm whitespace-nowrap text-emerald-700">
-        {money(tx.vat_collected_cents)}
-      </TableCell>
-
-      <TableCell>
-        <span className={cn("text-sm font-medium capitalize", TYPE_COLORS[tx.type])}>{tx.type}</span>
-      </TableCell>
-      <TableCell>
-        <Badge variant="secondary" className={cn("capitalize text-xs", SOURCE_COLORS[tx.source])}>
-          {tx.source === "receipt_log" ? "receipt log" : tx.source}
-        </Badge>
-      </TableCell>
-
-      <TableCell className="max-w-[180px]">
-        <span className="text-xs truncate block" title={tx.receipt_filename ?? ""}>
-          {tx.receipt_filename ?? "—"}
-        </span>
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{tx.receipt_size ?? "—"}</TableCell>
-
-      {/* The two links are the whole point of the log: reconciling a row means
-          opening the document, so they are one click from the row. */}
-      <TableCell>
-        {tx.drive_url ? (
-          <a href={tx.drive_url} target="_blank" rel="noreferrer"
-             className="text-xs text-primary hover:underline whitespace-nowrap">Drive ↗</a>
-        ) : <span className="text-muted-foreground text-xs">—</span>}
-      </TableCell>
-      <TableCell>
-        {tx.gmail_url ? (
-          <a href={tx.gmail_url} target="_blank" rel="noreferrer"
-             className="text-xs text-primary hover:underline whitespace-nowrap">Gmail ↗</a>
-        ) : <span className="text-muted-foreground text-xs">—</span>}
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{tx.mailbox ?? "—"}</TableCell>
-
-      <TableCell className="max-w-[200px]">
-        <span className="text-xs text-muted-foreground truncate block" title={tx.notes ?? ""}>
-          {tx.notes ?? "—"}
-        </span>
-      </TableCell>
-
-      <TableCell>
-        <div className="flex items-center gap-1">
-          {!tx.is_reconciled ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7"
-                  onClick={() => updateTx.mutate({ id: tx.id, is_reconciled: true })}>
-                  <Check className="h-3.5 w-3.5 text-emerald-600" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Mark reconciled</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 text-xs">Reconciled</Badge>
-          )}
-          {/* AlertDialog, like every other destructive action in this app.
-              A native confirm() is a different dialog from a different era,
-              it cannot say what is being deleted, and some browsers suppress
-              it outright — which would delete the row with no prompt at all. */}
-          <AlertDialog>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </AlertDialogTrigger>
-              </TooltipTrigger>
-              <TooltipContent>Delete</TooltipContent>
-            </Tooltip>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this transaction?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {tx.transaction_date} · {tx.counterparty_name ?? tx.description ?? "—"} ·{" "}
-                  {centsToEur(tx.amount_eur_cents ?? tx.amount_cents)}.
-                  This cannot be undone, and if the row came from a sync it will
-                  reappear on the next run.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => deleteTx.mutate(tx.id)}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-}
 
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function FinancePage() {
@@ -365,9 +153,6 @@ export default function FinancePage() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [groupBy, setGroupBy] = useState<GroupBy>("none");
-  const [sortField, setSortField] = useState<SortField>("date");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [syncing, setSyncing] = useState(false);
   const [syncingGmail, setSyncingGmail] = useState(false);
   const [syncingRevolut, setSyncingRevolut] = useState(false);
@@ -486,11 +271,6 @@ export default function FinancePage() {
     },
   });
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortField(field); setSortDir("asc"); }
-  };
-
   // ── Summary metrics ────────────────────────────────────────────────────
   const metrics = useMemo(() => {
     const income = txs.filter(t => t.type === "income");
@@ -542,59 +322,44 @@ export default function FinancePage() {
     return buckets;
   }, [txs, selectedYears, availableYears]);
 
-  // ── Filtered + searched + sorted rows ────────────────────────────────────
+  // The grid hands its API up so the row count and the CSV reflect what is
+  // actually on screen — the same rows, in the same order.
+  // The summary — four metric cards and a 240px chart — is ~330px of fixed
+  // height sitting directly above a 1,000-row ledger on a fill-height page.
+  // Everything above the grid is shrink-0, so that 330px comes straight out
+  // of the grid, which is the thing you actually work in. Collapsed by
+  // default; the choice is remembered.
+  const [summaryOpen, setSummaryOpen] = useState(() => {
+    try { return localStorage.getItem("finance.summaryOpen") === "1"; } catch { return false; }
+  });
+  const toggleSummary = () => {
+    setSummaryOpen(v => {
+      try { localStorage.setItem("finance.summaryOpen", v ? "0" : "1"); } catch { /* private mode */ }
+      return !v;
+    });
+  };
+
+  const gridApiRef = useRef<GridApi<FinanceTransaction> | null>(null);
+  const [displayedCount, setDisplayedCount] = useState<number | null>(null);
+
+  // ── Filtered rows handed to the grid ─────────────────────────────────────
   const filteredTxs = useMemo(() => {
     let rows = txs;
     if (dateRange.from || dateRange.to) rows = rows.filter(t => inRange(t.transaction_date, dateRange));
     if (typeFilter !== "all") rows = rows.filter(t => t.type === typeFilter);
     if (sourceFilter !== "all") rows = rows.filter(t => t.source === sourceFilter);
     if (categoryFilter !== "all") rows = rows.filter(t => t.accounting_category === categoryFilter);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      rows = rows.filter(t =>
-        (t.description ?? "").toLowerCase().includes(q) ||
-        (t.counterparty_name ?? "").toLowerCase().includes(q) ||
-        (t.counterparty_email ?? "").toLowerCase().includes(q)
-      );
-    }
-    // sort
-    rows = [...rows].sort((a, b) => {
-      let av: string | number, bv: string | number;
-      switch (sortField) {
-        case "date":     av = a.transaction_date; bv = b.transaction_date; break;
-        case "amount":   av = a.amount_eur_cents ?? a.amount_cents; bv = b.amount_eur_cents ?? b.amount_cents; break;
-        case "customer": av = (a.counterparty_name ?? "").toLowerCase(); bv = (b.counterparty_name ?? "").toLowerCase(); break;
-        case "category": av = (a.accounting_category ?? "").toLowerCase(); bv = (b.accounting_category ?? "").toLowerCase(); break;
-        case "type":     av = a.type; bv = b.type; break;
-      }
-      if (av < bv) return sortDir === "asc" ? -1 : 1;
-      if (av > bv) return sortDir === "asc" ? 1 : -1;
-      return 0;
-    });
+    // Search is NOT applied here. It used to be — over description, counterparty
+    // name and email — while the grid ALSO applied it as a quick filter across
+    // every column, so two different predicates ran in series: the toolbar
+    // counted this array and the grid displayed a subset of it, and the two
+    // numbers disagreed. The grid's filter is the wider of the two and it is
+    // the one that decides what you can see, so it is the only one now.
+    //
+    // No sort here either. The grid owns sorting, on every column rather than
+    // the five the old switch handled, and sorting in both places would fight.
     return rows;
-  }, [txs, search, dateRange, typeFilter, sourceFilter, categoryFilter, sortField, sortDir]);
-
-  // ── Grouped rows ──────────────────────────────────────────────────────────
-  const groupedRows = useMemo(() => {
-    if (groupBy === "none") return null;
-    const getKey = (t: FinanceTransaction) => {
-      switch (groupBy) {
-        case "category": return t.accounting_category
-          ? (ACCOUNTING_CATEGORY_LABELS[t.accounting_category] ?? t.accounting_category)
-          : "Unposted";
-        case "type":     return t.type.charAt(0).toUpperCase() + t.type.slice(1);
-        case "customer": return t.counterparty_name ?? "Unknown";
-        case "month":    return t.transaction_date.slice(0, 7); // YYYY-MM
-      }
-    };
-    const map = new Map<string, FinanceTransaction[]>();
-    for (const t of filteredTxs) {
-      const k = getKey(t)!;
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(t);
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredTxs, groupBy]);
+  }, [txs, dateRange, typeFilter, sourceFilter, categoryFilter]);
 
   // ── Stripe sync ────────────────────────────────────────────────────────
   const handleStripeSync = async () => {
@@ -659,7 +424,16 @@ export default function FinancePage() {
 
   // ── CSV export ─────────────────────────────────────────────────────────
   const handleExport = () => {
-    const rows = filteredTxs.map(t => ({
+    // Walk the grid's displayed nodes rather than `filteredTxs`: the grid owns
+    // sorting and the quick filter, so the array the page holds is neither in
+    // the order on screen nor the same set of rows. Exporting it produced a
+    // file that did not match what the person was looking at.
+    const api = gridApiRef.current;
+    const source: FinanceTransaction[] = [];
+    if (api) {
+      api.forEachNodeAfterFilterAndSort(n => { if (n.data) source.push(n.data); });
+    }
+    const rows = (source.length ? source : filteredTxs).map(t => ({
       Date: t.transaction_date,
       Supplier: t.counterparty_name ?? "",
       Subject: t.subject ?? t.description ?? "",
@@ -689,7 +463,16 @@ export default function FinancePage() {
   };
 
   return (
-    <div className="flex w-full shrink-0 flex-col gap-6 pb-12">
+    // One scrollbar, not two. This page used to grow past the viewport (the
+    // page scrolled) AND cap the table at 70vh (the table scrolled), so
+    // reaching the bottom of the page meant scrolling the table first — the
+    // scroll wheel did different things depending on where the pointer was.
+    //
+    // Now the page fills the shell and does not scroll; the table is the only
+    // thing that does. That is also what lets the header stick: a sticky thead
+    // pins against its NEAREST scrollport, so with two of them it pinned to the
+    // inner one and appeared not to work at all.
+    <PageShell variant="fill">
       {/* Header */}
       <div className="flex shrink-0 flex-col gap-4">
         <PageActions>
@@ -717,33 +500,15 @@ export default function FinancePage() {
           </Button>
         </PageActions>
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Finance & Tax</h1>
-            <p className="text-muted-foreground mt-1">
-              Reconcile income, expenses and VAT for your Irish tax return
-            </p>
-          </div>
-          {/* The filter stays on the page: it changes what you are looking at
-              rather than doing something, and reads as part of the report. */}
-          {/* MultiSelectFilter was already in the codebase, built on Command +
-              Popover + Checkbox, with search, select-all and a clear button —
-              and used by nothing. YearFilter was a worse copy of it. */}
-          <MultiSelectFilter
-            label="years"
-            placeholder="All years"
-            className="w-[180px]"
-            options={availableYears.map(y => ({
-              value: String(y.year),
-              label: `${y.year} (${y.count})`,
-            }))}
-            selectedValues={[...selectedYears].map(String)}
-            onChange={vals => setSelectedYears(new Set(vals.map(Number)))}
-          />
-        </div>
+        <PageHeader
+          title="Finance & Tax"
+          description="Reconcile income, expenses and VAT for your Irish tax return"
+        />
 
-        {/* Data Sources status bar */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Data Sources status bar. Folded into the summary toggle: it is
+            sync status, not something you work in, and on a fill-height page
+            every fixed row above the ledger is a row taken off the ledger. */}
+        {summaryOpen && <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Data sources</span>
           <SourceChip
             icon={<CreditCard className="h-3.5 w-3.5" />}
@@ -769,7 +534,7 @@ export default function FinancePage() {
             onAction={handleGmailSync}
             loading={syncingGmail}
           />
-        </div>
+        </div>}
       </div>
 
       <ReceiptReviewDialog open={receiptReviewOpen} onClose={() => setReceiptReviewOpen(false)} />
@@ -793,7 +558,7 @@ export default function FinancePage() {
       />
 
       {/* Metric cards (FinanceFlow style) */}
-      <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {summaryOpen && <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Total Income"
           value={centsToEur(metrics.totalIncome)}
@@ -822,10 +587,10 @@ export default function FinancePage() {
           gradient="net"
           icon={<DollarSign className="w-5 h-5 text-white" />}
         />
-      </div>
+      </div>}
 
       {/* Revenue / Expenses bar chart */}
-      <Card className="shrink-0">
+      {summaryOpen && <Card className="shrink-0">
         <CardHeader>
           <CardTitle className="text-base">Monthly Income vs Expenses ({yearLabel})</CardTitle>
         </CardHeader>
@@ -841,18 +606,63 @@ export default function FinancePage() {
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Tabs */}
-      <Tabs defaultValue="transactions">
-        <TabsList className="shrink-0 self-start">
-          <TabsTrigger value="transactions">Transactions</TabsTrigger>
-          <TabsTrigger value="reconcile">Reconcile</TabsTrigger>
-          <TabsTrigger value="vat">VAT Report</TabsTrigger>
-        </TabsList>
+      {/* min-h is load-bearing, not padding. Everything above this — header,
+          metric cards, chart, tab strip — is shrink-0, so the tabs region is
+          the only thing that can absorb a short viewport, and `flex-1
+          min-h-0` lets it absorb all the way to zero. On a laptop that put the
+          table at zero height: the shell would still scroll the cards into
+          view, but there were no rows left to reveal.
+
+          The floor now lives on the TABLE, not on this region, and it is
+          60svh rather than a rem value. That is the difference between a
+          table whose height is whatever is left over after everything else
+          has taken its share — which is how it ended up five rows tall — and
+          one that is guaranteed most of the screen no matter what sits above
+          it. If the total then exceeds the viewport, the page scrolls. That
+          is the honest outcome, and it is bounded: the summary above the
+          table is collapsed by default.
+
+          With a floor, a viewport too short to fit everything overflows the
+          shell and the page scrolls — which is the honest outcome, since
+          something has to scroll when the content genuinely does not fit.
+          Above that height there is still exactly one scrollbar: the table's.
+
+          Note this element does NOT also carry min-h-0, unlike its children:
+          the two are contradictory, and Tailwind would resolve the conflict by
+          CSS source order rather than by the order written here. The children
+          keep min-h-0 so the table can still scroll inside whatever height
+          this resolves to. */}
+      <Tabs defaultValue="transactions" className="flex flex-1 flex-col">
+        <div className="flex shrink-0 items-center justify-between gap-3">
+          <TabsList className="self-start">
+            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="reconcile">Reconcile</TabsTrigger>
+            <TabsTrigger value="vat">VAT Report</TabsTrigger>
+          </TabsList>
+          <div className="flex items-center gap-2">
+          <MultiSelectFilter
+              label="years"
+              placeholder="All years"
+              className="w-[180px]"
+              options={availableYears.map(y => ({
+                value: String(y.year),
+                label: `${y.year} (${y.count})`,
+              }))}
+              selectedValues={[...selectedYears].map(String)}
+              onChange={vals => setSelectedYears(new Set(vals.map(Number)))}
+            />
+          <Button variant="ghost" size="sm" onClick={toggleSummary} className="gap-1.5">
+            {summaryOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {summaryOpen ? "Hide summary" : "Show summary"}
+          </Button>
+          </div>
+        </div>
 
         {/* ── Transactions tab ──────────────────────────────────────────── */}
-        <TabsContent value="transactions" className="mt-4 space-y-4">
+        <TabsContent value="transactions" className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
           {/* Filter + Group row */}
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <div className="relative">
@@ -907,136 +717,32 @@ export default function FinancePage() {
               </SelectContent>
             </Select>
 
-            <div className="flex items-center gap-1.5 ml-auto">
-              <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Select value={groupBy} onValueChange={v => setGroupBy(v as GroupBy)}>
-                <SelectTrigger className="w-40"><SelectValue placeholder="Group by…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No grouping</SelectItem>
-                  <SelectItem value="category">Category</SelectItem>
-                  <SelectItem value="type">Type</SelectItem>
-                  <SelectItem value="customer">Customer</SelectItem>
-                  <SelectItem value="month">Month</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* The "Group by" control is gone, not hidden. Row grouping is an
+                AG Grid Enterprise feature; on Community the dropdown would sit
+                there doing nothing, which is worse than its absence. With a
+                licence it returns as `rowGroup: true` on the column plus a
+                grouping panel — a few lines, not a rebuild. */}
 
-            <span className="text-sm text-muted-foreground whitespace-nowrap">
-              {filteredTxs.length} row{filteredTxs.length !== 1 ? "s" : ""}
+            <span className="ml-auto text-sm text-muted-foreground whitespace-nowrap">
+              {(displayedCount ?? filteredTxs.length).toLocaleString()} row
+              {(displayedCount ?? filteredTxs.length) !== 1 ? "s" : ""}
             </span>
           </div>
 
-          <Card className="overflow-hidden">
-            {/* The cap goes on the Table's own scrollport rather than a wrapper
-                around it. Nesting a second scrolling div would anchor the
-                sticky header to the inner box, which never scrolls. */}
-            <Table containerClassName="max-h-[70vh] min-h-[280px]">
-                {/* Twenty columns is too many to hold in your head while
-                    scrolling 894 rows. bg-background is not decoration: a
-                    transparent sticky header shows the rows sliding under it. */}
-                <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background shadow-[inset_0_-1px_0_hsl(var(--border))]">
-                  <TableRow>
-                    <SortHead field="date"     label="Date"     sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <SortHead field="customer" label="Supplier" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <TableHead>Subject</TableHead>
-                    <SortHead field="category" label="Accounting Category" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <TableHead>Tax Rate</TableHead>
-                    <SortHead field="amount" label="Invoice Amount" sortField={sortField} sortDir={sortDir} onSort={handleSort} className="text-right" />
-                    <TableHead className="text-right whitespace-nowrap">Invoices Paid</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">VAT Paid</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">VAT – Curr conv</TableHead>
-                    <TableHead>Currency</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">VAT Collected</TableHead>
-                    <SortHead field="type"     label="Type"     sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <TableHead>Source</TableHead>
-                    <TableHead>Filename</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Drive link</TableHead>
-                    <TableHead>Gmail link</TableHead>
-                    <TableHead>Mailbox</TableHead>
-                    <TableHead>Notes</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={COLUMN_COUNT} className="h-48 text-muted-foreground">
-                        <div className="sticky left-0 w-[min(100vw,60rem)] text-center">Loading…</div>
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredTxs.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={COLUMN_COUNT} className="h-48 text-muted-foreground">
-                        {/* An empty table caused by a filter is not the same
-                            as an empty table, and saying "import a statement"
-                            when 894 rows are simply being hidden sends you to
-                            fix the wrong thing. */}
-                        <div className="sticky left-0 w-[min(100vw,60rem)] space-y-2 text-center">
-                          {txs.length > 0 ? (
-                            <>
-                              <p>
-                                No transactions match these filters
-                                {(dateRange.from || dateRange.to) && <> ({rangeLabel(dateRange)})</>}.
-                              </p>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setDateRange(EMPTY_RANGE);
-                                  setTypeFilter("all");
-                                  setSourceFilter("all");
-                                  setCategoryFilter("all");
-                                  setSearch("");
-                                }}
-                              >
-                                Clear filters ({txs.length} rows)
-                              </Button>
-                            </>
-                          ) : (
-                            <p>No transactions found. Sync Stripe, import a statement, or add one manually.</p>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : groupedRows ? (
-                    // ── Grouped view ──────────────────────────────────────
-                    groupedRows.map(([groupKey, groupTxs]) => {
-                      const groupTotal = groupTxs.reduce((s, t) => {
-                        const amt = t.amount_eur_cents ?? t.amount_cents;
-                        // A pocket transfer nets to nothing: the same money
-                        // leaves one account and arrives in another, both hers.
-                        // Counting it as money in made a group of transfers
-                        // look like earnings.
-                        if (t.type === "transfer") return s;
-                        return s + (t.type === "expense" || t.type === "fee" ? -amt : amt);
-                      }, 0);
-                      return (
-                        <>
-                          <TableRow key={`g-${groupKey}`} className="bg-muted/60 hover:bg-muted/70">
-                            <TableCell colSpan={5} className="py-2 font-semibold text-sm">
-                              {groupBy === "month"
-                                ? new Date(groupKey + "-01").toLocaleString("en-IE", { month: "long", year: "numeric" })
-                                : groupKey}
-                              <span className="ml-2 text-muted-foreground font-normal text-xs">
-                                ({groupTxs.length} transaction{groupTxs.length !== 1 ? "s" : ""})
-                              </span>
-                            </TableCell>
-                            <TableCell className={cn("text-right font-bold text-sm py-2", groupTotal >= 0 ? "text-emerald-700" : "text-rose-700")}>
-                              {groupTotal >= 0 ? "" : "-"}{centsToEur(Math.abs(groupTotal))}
-                            </TableCell>
-                            <TableCell colSpan={COLUMN_COUNT - 6} />
-                          </TableRow>
-                          {groupTxs.map(tx => <TxRow key={tx.id} tx={tx} updateTx={updateTx} deleteTx={deleteTx} taxRates={taxRates} />)}
-                        </>
-                      );
-                    })
-                  ) : (
-                    // ── Flat view ─────────────────────────────────────────
-                    filteredTxs.map(tx => <TxRow key={tx.id} tx={tx} updateTx={updateTx} deleteTx={deleteTx} taxRates={taxRates} />)
-                  )}
-                </TableBody>
-            </Table>
+          <Card className="flex min-h-[60svh] flex-1 flex-col overflow-hidden">
+            <Suspense fallback={
+              <div className="flex h-full items-center justify-center">
+                <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            }>
+              <FinanceGrid
+                rows={filteredTxs}
+                taxRates={taxRates}
+                search={search}
+                onGridReady={api => { gridApiRef.current = api; }}
+                onDisplayedRowsChanged={setDisplayedCount}
+              />
+            </Suspense>
           </Card>
         </TabsContent>
 
@@ -1096,6 +802,6 @@ export default function FinancePage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

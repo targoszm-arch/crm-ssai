@@ -21,11 +21,20 @@ import { createPortal } from "react-dom";
 const SlotContext = createContext<HTMLElement | null>(null);
 const SetSlotContext = createContext<(el: HTMLElement | null) => void>(() => {});
 
+/** Same machinery, second slot: the page title. */
+const TitleSlotContext = createContext<HTMLElement | null>(null);
+const SetTitleSlotContext = createContext<(el: HTMLElement | null) => void>(() => {});
+
 export function PageActionsProvider({ children }: { children: ReactNode }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
   return (
     <SetSlotContext.Provider value={setSlot}>
-      <SlotContext.Provider value={slot}>{children}</SlotContext.Provider>
+      <SlotContext.Provider value={slot}>
+        <SetTitleSlotContext.Provider value={setTitleSlot}>
+          <TitleSlotContext.Provider value={titleSlot}>{children}</TitleSlotContext.Provider>
+        </SetTitleSlotContext.Provider>
+      </SlotContext.Provider>
     </SetSlotContext.Provider>
   );
 }
@@ -39,6 +48,26 @@ export function PageActionsSlot({ className }: { className?: string }) {
 /** What a page wraps its buttons in. Renders nothing outside the shell. */
 export function PageActions({ children }: { children: ReactNode }) {
   const slot = useContext(SlotContext);
+  if (!slot) return null;
+  return createPortal(children, slot);
+}
+
+/** Where the page title lands. Rendered once, by the header. */
+export function PageTitleSlot({ className }: { className?: string }) {
+  const setSlot = useContext(SetTitleSlotContext);
+  return <div ref={setSlot} className={className} />;
+}
+
+/**
+ * The page title, rendered in the top bar rather than in the scroll area.
+ *
+ * A 60px `<h1>` plus a subtitle at the top of the document is 60px of every
+ * page that tells you where you are — and then scrolls away exactly when a
+ * long list makes you forget. Every app that handles lists puts the page name
+ * in the fixed chrome. So does this one now.
+ */
+export function PageTitlePortal({ children }: { children: ReactNode }) {
+  const slot = useContext(TitleSlotContext);
   if (!slot) return null;
   return createPortal(children, slot);
 }

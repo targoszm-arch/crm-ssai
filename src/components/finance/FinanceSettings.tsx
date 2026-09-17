@@ -65,6 +65,27 @@ const CONNECTIONS = [
   },
 ] as const;
 
+/**
+ * The JSON body of a failed `functions.invoke`, or null.
+ *
+ * FunctionsHttpError carries the raw Response on `context`. Reading it is the
+ * only way to see what the function actually said about a non-2xx, and a
+ * function that answers 400 with a reason is being helpful, not broken.
+ *
+ * Returns null rather than throwing on anything unexpected — a relay error, a
+ * network failure and an HTML error page all have no JSON body, and none of
+ * them should turn a status check into an exception.
+ */
+async function readErrorBody(error: unknown): Promise<unknown | null> {
+  const context = (error as { context?: unknown } | null)?.context;
+  if (!context || typeof (context as Response).json !== "function") return null;
+  try {
+    return await (context as Response).clone().json();
+  } catch {
+    return null;
+  }
+}
+
 function ConnectionRow({ conn }: { conn: (typeof CONNECTIONS)[number] }) {
   const [state, setState] = useState<ConnState>("unknown");
   const [detail, setDetail] = useState<string | null>(null);
@@ -77,15 +98,29 @@ function ConnectionRow({ conn }: { conn: (typeof CONNECTIONS)[number] }) {
     setDetail(null);
     try {
       const { data, error } = await supabase.functions.invoke(conn.fn, { body: { limit: 1, days: 1 } });
-      const payload = (data ?? {}) as { error?: string; message?: string };
-      if (payload.error === "not_configured") {
+
+      // The "not configured" branch used to read `data`, and never once fired.
+      //
+      // functions-js throws FunctionsHttpError on any non-2xx and returns
+      // `{ data: null, error }` — the response body is NOT in `data`, it is on
+      // `error.context`. So a function politely answering 400 with
+      // `{"error":"not_configured"}` was reported as a red **Error** reading
+      // "Edge Function returned a non-2xx status code", which is how an
+      // unset STRIPE_SECRET_KEY looked like a broken deployment.
+      //
+      // Read the body off the error, then decide.
+      const body = (data ?? (await readErrorBody(error))) as
+        { error?: string; message?: string } | null;
+
+      if (body?.error === "not_configured") {
         setState("not_configured");
-        setDetail(payload.message ?? null);
+        setDetail(body.message ?? null);
         return;
       }
       if (error) {
         setState("error");
-        setDetail(error.message);
+        // Prefer the function's own message over the library's generic one.
+        setDetail(body?.message ?? body?.error ?? error.message);
         return;
       }
       setState("connected");

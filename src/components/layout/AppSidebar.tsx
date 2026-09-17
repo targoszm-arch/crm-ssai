@@ -66,6 +66,11 @@ const settingsNavItems = [{
 export function AppSidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
+  // NOT variant="inset". That switches on `m-2 rounded-xl shadow` plus a
+  // `min-h-[calc(100svh-1rem)]` on SidebarInset, which floats the whole
+  // content area as a rounded card detached from the window edges — and
+  // fights the `h-svh` the height chain depends on. It also contradicts the
+  // rule this app is built on: every page fills the screen.
   return <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border h-14 flex items-center px-4">
         <Link to="/" className="flex items-center gap-2 font-semibold">

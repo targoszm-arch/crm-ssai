@@ -76,7 +76,14 @@ export function SearchableSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      {/* Wider than the trigger on purpose. Pinned to the trigger width this
+          popover was ~185px, so every contact rendered as "Yvonne …" against a
+          truncated address — a picker you cannot pick from. The trigger width
+          is the floor, not the ceiling. */}
+      <PopoverContent
+        className="w-[min(28rem,var(--radix-popover-content-available-width))] min-w-[--radix-popover-trigger-width] p-0"
+        align="start"
+      >
         <Command
           filter={(itemValue, search) => {
             // itemValue is the option's value; match against the label and hint instead so

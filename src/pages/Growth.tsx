@@ -9,6 +9,8 @@ import {
   stageLabel,
   type FunnelStage,
 } from "@/hooks/useGrowthSnapshot";
+import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 
 function money(cents: number): string {
   return new Intl.NumberFormat("en-IE", {
@@ -59,14 +61,11 @@ export default function Growth() {
   const paying = lms.data?.totals.paying ?? 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Growth</h1>
-        <p className="text-muted-foreground">
-          Signups, revenue and outreach in one place. The funnel is read live from
-          the LMS; everything else is this CRM's own data.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Growth"
+        description="Signups, revenue and outreach in one place. The funnel is read live from the LMS; everything else is this CRM's own data."
+      />
 
       {/* Revenue first, because it is the number the rest has to explain. */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -209,6 +208,6 @@ export default function Growth() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

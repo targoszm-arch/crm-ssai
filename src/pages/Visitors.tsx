@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -168,18 +170,11 @@ export default function Visitors() {
   }, [visits, companies]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Radar className="h-6 w-6" />
-            Website Visitors
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Companies that visited your site, resolved from their IP — no
-            third-party tracker, no per-lead billing.
-          </p>
-        </div>
+    <PageShell>
+      <PageHeader
+        title="Website Visitors"
+        description="Companies that visited your site, resolved from their IP — no third-party tracker, no per-lead billing."
+      >
         <div className="flex items-center gap-2">
           <ImportLeadfeederCsv />
           <Select value={range} onValueChange={setRange}>
@@ -193,7 +188,7 @@ export default function Visitors() {
             </SelectContent>
           </Select>
         </div>
-      </div>
+      </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
@@ -418,6 +413,6 @@ export default function Visitors() {
         days={days}
         onClose={() => setSelected(null)}
       />
-    </div>
+    </PageShell>
   );
 }

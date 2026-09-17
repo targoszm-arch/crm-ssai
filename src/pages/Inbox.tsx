@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Plus, Settings, Mail, RefreshCw, Loader2, FileSignature, LayoutGrid, List, PanelLeftClose, PanelLeftOpen, Linkedin } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { PageActions } from "@/components/layout/PageActions";
+import PageShell from "@/components/layout/PageShell";
 
 type InboxTab = "email" | "linkedin";
 // How stale the mailbox has to be before opening the Inbox starts a background sync.
@@ -205,7 +207,7 @@ export default function Inbox() {
   const showConnectPrompt = activeTab === "email" && !hasConnectedAccount;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-background">
+    <PageShell variant="fill">
       <PageActions>
         {activeTab === "linkedin" && (
           <Button
@@ -238,14 +240,12 @@ export default function Inbox() {
           nothing called setActiveTab, setViewMode, setSignatureOpen or
           handleDisconnect any more. They are wired back up here, in the new
           header's own idiom rather than the old one's. */}
-      <div className="flex flex-col gap-3 border-b border-border/70 px-6 py-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3 flex-wrap">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">Emails</h1>
-            <p className="hidden text-xs text-muted-foreground md:block">
-              Mailbox and LinkedIn in one workspace — folders, drafts, syncing and full thread reading.
-            </p>
-          </div>
+          <PageHeader
+            title="Emails"
+            description="Mailbox and LinkedIn in one workspace — folders, drafts, syncing and full thread reading."
+          />
           {isSyncing && (
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -470,6 +470,6 @@ export default function Inbox() {
         initialTemplate={composeTemplate}
       />
       <SignatureSettings open={signatureOpen} onOpenChange={setSignatureOpen} />
-    </div>
+    </PageShell>
   );
 }

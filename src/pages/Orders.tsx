@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { SectionHeader } from "@/components/ui/section-header";
 import {
   Search,
   PlusCircle,
@@ -22,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { orderData, Order } from "@/data/mockData";
 import { PageActions } from "@/components/layout/PageActions";
+import { PageHeader } from "@/components/layout/PageHeader";
+import PageShell from "@/components/layout/PageShell";
 
 export default function Orders() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -106,7 +107,7 @@ export default function Orders() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <PageShell>
       <PageActions>
         <Button variant="outline" size="sm">
           <Download className="mr-2 h-4 w-4" />
@@ -118,22 +119,23 @@ export default function Orders() {
         </Button>
       </PageActions>
 
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Orders</h1>
-        <p className="text-muted-foreground">
-          View and manage all your customer orders in one place.
-        </p>
-      </div>
+      <PageHeader
+        title="Orders"
+        description="View and manage all your customer orders in one place."
+      />
 
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="relative w-full sm:w-auto flex-1 max-w-sm">
+      <DataTable
+        columns={orderColumns}
+        data={filteredOrders}
+        emptyMessage="No orders found"
+        toolbar={
+          <>
+            <div className="relative w-full sm:max-w-sm">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
                 placeholder="Press Enter to search..."
-                className="pl-8 w-full"
+                className="w-full pl-8"
                 value={localSearch}
                 onChange={(e) => setLocalSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && setSearchQuery(localSearch)}
@@ -150,39 +152,25 @@ export default function Orders() {
                 </Button>
               )}
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <Select onValueChange={(value) => setStatusFilter(value || null)}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <div className="flex items-center">
-                    <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <SelectValue placeholder="Status" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="processing">Processing</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="refunded">Refunded</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <SectionHeader
-        title="Order List"
-        description={`Showing ${filteredOrders.length} orders`}
-        className="mt-8 mb-4"
+            <Select onValueChange={(value) => setStatusFilter(value || null)}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <div className="flex items-center">
+                  <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Status" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="processing">Processing</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="refunded">Refunded</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
       />
-
-      <DataTable
-        columns={orderColumns}
-        data={filteredOrders}
-        emptyMessage="No orders found"
-      />
-    </div>
+    </PageShell>
   );
 }

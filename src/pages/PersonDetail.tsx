@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PageShell from "@/components/layout/PageShell";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Building2, Mail, Sparkles } from "lucide-react";
@@ -41,13 +42,13 @@ export default function PersonDetail() {
   const companyName = contact.companies?.company_name;
 
   return <div>
-    <div className="w-full">
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+    <PageShell>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
         <div className="flex items-center gap-3 text-sm"><Button variant="outline" size="icon" asChild><Link to={`/customers?tab=${returnTab}`} aria-label="Back to people"><ArrowLeft className="h-4 w-4" /></Link></Button><Link className="text-muted-foreground hover:text-foreground" to={`/customers?tab=${returnTab}`}>People</Link><span className="text-muted-foreground">›</span><strong>{name}</strong></div>
         <div className="flex gap-2"><Button variant="outline" size="sm" disabled={!contact.email} onClick={() => setComposeOpen(true)}><Mail className="mr-2 h-4 w-4" />Send email</Button>{companyName && contact.company_id && <Button variant="outline" size="sm" asChild><Link to={`/companies/${contact.company_id}?from=customers`}><Building2 className="mr-2 h-4 w-4" />Open company</Link></Button>}<Button size="sm" onClick={() => setActiveTab("activity")}><Sparkles className="mr-2 h-4 w-4" />Log activity</Button></div>
       </header>
-      <div className="mb-4 rounded-2xl border bg-gradient-to-r from-primary/10 via-background to-background p-6"><div className="flex items-start gap-4"><div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-lg font-semibold text-primary">{initials}</div><div><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold">{name}</h1>{contact.connection_strength && <Badge variant="outline">{contact.connection_strength}</Badge>}{companyName && <Badge variant="secondary">{companyName}</Badge>}</div><p className="mt-1 text-sm text-muted-foreground">Contact profile · {companyName || "Company not set"} · {contact.work_location || "Location not set"}</p><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Contact linked to {companyName || "the CRM"}. Keep account details current here so the company record, people list, and pipeline stay aligned.</p></div></div></div>
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
+      <div className="rounded-2xl border bg-gradient-to-r from-primary/10 via-background to-background p-6"><div className="flex items-start gap-4"><div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-lg font-semibold text-primary">{initials}</div><div><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold">{name}</h1>{contact.connection_strength && <Badge variant="outline">{contact.connection_strength}</Badge>}{companyName && <Badge variant="secondary">{companyName}</Badge>}</div><p className="mt-1 text-sm text-muted-foreground">Contact profile · {companyName || "Company not set"} · {contact.work_location || "Location not set"}</p><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Contact linked to {companyName || "the CRM"}. Keep account details current here so the company record, people list, and pipeline stay aligned.</p></div></div></div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-transparent">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
@@ -57,7 +58,7 @@ export default function PersonDetail() {
       {activeTab === "activity" && <div className="max-w-4xl"><ActivityStreamPanel scope={{ contactId: contact.id, companyId: contact.company_id }} onOpenEmail={(emailId) => { setHistoryEmailId(emailId); setHistoryOpen(true); }} /></div>}
       {activeTab === "files" && <div className="max-w-4xl"><FilesPanel scope={{ contactId: contact.id, companyId: contact.company_id }} /></div>}
       <div hidden={activeTab !== "overview"} className="max-w-4xl"><ContactDetailContent contact={contact} onRefetched={refetch} /></div>
-    </div>
+    </PageShell>
     {/* An anchor with a mailto: href handed the click to whatever the OS has
         registered — Apple Mail here — which is not the CRM and doesn't log
         the send. Same composer the inbox uses. */}

@@ -118,10 +118,48 @@ Re-check these with a query before relying on them; they move.
   `user_consent` empty (it mirrors the LMS; the LMS is the source of truth).
 - Mail and calendar sync are **Google only**. Confirm before assuming Microsoft 365 works.
 
+## Build and typecheck
+
+**`npx tsc --noEmit` is a no-op in this repo.** `tsconfig.json` is
+solution-style — `"files": []` plus references to `tsconfig.app.json` and
+`tsconfig.node.json` — so bare `tsc` compiles zero files and exits 0. It has
+never checked anything. Use `npm run typecheck` (`tsc --noEmit -p
+tsconfig.app.json`), which `npm run build` now runs first, so a type error
+fails the Vercel build rather than reaching the site.
+
+**Regenerating `src/integrations/supabase/types.ts`:** the Supabase MCP tool
+returns `{"types":"<the file>"}`. Parse the JSON and write the `types` value —
+do not hand-strip the wrapper. A previous regeneration removed the leading
+`{"types":"` and left the trailing `"}`, so the file was an unterminated
+string literal for days. Nothing caught it: every import of it is type-only,
+so esbuild erases the module without parsing, and the typecheck was the
+no-op above.
+
 ## UI conventions
 
 Established September 2026. They exist because the app had drifted into five different page
 layouts and buttons in five different places.
+
+- **`PageShell` is the page root.** Two variants and no third: `stacked`
+  (the page scrolls) and `fill` (the page is viewport-height and something
+  inside it scrolls). A page renders sections and does not set its own
+  spacing or gutter. Before this there were four roots — `space-y-6
+  animate-fade-in`, `space-y-6`, `space-y-1`, and a bare flex column with a
+  private `px-4 md:px-6` header bar, which inset that bar's `border-b` from
+  both page edges and made it read as floating.
+- **`PageHeader` carries every title.** There were five heading scales
+  (text-3xl through text-lg, bold and semibold), so the title changed size
+  between pages. A control that belongs on the title line — a range picker,
+  a year filter — goes in its children slot. Things that *do* something go
+  in `<PageActions>` and portal to the top bar.
+- **`DataTable` is the table.** It draws its own frame, pages at 25, sorts
+  (nulls last), and takes a `toolbar` — so a search box never needs a Card of
+  its own above the table. Do not hand-roll a list as two CSS grids sharing a
+  `grid-cols-[...]` template: header and rows in separate grid containers
+  cannot align, because `auto` and `minmax()` tracks size against each
+  container's own content. That is what `CustomersTab` and `OrganisationsTab`
+  did, and both had a complete, sortable, column-configurable definition built
+  and never passed to anything.
 
 - **`AppShell` owns page width and padding.** Every page fills the screen with a 10px side
   margin — no max width, no centred column, no exceptions. A centred `max-w-[1200px]` column
