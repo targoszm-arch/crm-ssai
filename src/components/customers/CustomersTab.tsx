@@ -547,7 +547,7 @@ export function CustomersTab() {
     },
   ];
 
-  const columns = allColumns.filter((col) => col.id === "select" || isVisible(col.id));
+  const columns = allColumns.filter(   (col) => col.id === "select" || col.id === "name" || isVisible(col.id) );
 
   if (isLoading) {
     return (
