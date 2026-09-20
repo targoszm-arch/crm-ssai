@@ -243,6 +243,106 @@ export function useEnrollContact() {
   });
 }
 
+export function useEnrollContacts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      sequenceId,
+      contactIds,
+    }: {
+      sequenceId: string;
+      contactIds: string[];
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      if (contactIds.length === 0) return { enrolled: 0, skipped: 0 };
+
+      // Re-enrolling someone already active in this sequence is a no-op, not an error —
+      // same reasoning as useAddToList: read what's already there, only insert the rest.
+      const { data: existing, error: existingError } = await supabase
+        .from("sequence_enrollments")
+        .select("contact_id")
+        .eq("sequence_id", sequenceId)
+        .eq("status", "active")
+        .in("contact_id", contactIds);
+      if (existingError) throw existingError;
+      const alreadyEnrolled = new Set((existing ?? []).map((e) => e.contact_id));
+      const candidates = contactIds.filter((id) => !alreadyEnrolled.has(id));
+
+      // Hard suppression must block a list enrolment the same way it blocks a single one.
+      let blocked = new Set<string>();
+      if (candidates.length > 0) {
+        const { data: contacts, error: contactsError } = await supabase
+          .from("contacts")
+          .select("id, do_not_contact, marketing_status")
+          .in("id", candidates);
+        if (contactsError) throw contactsError;
+        blocked = new Set(
+          (contacts ?? [])
+            .filter((c) => {
+              if (c.do_not_contact) return true;
+              const status = String(c.marketing_status ?? "").toLowerCase();
+              return ["unsubscribed", "bounced", "complained", "do not contact"].includes(status);
+            })
+            .map((c) => c.id)
+        );
+      }
+
+      const toEnroll = candidates.filter((id) => !blocked.has(id));
+      const skipped = contactIds.length - toEnroll.length;
+      if (toEnroll.length === 0) return { enrolled: 0, skipped };
+
+      const { data: sequence } = await supabase
+        .from("sequences")
+        .select("steps")
+        .eq("id", sequenceId)
+        .single();
+
+      const stepsData = sequence?.steps;
+      let steps: SequenceStep[] = [];
+      if (typeof stepsData === "string") {
+        steps = JSON.parse(stepsData);
+      } else if (Array.isArray(stepsData)) {
+        steps = stepsData as unknown as SequenceStep[];
+      }
+      const firstStepDay = steps?.[0]?.day || 0;
+      const nextEmailAt = new Date();
+      nextEmailAt.setDate(nextEmailAt.getDate() + firstStepDay);
+
+      const { data, error } = await supabase
+        .from("sequence_enrollments")
+        .insert(
+          toEnroll.map((contactId) => ({
+            user_id: user.id,
+            sequence_id: sequenceId,
+            contact_id: contactId,
+            current_step: 0,
+            status: "active",
+            next_email_at: nextEmailAt.toISOString(),
+          }))
+        )
+        .select("id");
+      if (error) throw error;
+      return { enrolled: data?.length ?? 0, skipped };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["sequence-enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ["sequence-stats"] });
+      const description =
+        result.skipped > 0
+          ? `${result.skipped} skipped (already enrolled or not contactable).`
+          : undefined;
+      toast.success(`Enrolled ${result.enrolled} contact${result.enrolled === 1 ? "" : "s"}`, {
+        description,
+      });
+    },
+    onError: (error: any) => {
+      toast.error("Failed to enroll: " + error.message);
+    },
+  });
+}
+
 export function useUpdateEnrollment() {
   const queryClient = useQueryClient();
 
