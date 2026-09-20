@@ -2085,6 +2085,53 @@ export type Database = {
         }
         Relationships: []
       }
+      lms_event_routes: {
+        Row: {
+          created_at: string
+          enrol_sequence_id: string | null
+          event_name: string
+          id: string
+          is_active: boolean
+          label: string
+          priority: number
+          topic: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          enrol_sequence_id?: string | null
+          event_name: string
+          id?: string
+          is_active?: boolean
+          label: string
+          priority?: number
+          topic: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          enrol_sequence_id?: string | null
+          event_name?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          priority?: number
+          topic?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lms_event_routes_enrol_sequence_id_fkey"
+            columns: ["enrol_sequence_id"]
+            isOneToOne: false
+            referencedRelation: "sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lms_leads: {
         Row: {
           apollo_contact_id: string | null

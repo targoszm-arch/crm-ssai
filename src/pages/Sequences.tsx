@@ -22,6 +22,7 @@ import { EnrollContactModal } from "@/components/sequences/EnrollContactModal";
 import { SequenceEnrollmentsSheet } from "@/components/sequences/SequenceEnrollmentsSheet";
 import { TemplateListModal } from "@/components/templates/TemplateListModal";
 import { ClickRoutesPanel } from "@/components/sequences/ClickRoutesPanel";
+import { LmsEventRoutesPanel } from "@/components/sequences/LmsEventRoutesPanel";
 import { PageActions } from "@/components/layout/PageActions";
 import { PageHeader } from "@/components/layout/PageHeader";
 import PageShell from "@/components/layout/PageShell";
@@ -45,7 +46,7 @@ export default function Sequences() {
   // rather than another status — keep the tab and the filter separate so it can't be read
   // as a status nothing has.
   const [activeTab, setActiveTab] = useState<string>("all");
-  const statusFilter = activeTab === "routing" ? "all" : activeTab;
+  const statusFilter = activeTab === "routing" || activeTab === "lms-routing" ? "all" : activeTab;
   const { data: sequences, isLoading } = useSequences(statusFilter === "all" ? undefined : statusFilter);
   const { data: stats } = useSequenceStats();
   const updateSequence = useUpdateSequence();
@@ -206,10 +207,15 @@ export default function Sequences() {
           <TabsTrigger value="active">Active</TabsTrigger>
           <TabsTrigger value="draft">Drafts</TabsTrigger>
           <TabsTrigger value="routing">Click Routing</TabsTrigger>
+          <TabsTrigger value="lms-routing">LMS Event Routing</TabsTrigger>
         </TabsList>
 
         <TabsContent value="routing" className="mt-6">
           <ClickRoutesPanel />
+        </TabsContent>
+
+        <TabsContent value="lms-routing" className="mt-6">
+          <LmsEventRoutesPanel />
         </TabsContent>
 
         <TabsContent value={statusFilter} className="mt-6">
