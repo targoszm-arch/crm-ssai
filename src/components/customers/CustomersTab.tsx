@@ -23,7 +23,7 @@ type ContactWithCompany = Contact & {
 };
 
 const CUSTOMER_COLUMNS: ColumnDefinition[] = [
-  { id: "name", label: "Name", defaultVisible: true, locked: true },
+  { id: "name", label: "Customer Name", defaultVisible: true, locked: true },
   { id: "connection_strength", label: "Connection", defaultVisible: false },
   { id: "email", label: "Email", defaultVisible: true },
   { id: "company", label: "Company", defaultVisible: true },
@@ -238,7 +238,7 @@ export function CustomersTab() {
       accessorKey: "name",
       header: (
         <FilterableTableHeader
-          label="Name"
+          label="Customer Name"
           columnId="first_name"
           sortable
           currentSort={sorting}
