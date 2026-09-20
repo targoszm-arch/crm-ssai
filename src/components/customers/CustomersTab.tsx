@@ -235,6 +235,7 @@ export function CustomersTab() {
       ),
     },
     {
+      id: "name",
       accessorKey: "name",
       header: (
         <FilterableTableHeader
