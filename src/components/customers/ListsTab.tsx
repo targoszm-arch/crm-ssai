@@ -207,7 +207,7 @@ function ListMembers({
                 : member.company!.company_name;
               const subtitle = isContact
                 ? member.contact!.email ?? member.contact!.title
-                : member.company!.domain ?? member.company!.industry;
+                : member.company!.domains ?? member.company!.industry;
 
               return (
                 <div key={member.id} className="flex items-center gap-3 p-3">
