@@ -106,8 +106,13 @@ Re-check these with a query before relying on them; they move.
   `useClickRoutes.ts` reads it, but of its four rows only `sop` is active — the other three are
   `RENAME-card-2/3/4` placeholders. `track-sequence-click` records the click; nothing yet
   routes it into a label, list or follow-on sequence.
-- **`lists` exists and is empty**, with no membership table and no code referencing it. The
-  table is not the feature.
+- **`lists` is real and in use (verified 20 Sep 2026).** `list_members` is the membership
+  table (`list_id`, `contact_id`, `company_id`, `user_id`), FK'd to `contacts`/`companies`,
+  RLS'd by `auth.uid() = user_id` same as `lists` and `contacts`. `AddToListMenu` (wired into
+  the Customers/Organisations bulk action bars) writes to it via `useAddToList`; `ListsTab`
+  reads it via `useLists`/`useListMembers`. The tab looked broken because `Customers.tsx`'s
+  `VALID_TABS` whitelist omitted `"lists"`, so `?tab=lists` silently fell back to
+  Organisations — fixed in `7eea739`. The write path was never the problem.
 - Sequence steps are email-only: `{ day, subject, template }`. `tasks` exists, is empty, and
   nothing writes to it.
 - **Sequences still send via Resend on a fixed from-address** (`send-sequence-email` imports
