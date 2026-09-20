@@ -13,7 +13,7 @@ import { PageActions } from "@/components/layout/PageActions";
 import { PageHeader } from "@/components/layout/PageHeader";
 import PageShell from "@/components/layout/PageShell";
 
-const VALID_TABS = ["customers", "organisations", "lms-leads"];
+const VALID_TABS = ["customers", "organisations", "lms-leads", "lists"];
 
 export default function Customers() {
   const [addContactOpen, setAddContactOpen] = useState(false);
