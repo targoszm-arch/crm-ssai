@@ -3,12 +3,22 @@ name: Deploy Supabase functions
 # Edge functions were deployed by hand until now, and the repo had drifted: five
 # functions sat in main having never been deployed at all, including the website
 # visitor tracker. This deploys what changed, on merge, so that cannot happen quietly.
+#
+# Migrations had the same gap until 2026-09-20 (SSAI lms-event-routing PR #52):
+# merging a migration file only put SQL text into git — nothing ever ran it
+# against the live database. lms_event_routes/route_lms_event had to be applied
+# by hand after the fact, and lms-webhook's new code path (calling
+# route_lms_event via rpc()) would otherwise have started failing in production
+# the moment it deployed, since the function it calls wouldn't exist yet. The
+# apply-migrations job below closes that gap the same way deploy already closed
+# it for functions: push a migration, main applies it, no manual step.
 
 on:
   push:
     branches: [main]
     paths:
       - "supabase/functions/**"
+      - "supabase/migrations/**"
       - "supabase/config.toml"
       - ".github/workflows/deploy-supabase-functions.yml"
   workflow_dispatch:
@@ -23,8 +33,67 @@ concurrency:
   cancel-in-progress: false # never interrupt a half-finished deploy
 
 jobs:
-  deploy:
+  apply-migrations:
+    name: Apply Supabase migrations
     runs-on: ubuntu-latest
+    outputs:
+      applied: ${{ steps.detect.outputs.has_migrations }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # need the previous commit to diff against
+
+      - name: Detect changed migrations
+        id: detect
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual runs only touch functions (see inputs above) — migrations
+            # are push-triggered only, so nothing to apply here.
+            echo "has_migrations=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} -- 'supabase/migrations/**')
+          if [ -n "$changed" ]; then
+            echo "has_migrations=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_migrations=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Changed migrations:"
+          echo "$changed"
+
+      - uses: supabase/setup-cli@v1
+        if: steps.detect.outputs.has_migrations == 'true'
+        with:
+          version: latest
+
+      - name: Push migrations
+        if: steps.detect.outputs.has_migrations == 'true'
+        env:
+          # Same secret and same project the functions deploy below uses — one
+          # access token, no separate DB password needed for `db push`.
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.GHACTIONSCRMSSAI }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "::error::Repository secret GHACTIONSCRMSSAI is empty or not set."
+            echo "Add it under Settings > Secrets and variables > Actions (not Codespaces or Dependabot)."
+            exit 1
+          fi
+          ref=$(grep '^project_id' supabase/config.toml | cut -d'"' -f2)
+          supabase link --project-ref "$ref"
+          supabase db push --include-all
+
+  deploy:
+    name: Deploy Supabase functions
+    runs-on: ubuntu-latest
+    # Migrations land before code that might call a function/table they add —
+    # exactly the failure this job exists to prevent (lms-webhook calling
+    # route_lms_event before it existed). needs: always waits for
+    # apply-migrations to finish even when it has nothing to do (has_migrations
+    # false is still a success), so function deploys are never blocked on a
+    # migration-free push.
+    needs: [apply-migrations]
     steps:
       - uses: actions/checkout@v4
         with:
