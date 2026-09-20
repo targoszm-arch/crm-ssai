@@ -37,6 +37,17 @@ interface LMSPayload {
   credits_total?: number;
   plan?: string;
   crm_user_id: string;
+  // Product event, e.g. "course_from_pdf_started" / "scorm_to_course_created" — the same
+  // event vocabulary the LMS already sends to PostHog via track-posthog-event. When set,
+  // this call is routed through lms_event_routes (see route_lms_event) instead of the
+  // registration path below: the contact is still resolved/created exactly the same way,
+  // but nothing is written to lms_leads and no "lms_registration" activity is logged —
+  // route_lms_event logs its own "lms_event_routed" activity instead. Omit entirely for a
+  // plain registration payload; existing callers are unaffected.
+  event_type?: string;
+  // Arbitrary extra context for the event (course_id, score, etc.), merged into the
+  // enrolment/activity metadata route_lms_event writes.
+  metadata?: Record<string, unknown>;
 }
 
 Deno.serve(async (req: Request) => {
@@ -230,6 +241,59 @@ Deno.serve(async (req: Request) => {
         contactId = newContact.id;
         console.log(`Created new contact: ${contactId}`);
       }
+    }
+
+    // Product event (course_from_pdf_started, scorm_to_course_created, ...): route it
+    // through lms_event_routes and stop here. This never touches lms_leads or the
+    // "lms_registration" activity below — those are registration-only, and a product
+    // event carries none of the fields (role, company_size, plan, ...) they need.
+    if (payload.event_type) {
+      if (!contactId) {
+        console.error(
+          `No contact available to route event ${payload.event_type} for ${email} — lookup and creation both failed`
+        );
+        return new Response(
+          JSON.stringify({ error: "Could not resolve or create a contact for this event" }),
+          {
+            status: 503,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      console.log(`Routing LMS event ${payload.event_type} for contact ${contactId}`);
+      const { data: routed, error: routeError } = await supabase.rpc("route_lms_event", {
+        p_contact_id: contactId,
+        p_event_name: payload.event_type,
+        p_metadata: payload.metadata ?? {},
+        p_user_id: userId,
+      });
+
+      if (routeError) {
+        console.error("route_lms_event failed:", routeError);
+        return new Response(
+          JSON.stringify({ error: "Event routing failed", message: routeError.message }),
+          {
+            status: 503,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      console.log("LMS event routing result:", routed);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          event_type: payload.event_type,
+          contact_id: contactId,
+          company_id: companyId,
+          routing: routed,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Upsert LMS lead
