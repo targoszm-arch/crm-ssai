@@ -30,7 +30,7 @@ export interface ListMember {
   company: {
     id: string;
     company_name: string;
-    domain: string | null;
+    domains: string | null;
     industry: string | null;
   } | null;
 }
@@ -80,7 +80,7 @@ export function useListMembers(listId: string | undefined) {
         .select(
           `id, list_id, added_at,
            contact:contacts(id, first_name, last_name, email, title),
-           company:companies(id, company_name, domain, industry)`
+           company:companies(id, company_name, domains, industry)`
         )
         .eq("list_id", listId!)
         .order("added_at", { ascending: false });

@@ -26,6 +26,7 @@ import {
   useDeleteList,
   useRemoveFromList,
 } from "@/hooks/useLists";
+import { EnrollListMenu } from "@/components/customers/EnrollListMenu";
 
 export function ListsTab() {
   const [selectedListId, setSelectedListId] = useState<string | undefined>();
@@ -153,6 +154,11 @@ function ListMembers({
   const { data: members, isLoading } = useListMembers(listId);
   const removeFromList = useRemoveFromList();
 
+  const contactIds = (members ?? [])
+    .map((m) => m.contact?.id)
+    .filter((id): id is string => !!id);
+  const companyOnlyCount = (members?.length ?? 0) - contactIds.length;
+
   return (
     <Card>
       <CardContent className="p-4 space-y-3">
@@ -161,29 +167,34 @@ function ListMembers({
             <h3 className="font-medium">{listName}</h3>
             <p className="text-xs text-muted-foreground">
               {members?.length ?? 0} member{members?.length === 1 ? "" : "s"}
+              {companyOnlyCount > 0 &&
+                ` — ${companyOnlyCount} ${companyOnlyCount === 1 ? "is a company, not enrollable in a sequence" : "are companies, not enrollable in a sequence"}`}
             </p>
           </div>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" disabled={isDeleting}>
-                <Trash2 className="h-4 w-4 mr-1" />
-                Delete list
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete "{listName}"?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes the list and its membership. The contacts and
-                  companies themselves are not deleted.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={onDelete}>Delete list</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <div className="flex items-center gap-2 shrink-0">
+            <EnrollListMenu contactIds={contactIds} disabled={contactIds.length === 0} />
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isDeleting}>
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete list
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete "{listName}"?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes the list and its membership. The contacts and
+                    companies themselves are not deleted.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={onDelete}>Delete list</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
 
         {isLoading ? (
@@ -207,7 +218,7 @@ function ListMembers({
                 : member.company!.company_name;
               const subtitle = isContact
                 ? member.contact!.email ?? member.contact!.title
-                : member.company!.domain ?? member.company!.industry;
+                : member.company!.domains ?? member.company!.industry;
 
               return (
                 <div key={member.id} className="flex items-center gap-3 p-3">
