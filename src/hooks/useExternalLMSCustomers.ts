@@ -28,6 +28,28 @@ interface FetchParams {
   offset?: number;
 }
 
+/**
+ * Emails already in `contacts`, lowercased. Cross-referenced against the live LMS
+ * customer list so the table can show, per row, whether "Save to CRM" would create
+ * a new contact or just match one that's already there — the dry-run preview only
+ * ever gave that as a total count, with no way to tell which people it meant.
+ * RLS already scopes `contacts` to the signed-in user, so no explicit filter here.
+ */
+export function useExistingContactEmails() {
+  return useQuery({
+    queryKey: ["existing-contact-emails"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("contacts")
+        .select("email")
+        .not("email", "is", null);
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.email!.trim().toLowerCase()));
+    },
+    staleTime: 30000,
+  });
+}
+
 export function useExternalLMSCustomers(params: FetchParams = {}) {
   return useQuery({
     queryKey: ['external-lms-customers', params],
