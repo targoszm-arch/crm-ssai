@@ -267,7 +267,7 @@ export default function Deals() {
 
       {/* Deal Detail Sheet */}
       <Sheet open={!!selectedDeal} onOpenChange={(open) => !open && closeDealDetail()}>
-        <SheetContent className="w-[600px] sm:max-w-[600px]">
+        <SheetContent className="w-[600px] overflow-y-auto sm:max-w-[600px]">
           <SheetHeader>
             <SheetTitle>{selectedDeal?.deal_name}</SheetTitle>
           </SheetHeader>
