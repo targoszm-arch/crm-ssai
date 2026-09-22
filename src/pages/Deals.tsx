@@ -53,7 +53,7 @@ export default function Deals() {
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();
   const activePipelineId = selectedPipelineId || pipelines?.find(p => p.is_default)?.id || pipelines?.[0]?.id;
   const { data: stages } = usePipelineStages(activePipelineId);
-  const { dealsByStage, isLoading: dealsLoading } = useDealsByStage(activePipelineId);
+  const { dealsByStage, isLoading: dealsLoading } = useDealsByStage(activePipelineId, search);
 
   const activePipeline = pipelines?.find(p => p.id === activePipelineId);
 

@@ -191,8 +191,8 @@ export function useMoveDealToStage() {
   });
 }
 
-export function useDealsByStage(pipelineId: string | undefined) {
-  const { data: deals, ...rest } = useDeals({ pipelineId });
+export function useDealsByStage(pipelineId: string | undefined, search?: string) {
+  const { data: deals, ...rest } = useDeals({ pipelineId, search });
 
   const dealsByStage = deals?.reduce((acc, deal) => {
     const stage = deal.stage || "Lead Qualification";
