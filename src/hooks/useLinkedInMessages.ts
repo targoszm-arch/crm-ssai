@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { searchTokens } from "@/lib/searchTokens";
 
 export interface LinkedInMessage {
   id: string;
@@ -57,7 +58,12 @@ export function useLinkedInMessages(options: UseLinkedInMessagesOptions = {}) {
         .limit(100);
 
       if (options.search) {
-        query = query.ilike("message_text", `%${options.search}%`);
+        // sender_name is the Meet Alfred sync's record of who actually sent the
+        // message — searching only message_text meant a person's name almost
+        // never matched, since it rarely appears in their own message body.
+        for (const token of searchTokens(options.search)) {
+          query = query.or(`message_text.ilike.%${token}%,sender_name.ilike.%${token}%`);
+        }
       }
 
       const { data, error } = await query;

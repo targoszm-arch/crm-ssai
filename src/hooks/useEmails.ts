@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { searchTokens } from "@/lib/searchTokens";
 
 export interface Email {
   id: string;
@@ -110,7 +111,14 @@ export function useEmails(filters: EmailFilters = {}) {
       }
 
       if (filters.search) {
-        query = query.or(`subject.ilike.%${filters.search}%,snippet.ilike.%${filters.search}%,from_email.ilike.%${filters.search}%`);
+        // Every word has to match somewhere (chained .or() calls are AND'd by
+        // PostgREST), and from_name is searched — a sender's actual name, not
+        // just their address or whatever the subject/snippet happen to contain.
+        for (const token of searchTokens(filters.search)) {
+          query = query.or(
+            `subject.ilike.%${token}%,snippet.ilike.%${token}%,from_email.ilike.%${token}%,from_name.ilike.%${token}%`
+          );
+        }
       }
 
       if (filters.folder) {

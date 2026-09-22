@@ -237,8 +237,8 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
           <SearchableSelect
               className="w-[200px] h-8"
               options={[
-                { value: "unlinked", label: "No contact" },
-                { value: "create-new", label: "Create new contact" },
+                { value: "unlinked", label: "No contact", alwaysShow: true },
+                { value: "create-new", label: "Create new contact", alwaysShow: true },
                 ...(contacts ?? []).map((contact: Contact) => ({
                   value: contact.id,
                   label: [contact.first_name, contact.last_name].filter(Boolean).join(" ")
