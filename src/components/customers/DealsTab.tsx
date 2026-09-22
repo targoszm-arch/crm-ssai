@@ -70,7 +70,7 @@ export function DealsTab({ contactId }: DealsTabProps) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="max-h-[480px] space-y-3 overflow-y-auto pr-1">
       {deals.map((deal) => (
         <div key={deal.id} className="p-4 rounded-lg border bg-card space-y-3">
           <div className="flex items-start justify-between gap-2">

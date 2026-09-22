@@ -14,13 +14,16 @@ interface ContactHistoryTabsProps {
   manualNotes: string;
   isEditing: boolean;
   onNotesChange: (notes: string) => void;
+  /** Opens the email an "All"/"Activities" row describes, via the shared HistoryPanel. */
+  onOpenEmail?: (emailId: string) => void;
 }
 
-export function ContactHistoryTabs({ 
-  contact, 
-  manualNotes, 
-  isEditing, 
-  onNotesChange 
+export function ContactHistoryTabs({
+  contact,
+  manualNotes,
+  isEditing,
+  onNotesChange,
+  onOpenEmail,
 }: ContactHistoryTabsProps) {
   return (
     <Tabs defaultValue="all" className="w-full">
@@ -36,11 +39,11 @@ export function ContactHistoryTabs({
       </TabsList>
       
       <TabsContent value="all" className="mt-4">
-        <AllTab contact={contact} />
+        <AllTab contact={contact} onOpenEmail={onOpenEmail} />
       </TabsContent>
-      
+
       <TabsContent value="activities" className="mt-4">
-        <ActivitiesTab contactId={contact.id} />
+        <ActivitiesTab contactId={contact.id} linkedinUrl={contact.linkedin_url} onOpenEmail={onOpenEmail} />
       </TabsContent>
       
       <TabsContent value="notes" className="mt-4">

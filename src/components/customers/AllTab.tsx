@@ -15,6 +15,8 @@ import { Contact } from "@/hooks/useContacts";
 
 interface AllTabProps {
   contact: Contact;
+  /** Opens the email an "email" row describes, via the shared HistoryPanel. */
+  onOpenEmail?: (emailId: string) => void;
 }
 
 interface TimelineItem {
@@ -25,9 +27,11 @@ interface TimelineItem {
   date: Date;
   icon: typeof Mail;
   color: string;
+  /** Set on "email" items so the row can open it instead of just sitting there. */
+  emailId?: string;
 }
 
-export function AllTab({ contact }: AllTabProps) {
+export function AllTab({ contact, onOpenEmail }: AllTabProps) {
   // Fetch all related data
   const { data: emails, isLoading: emailsLoading } = useQuery({
     queryKey: ["contact-emails", contact.id],
@@ -109,6 +113,7 @@ export function AllTab({ contact }: AllTabProps) {
       date: new Date(email.received_at),
       icon: Mail,
       color: "text-blue-500",
+      emailId: email.id,
     });
   });
 
@@ -173,25 +178,43 @@ export function AllTab({ contact }: AllTabProps) {
 
   return (
     <div className="space-y-2">
-      {timeline.map((item) => (
-        <div key={item.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
-          <item.icon className={`h-4 w-4 mt-0.5 ${item.color}`} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{item.title}</p>
-            <div className="flex items-center gap-2 mt-0.5">
-              {item.subtitle && (
-                <>
-                  <span className="text-xs text-muted-foreground">{item.subtitle}</span>
-                  <span className="text-xs text-muted-foreground">•</span>
-                </>
-              )}
-              <span className="text-xs text-muted-foreground">
-                {format(item.date, "MMM dd, yyyy")}
-              </span>
+      {timeline.map((item) => {
+        const openable = item.emailId && onOpenEmail;
+        const row = (
+          <>
+            <item.icon className={`h-4 w-4 mt-0.5 ${item.color}`} />
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-medium truncate ${openable ? "group-hover:text-primary group-hover:underline" : ""}`}>
+                {item.title}
+              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                {item.subtitle && (
+                  <>
+                    <span className="text-xs text-muted-foreground">{item.subtitle}</span>
+                    <span className="text-xs text-muted-foreground">•</span>
+                  </>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  {format(item.date, "MMM dd, yyyy")}
+                </span>
+              </div>
             </div>
+          </>
+        );
+        return openable ? (
+          <button
+            key={item.id}
+            className="group flex w-full items-start gap-3 rounded-lg border bg-card p-3 text-left hover:bg-accent"
+            onClick={() => onOpenEmail!(item.emailId!)}
+          >
+            {row}
+          </button>
+        ) : (
+          <div key={item.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+            {row}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

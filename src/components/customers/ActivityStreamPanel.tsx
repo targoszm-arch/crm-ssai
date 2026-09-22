@@ -51,10 +51,12 @@ interface ActivityStreamPanelProps {
    * plain text — which was the complaint.
    */
   onOpenEmail?: (emailId: string) => void;
+  /** Deeplink target for "linkedin" rows — the contact's or company's LinkedIn profile. */
+  linkedinUrl?: string | null;
 }
 
 export function ActivityStreamPanel({
-  scope, showPerson = false, onOpenEmail,
+  scope, showPerson = false, onOpenEmail, linkedinUrl,
 }: ActivityStreamPanelProps) {
   const [draft, setDraft] = useState("");
   const [includeAutomation, setIncludeAutomation] = useState(false);
@@ -181,6 +183,20 @@ export function ActivityStreamPanel({
                         <ExternalLink className="size-3" /> Open this email
                       </span>
                     </button>
+                  ) : item.kind === "linkedin" && linkedinUrl ? (
+                    <a
+                      href={linkedinUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 block w-full text-left"
+                    >
+                      <span className="whitespace-pre-wrap text-sm group-hover:text-primary group-hover:underline">
+                        {item.body}
+                      </span>
+                      <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <ExternalLink className="size-3" /> Open on LinkedIn
+                      </span>
+                    </a>
                   ) : (
                     <p className="mt-1 whitespace-pre-wrap text-sm">{item.body}</p>
                   )

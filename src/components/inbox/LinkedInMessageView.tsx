@@ -89,7 +89,10 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
         title: "Contact Linked",
         description: "LinkedIn connection has been linked to the contact.",
       });
-      queryClient.invalidateQueries({ queryKey: ["linkedin-messages"] });
+      // The LinkedIn tab's list (LinkedInMessageList) reads from useLinkedInFeed,
+      // keyed "linkedin-feed" — not useLinkedInMessages, which nothing renders.
+      // Invalidating the wrong key meant linking never refreshed anything here.
+      queryClient.invalidateQueries({ queryKey: ["linkedin-feed"] });
     }
   };
 
@@ -163,8 +166,9 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
         .eq("id", message.connection_id);
     }
 
-    // Invalidate queries to refresh data
-    queryClient.invalidateQueries({ queryKey: ["linkedin-messages"] });
+    // Invalidate queries to refresh data. See handleLinkContact above for why
+    // this is "linkedin-feed", not "linkedin-messages".
+    queryClient.invalidateQueries({ queryKey: ["linkedin-feed"] });
     queryClient.invalidateQueries({ queryKey: ["contacts"] });
 
     toast({

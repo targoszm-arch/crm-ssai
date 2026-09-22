@@ -10,9 +10,14 @@ import { useActivities } from "@/hooks/useActivities";
 
 interface ActivitiesTabProps {
   contactId: string;
+  /** The contact's LinkedIn profile — the deeplink target for MeetAlfred rows, which carry
+   * a campaign name and a message preview but no per-message URL of their own. */
+  linkedinUrl?: string | null;
+  /** Opens the email an "email"-type activity row describes, via the shared HistoryPanel. */
+  onOpenEmail?: (emailId: string) => void;
 }
 
-export function ActivitiesTab({ contactId }: ActivitiesTabProps) {
+export function ActivitiesTab({ contactId, linkedinUrl, onOpenEmail }: ActivitiesTabProps) {
   // Fetch tasks linked to this contact
   const { data: tasks, isLoading: tasksLoading } = useQuery({
     queryKey: ["contact-tasks", contactId],
@@ -88,27 +93,53 @@ export function ActivitiesTab({ contactId }: ActivitiesTabProps) {
             Activity ({timeline.length}
             {timeline.length === 50 ? "+" : ""})
           </h5>
-          {timeline.map((activity) => (
-            <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
-              {activityIcon(activity.activity_type)}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{activityLabel(activity.activity_type)}</p>
-                {activity.description && (
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-3">
-                    {activity.description}
+          {timeline.map((activity) => {
+            const emailId = activity.activity_type === "email" ? activity.metadata?.email_id : undefined;
+            const isLinkedIn = activity.activity_type.startsWith("linkedin");
+            const openEmail = emailId && onOpenEmail ? () => onOpenEmail(emailId) : undefined;
+            const openLinkedIn = isLinkedIn && linkedinUrl
+              ? () => window.open(linkedinUrl, "_blank", "noopener,noreferrer")
+              : undefined;
+            const onClick = openEmail ?? openLinkedIn;
+
+            const row = (
+              <>
+                {activityIcon(activity.activity_type)}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${onClick ? "group-hover:text-primary group-hover:underline" : ""}`}>
+                    {activityLabel(activity.activity_type)}
                   </p>
+                  {activity.description && (
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-3">
+                      {activity.description}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {format(new Date(activity.occurred_at), "MMM dd, yyyy 'at' h:mm a")}
+                  </p>
+                </div>
+                {activity.source && (
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {activity.source}
+                  </Badge>
                 )}
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {format(new Date(activity.occurred_at), "MMM dd, yyyy 'at' h:mm a")}
-                </p>
+              </>
+            );
+
+            return onClick ? (
+              <button
+                key={activity.id}
+                onClick={onClick}
+                className="group flex w-full items-start gap-3 rounded-lg border bg-card p-3 text-left hover:bg-accent"
+              >
+                {row}
+              </button>
+            ) : (
+              <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                {row}
               </div>
-              {activity.source && (
-                <Badge variant="outline" className="text-xs shrink-0">
-                  {activity.source}
-                </Badge>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
