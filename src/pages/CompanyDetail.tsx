@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { EditableLabels } from "@/components/customers/EditableLabels";
 import { useUpdateCompany } from "@/hooks/useCompanies";
 import { useListsForEntity } from "@/hooks/useLists";
+import { CustomFieldsCard } from "@/components/shared/CustomFieldsCard";
 import { format } from "date-fns";
 
 export default function CompanyDetail() {
@@ -68,7 +69,7 @@ export default function CompanyDetail() {
         the whole right column only rendered under one of five outer tabs. */}
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,.9fr)]">
       <div className="space-y-4">
-        <Card><CardHeader className="border-b"><CardTitle className="text-base">Company summary</CardTitle></CardHeader><CardContent className="space-y-5 p-5"><p className="text-sm text-muted-foreground">{company.description || "No company summary added yet."}</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Industry" value={company.industry} /><Field label="Stage" value={company.connection_strength || "Engaged"} /><Field label="Location" value={company.country} /><Field label="Employees" value={company.employee_range} /></div><div className="grid gap-4 sm:grid-cols-2"><LinkField label="Website" href={(() => { const site = company.website || company.domains; return site ? (site.startsWith("http") ? site : `https://${site}`) : null; })()} text={company.website || company.domains} /><LinkField label="LinkedIn" href={company.linkedin_url} text={company.linkedin_url ? "Open profile" : null} /></div></CardContent></Card>
+        <Card><CardHeader className="border-b"><CardTitle className="text-base">Company summary</CardTitle></CardHeader><CardContent className="space-y-5 p-5"><p className="text-sm text-muted-foreground">{company.description || "No company summary added yet."}</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Industry" value={company.industry} /><Field label="Sales Stage" value={company.stage} /><Field label="Location" value={company.country} /><Field label="Company Size" value={company.employee_range} /></div><div className="grid gap-4 sm:grid-cols-2"><LinkField label="Website" href={(() => { const site = company.website || company.domains; return site ? (site.startsWith("http") ? site : `https://${site}`) : null; })()} text={company.website || company.domains} /><LinkField label="LinkedIn" href={company.linkedin_url} text={company.linkedin_url ? "Open profile" : null} /></div></CardContent></Card>
 
         <EntityHistoryTabs
           company={company}
@@ -80,9 +81,18 @@ export default function CompanyDetail() {
       <div className="space-y-4">
         <Card><CardHeader><CardTitle className="text-base">Labels</CardTitle></CardHeader><CardContent className="p-5 pt-0"><EditableLabels labels={company.labels} isLoading={updateCompany.isPending} onSave={async (labels) => { await updateCompany.mutateAsync({ id: company.id, labels }); queryClient.invalidateQueries({ queryKey: ["company-detail", company.id] }); }} /></CardContent></Card>
 
-        <Card><CardHeader><CardTitle className="text-base">Company Details</CardTitle></CardHeader><CardContent className="p-5 pt-0">{hasCompanyDetails ? <div className="space-y-3">{company.categories && <DetailRow icon={Tag} label="Categories" value={company.categories} />}{company.annual_turnover != null && <DetailRow icon={Landmark} label="Annual Turnover" value={new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(company.annual_turnover)} />}{company.funding_raised != null && <DetailRow icon={Landmark} label="Funding Raised" value={new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(company.funding_raised)} />}{company.foundation_date && <DetailRow icon={Users2} label="Founded" value={format(new Date(company.foundation_date), "MMM yyyy")} />}{company.twitter_followers != null && <DetailRow icon={Twitter} label="Twitter Followers" value={company.twitter_followers.toLocaleString()} />}</div> : <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground"><Sparkles className="h-3.5 w-3.5" />Click Enrich to fill in company details.</div>}</CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-base">Company Details</CardTitle></CardHeader><CardContent className="p-5 pt-0">{hasCompanyDetails ? <div className="space-y-3">{company.categories && <DetailRow icon={Tag} label="Categories" value={company.categories} />}{company.annual_turnover != null && <DetailRow icon={Landmark} label="Annual Revenue" value={new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(company.annual_turnover)} />}{company.funding_raised != null && <DetailRow icon={Landmark} label="Funding Raised" value={new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(company.funding_raised)} />}{company.foundation_date && <DetailRow icon={Users2} label="Founded" value={format(new Date(company.foundation_date), "MMM yyyy")} />}{company.twitter_followers != null && <DetailRow icon={Twitter} label="Twitter Followers" value={company.twitter_followers.toLocaleString()} />}</div> : <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground"><Sparkles className="h-3.5 w-3.5" />Click Enrich to fill in company details.</div>}</CardContent></Card>
 
         <Card><CardHeader><CardTitle className="text-base">Lists</CardTitle></CardHeader><CardContent className="p-5 pt-0 text-sm text-muted-foreground">{companyLists && companyLists.length > 0 ? <div className="flex flex-wrap gap-1.5">{companyLists.map((list) => <Badge key={list.id} variant="secondary">{list.name}</Badge>)}</div> : "No lists assigned."}</CardContent></Card>
+
+        <CustomFieldsCard
+          entityType="company"
+          values={(company.custom_fields as Record<string, unknown>) ?? {}}
+          onSave={async (customFields) => {
+            await updateCompany.mutateAsync({ id: company.id, custom_fields: customFields as never });
+            queryClient.invalidateQueries({ queryKey: ["company-detail", company.id] });
+          }}
+        />
       </div>
     </div>
 

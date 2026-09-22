@@ -238,6 +238,7 @@ export type Database = {
           connection_strength: string | null
           country: string | null
           created_at: string
+          custom_fields: Json
           description: string | null
           domains: string | null
           done_activities: number | null
@@ -272,6 +273,7 @@ export type Database = {
           connection_strength?: string | null
           country?: string | null
           created_at?: string
+          custom_fields?: Json
           description?: string | null
           domains?: string | null
           done_activities?: number | null
@@ -306,6 +308,7 @@ export type Database = {
           connection_strength?: string | null
           country?: string | null
           created_at?: string
+          custom_fields?: Json
           description?: string | null
           domains?: string | null
           done_activities?: number | null
@@ -343,6 +346,7 @@ export type Database = {
           country: string | null
           created_at: string
           current_job_start_date: string | null
+          custom_fields: Json
           department: string | null
           do_not_contact: boolean
           done_activities: number | null
@@ -393,6 +397,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           current_job_start_date?: string | null
+          custom_fields?: Json
           department?: string | null
           do_not_contact?: boolean
           done_activities?: number | null
@@ -443,6 +448,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           current_job_start_date?: string | null
+          custom_fields?: Json
           department?: string | null
           do_not_contact?: boolean
           done_activities?: number | null
@@ -596,6 +602,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      custom_field_definitions: {
+        Row: {
+          created_at: string
+          entity_type: string
+          field_key: string
+          field_type: string
+          id: string
+          label: string
+          position: number
+          select_options: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_type: string
+          field_key: string
+          field_type?: string
+          id?: string
+          label: string
+          position?: number
+          select_options?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_type?: string
+          field_key?: string
+          field_type?: string
+          id?: string
+          label?: string
+          position?: number
+          select_options?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       data_export_requests: {
         Row: {
@@ -1889,6 +1934,79 @@ export type Database = {
           value?: Json
         }
         Relationships: []
+      }
+      lead_qualifications: {
+        Row: {
+          champions_identification: Json
+          company_id: string | null
+          completed_at: string | null
+          contact_id: string
+          cost_qualification: Json
+          created_at: string
+          id: string
+          problem_identification: Json
+          process_qualification: Json
+          status: string
+          success_metrics: Json
+          time_qualification: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          champions_identification?: Json
+          company_id?: string | null
+          completed_at?: string | null
+          contact_id: string
+          cost_qualification?: Json
+          created_at?: string
+          id?: string
+          problem_identification?: Json
+          process_qualification?: Json
+          status?: string
+          success_metrics?: Json
+          time_qualification?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          champions_identification?: Json
+          company_id?: string | null
+          completed_at?: string | null
+          contact_id?: string
+          cost_qualification?: Json
+          created_at?: string
+          id?: string
+          problem_identification?: Json
+          process_qualification?: Json
+          status?: string
+          success_metrics?: Json
+          time_qualification?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_qualifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_qualifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
+            foreignKeyName: "lead_qualifications_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       leads: {
         Row: {

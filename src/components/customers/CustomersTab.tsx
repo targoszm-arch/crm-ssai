@@ -454,7 +454,7 @@ export function CustomersTab() {
       ),
       cell: (contact: ContactWithCompany) => (
         <span className="text-sm">
-          {contact.last_contacted ? format(new Date(contact.last_contacted), "MMM d, yyyy") : "-"}
+          {contact.last_contacted ? format(new Date(contact.last_contacted), "dd/MM/yyyy") : "-"}
         </span>
       ),
     },

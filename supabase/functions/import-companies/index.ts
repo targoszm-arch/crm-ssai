@@ -150,7 +150,10 @@ serve(async (req) => {
           country: pick(["Organization - Country of Address", "Country", "Primary location > Country", "Country/Region", "HQ Country"]),
           client_id: pick(["Organization - ID", "ID", "Company ID", "Account ID"]),
           last_interaction: parseTimestamp(pick(["Organization - Last activity date", "Last activity date", "Last interaction", "Last Activity"])),
-          stage: mapLabel(labelsValue),
+          // An explicit stage column (Apollo's "Account stage", or "Stage")
+          // wins when it names a real stage; otherwise fall back to the old
+          // labels-based guess so a file with neither still gets something.
+          stage: matchStageOption(pick(["Account Stage", "Stage", "Organization - Stage", "Sales Stage"])) ?? mapLabel(labelsValue),
         };
 
         if (i === 1) {
@@ -394,6 +397,19 @@ function buildPicker(record: Record<string, any>) {
     }
     return null;
   };
+}
+
+// Kept in sync with src/lib/constants/companyFields.ts SALES_STAGE_OPTIONS --
+// Deno functions can't import from src/, so this is a deliberate duplicate.
+const SALES_STAGE_OPTIONS = [
+  "Discovery", "Contact Made", "Cold Lead", "Warm Lead", "Hot Lead",
+  "Marketing Qualified", "Sales Qualified", "Demo Done", "Prospect", "Partner",
+];
+
+function matchStageOption(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  return SALES_STAGE_OPTIONS.find((option) => option.toLowerCase() === normalized) ?? null;
 }
 
 function mapLabel(label: string | null): string {
