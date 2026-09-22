@@ -21,3 +21,23 @@ export function searchTokens(term: string, maxTokens = 6): string[] {
     .map((token) => token.replace(/[,()]/g, "").replace(/[%_\\]/g, (c) => `\\${c}`))
     .filter(Boolean);
 }
+
+/**
+ * Applies "every word must match somewhere across these columns" to a Supabase query
+ * builder. This was the same five lines copy-pasted into every list's search (contacts,
+ * companies, deals, ...), each with its own column list and its own chance to be fixed
+ * in one place and not the others — which is exactly what happened. One implementation
+ * now; a list's search is just its column names.
+ */
+export function applyTokenSearch<T extends { or: (filter: string) => T }>(
+  query: T,
+  columns: string[],
+  search: string | undefined,
+): T {
+  let result = query;
+  for (const token of searchTokens(search ?? "")) {
+    const clause = columns.map((col) => `${col}.ilike.%${token}%`).join(",");
+    result = result.or(clause);
+  }
+  return result;
+}
