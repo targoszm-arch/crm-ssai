@@ -439,6 +439,7 @@ export function AddDealModal({
                           <SelectItem value="linkedin">LinkedIn</SelectItem>
                           <SelectItem value="email">Email</SelectItem>
                           <SelectItem value="website">Website</SelectItem>
+                          <SelectItem value="llm">LLM</SelectItem>
                           <SelectItem value="referral">Referral</SelectItem>
                           <SelectItem value="cold_call">Cold Call</SelectItem>
                           <SelectItem value="event">Event</SelectItem>
