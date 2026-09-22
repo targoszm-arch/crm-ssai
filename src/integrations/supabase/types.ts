@@ -1293,6 +1293,123 @@ export type Database = {
           },
         ]
       }
+      finance_dedupe_backup_20260917: {
+        Row: {
+          accounting_category: string | null
+          amount_cents: number
+          amount_eur_cents: number | null
+          category: string | null
+          classified_by_rule_id: string | null
+          counterparty_country: string | null
+          counterparty_email: string | null
+          counterparty_name: string | null
+          counterparty_vat_number: string | null
+          created_at: string
+          currency: string
+          description: string | null
+          drive_url: string | null
+          gmail_url: string | null
+          id: string
+          is_reconciled: boolean | null
+          mailbox: string | null
+          net_cents: number | null
+          notes: string | null
+          raw_data: Json | null
+          receipt_filename: string | null
+          receipt_size: string | null
+          source: string
+          source_id: string | null
+          stripe_fee_cents: number | null
+          subject: string | null
+          tax_rate_name: string | null
+          tax_rate_percent: number | null
+          transaction_date: string
+          type: string
+          updated_at: string
+          user_id: string
+          vat_amount_cents: number | null
+          vat_collected_cents: number | null
+          vat_eur_cents: number | null
+          vat_treatment: string | null
+        }
+        Insert: {
+          accounting_category?: string | null
+          amount_cents: number
+          amount_eur_cents?: number | null
+          category?: string | null
+          classified_by_rule_id?: string | null
+          counterparty_country?: string | null
+          counterparty_email?: string | null
+          counterparty_name?: string | null
+          counterparty_vat_number?: string | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          drive_url?: string | null
+          gmail_url?: string | null
+          id?: string
+          is_reconciled?: boolean | null
+          mailbox?: string | null
+          net_cents?: number | null
+          notes?: string | null
+          raw_data?: Json | null
+          receipt_filename?: string | null
+          receipt_size?: string | null
+          source: string
+          source_id?: string | null
+          stripe_fee_cents?: number | null
+          subject?: string | null
+          tax_rate_name?: string | null
+          tax_rate_percent?: number | null
+          transaction_date: string
+          type: string
+          updated_at?: string
+          user_id: string
+          vat_amount_cents?: number | null
+          vat_collected_cents?: number | null
+          vat_eur_cents?: number | null
+          vat_treatment?: string | null
+        }
+        Update: {
+          accounting_category?: string | null
+          amount_cents?: number
+          amount_eur_cents?: number | null
+          category?: string | null
+          classified_by_rule_id?: string | null
+          counterparty_country?: string | null
+          counterparty_email?: string | null
+          counterparty_name?: string | null
+          counterparty_vat_number?: string | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          drive_url?: string | null
+          gmail_url?: string | null
+          id?: string
+          is_reconciled?: boolean | null
+          mailbox?: string | null
+          net_cents?: number | null
+          notes?: string | null
+          raw_data?: Json | null
+          receipt_filename?: string | null
+          receipt_size?: string | null
+          source?: string
+          source_id?: string | null
+          stripe_fee_cents?: number | null
+          subject?: string | null
+          tax_rate_name?: string | null
+          tax_rate_percent?: number | null
+          transaction_date?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+          vat_amount_cents?: number | null
+          vat_collected_cents?: number | null
+          vat_eur_cents?: number | null
+          vat_treatment?: string | null
+        }
+        Relationships: []
+      }
       finance_oauth_tokens: {
         Row: {
           obtained_at: string
@@ -3653,6 +3770,17 @@ export type Database = {
       }
     }
     Functions: {
+      backfill_route_enrollments: {
+        Args: {
+          p_contact_ids: string[]
+          p_label?: string
+          p_route_id?: string
+          p_sequence_id: string
+          p_source?: string
+          p_topic?: string
+        }
+        Returns: Json
+      }
       increment_contact_clicks: {
         Args: { contact_id_param: string }
         Returns: undefined
@@ -3702,6 +3830,15 @@ export type Database = {
       refresh_newsletter_metrics: {
         Args: { p_newsletter_send_id: string }
         Returns: undefined
+      }
+      route_lms_event: {
+        Args: {
+          p_contact_id: string
+          p_event_name: string
+          p_metadata?: Json
+          p_user_id?: string
+        }
+        Returns: Json
       }
       route_sequence_click: {
         Args: { p_contact_id: string; p_link_url: string; p_user_id?: string }

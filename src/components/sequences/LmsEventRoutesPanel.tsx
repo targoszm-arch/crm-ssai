@@ -16,12 +16,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Zap, Plus, Trash2, Loader2 } from "lucide-react";
+import { Zap, Plus, Trash2, Loader2, Pencil } from "lucide-react";
 import {
   useLmsEventRoutes, useLmsEventRouteStats, useCreateLmsEventRoute,
   useUpdateLmsEventRoute, useDeleteLmsEventRoute, LmsEventRoute, LMS_EVENT_NAMES,
 } from "@/hooks/useLmsEventRoutes";
 import { useSequences } from "@/hooks/useSequences";
+import { MatchedPeopleDialog } from "@/components/sequences/MatchedPeopleDialog";
 
 const NO_SEQUENCE = "__none__";
 
@@ -49,12 +50,14 @@ export function LmsEventRoutesPanel() {
   const deleteRoute = useDeleteLmsEventRoute();
 
   const [showForm, setShowForm] = useState(false);
+  const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
   const [topic, setTopic] = useState("");
   const [eventName, setEventName] = useState<string>("");
   const [label, setLabel] = useState("");
   const [sequenceId, setSequenceId] = useState<string>(NO_SEQUENCE);
   const [priority, setPriority] = useState("0");
   const [pendingDelete, setPendingDelete] = useState<LmsEventRoute | null>(null);
+  const [matchedDialogRoute, setMatchedDialogRoute] = useState<LmsEventRoute | null>(null);
 
   const sequenceName = (id: string | null) =>
     id ? sequences?.find((s) => s.id === id)?.name ?? "(deleted sequence)" : null;
@@ -85,19 +88,32 @@ export function LmsEventRoutesPanel() {
     setSequenceId(NO_SEQUENCE);
     setPriority("0");
     setShowForm(false);
+    setEditingRouteId(null);
   };
 
-  const handleCreate = () => {
-    createRoute.mutate(
-      {
-        topic: topic.trim(),
-        event_name: eventName,
-        label: label.trim(),
-        enrol_sequence_id: sequenceId === NO_SEQUENCE ? null : sequenceId,
-        priority: Number.parseInt(priority, 10) || 0,
-      },
-      { onSuccess: resetForm },
-    );
+  const startEdit = (route: LmsEventRoute) => {
+    setEditingRouteId(route.id);
+    setTopic(route.topic);
+    setEventName(route.event_name);
+    setLabel(route.label);
+    setSequenceId(route.enrol_sequence_id ?? NO_SEQUENCE);
+    setPriority(String(route.priority));
+    setShowForm(true);
+  };
+
+  const handleSave = () => {
+    const payload = {
+      topic: topic.trim(),
+      event_name: eventName,
+      label: label.trim(),
+      enrol_sequence_id: sequenceId === NO_SEQUENCE ? null : sequenceId,
+      priority: Number.parseInt(priority, 10) || 0,
+    };
+    if (editingRouteId) {
+      updateRoute.mutate({ id: editingRouteId, ...payload }, { onSuccess: resetForm });
+    } else {
+      createRoute.mutate(payload, { onSuccess: resetForm });
+    }
   };
 
   const canSave = topic.trim() && eventName && label.trim();
@@ -117,7 +133,10 @@ export function LmsEventRoutesPanel() {
             that topic.
           </CardDescription>
         </div>
-        <Button variant="outline" onClick={() => setShowForm((v) => !v)}>
+        <Button
+          variant="outline"
+          onClick={() => (showForm ? resetForm() : setShowForm(true))}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Add rule
         </Button>
@@ -126,6 +145,9 @@ export function LmsEventRoutesPanel() {
       <CardContent className="space-y-4">
         {showForm && (
           <div className="rounded-lg border p-4 space-y-4">
+            {editingRouteId && (
+              <p className="text-sm font-medium">Editing rule</p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="event-route-topic">Topic</Label>
@@ -212,9 +234,14 @@ export function LmsEventRoutesPanel() {
               <Button variant="ghost" onClick={resetForm}>
                 Cancel
               </Button>
-              <Button onClick={handleCreate} disabled={!canSave || createRoute.isPending}>
-                {createRoute.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save rule
+              <Button
+                onClick={handleSave}
+                disabled={!canSave || createRoute.isPending || updateRoute.isPending}
+              >
+                {(createRoute.isPending || updateRoute.isPending) && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {editingRouteId ? "Update rule" : "Save rule"}
               </Button>
             </div>
           </div>
@@ -272,11 +299,17 @@ export function LmsEventRoutesPanel() {
                       {sequenceName(route.enrol_sequence_id) ?? "Label only"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {stats
-                        ? `${stats.hits} (${stats.people.size} ${
-                            stats.people.size === 1 ? "person" : "people"
-                          })`
-                        : "—"}
+                      {stats && stats.people.size > 0 ? (
+                        <Button
+                          variant="link"
+                          className="h-auto p-0 tabular-nums"
+                          onClick={() => setMatchedDialogRoute(route)}
+                        >
+                          {stats.hits} ({stats.people.size} {stats.people.size === 1 ? "person" : "people"})
+                        </Button>
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{route.priority}</TableCell>
                     <TableCell className="text-center">
@@ -288,6 +321,9 @@ export function LmsEventRoutesPanel() {
                       />
                     </TableCell>
                     <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => startEdit(route)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -303,6 +339,23 @@ export function LmsEventRoutesPanel() {
           </Table>
         )}
       </CardContent>
+
+      {matchedDialogRoute && (
+        <MatchedPeopleDialog
+          open={!!matchedDialogRoute}
+          onOpenChange={(open) => !open && setMatchedDialogRoute(null)}
+          routeId={matchedDialogRoute.id}
+          topic={matchedDialogRoute.topic}
+          label={matchedDialogRoute.label}
+          contactIds={Array.from(matchCounts.get(matchedDialogRoute.id)?.people ?? [])}
+          sequenceId={matchedDialogRoute.enrol_sequence_id}
+          sequenceName={sequenceName(matchedDialogRoute.enrol_sequence_id)}
+          onEditRule={() => {
+            startEdit(matchedDialogRoute);
+            setMatchedDialogRoute(null);
+          }}
+        />
+      )}
 
       <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
         <AlertDialogContent>
