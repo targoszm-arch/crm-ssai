@@ -76,9 +76,12 @@ export function ImportDataButton() {
         if (error) throw new Error(error.message);
 
         if (data.success) {
+          const enriched = data.enriched ?? 0;
           toast({
             title: "Contacts Imported",
-            description: `Successfully imported ${data.imported} contacts. ${data.matched} linked to organisations.`,
+            description:
+              `${data.imported} new, ${enriched} existing enriched. ` +
+              `${data.matched} linked to organisations.`,
           });
           queryClient.invalidateQueries({ queryKey: ["contacts"] });
           queryClient.invalidateQueries({ queryKey: ["contact-filter-options"] });
