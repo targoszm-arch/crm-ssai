@@ -160,7 +160,12 @@ serve(async (req: Request): Promise<Response> => {
       });
 
       if (!refreshResponse.ok) {
-        throw new Error("Failed to refresh token");
+        // The generic "Failed to refresh token" this used to throw hid Google's actual
+        // reason (invalid_grant vs. a credential mismatch) from every log line, which is
+        // why a real refresh failure looked identical to a code bug for 5 days.
+        const errorBody = await refreshResponse.text();
+        console.error(`Google token refresh failed (${refreshResponse.status}):`, errorBody);
+        throw new Error(`Failed to refresh token: ${refreshResponse.status} ${errorBody}`);
       }
 
       const tokens = await refreshResponse.json();

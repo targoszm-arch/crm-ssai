@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { startGoogleOAuth } from "@/hooks/useEmailAccounts";
 import { toast } from "@/hooks/use-toast";
 
 export function ConnectGmail() {
@@ -13,33 +13,8 @@ export function ConnectGmail() {
     setIsLoading(true);
 
     try {
-      // Fetch Google config from edge function (Client ID and fixed redirect URI)
-      const { data, error } = await supabase.functions.invoke("get-google-config");
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      if (!data.clientId || !data.redirectUri) {
-        throw new Error("Invalid configuration received from server");
-      }
-
       setIsConnecting(true);
-
-      const scope = encodeURIComponent(
-        "https://www.googleapis.com/auth/gmail.readonly " +
-        "https://www.googleapis.com/auth/gmail.send " +
-        "https://www.googleapis.com/auth/userinfo.email " +
-        "https://www.googleapis.com/auth/calendar " +
-        "https://www.googleapis.com/auth/calendar.events"
-      );
-
-      // Use state parameter to tell the callback where to redirect after auth
-      const state = "inbox";
-
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${data.clientId}&redirect_uri=${encodeURIComponent(data.redirectUri)}&response_type=code&scope=${scope}&access_type=offline&prompt=consent&state=${state}`;
-
-      window.location.href = authUrl;
+      await startGoogleOAuth();
     } catch (err) {
       console.error("Failed to start OAuth flow:", err);
       const message = err instanceof Error ? err.message : "Failed to connect";

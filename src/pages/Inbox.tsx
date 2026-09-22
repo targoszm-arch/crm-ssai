@@ -11,8 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useEmailAccounts, useDisconnectEmailAccount } from "@/hooks/useEmailAccounts";
-import { Email, useSyncEmails, useBulkMarkEmailsRead, useArchiveEmails, EmailFilters } from "@/hooks/useEmails";
+import { useEmailAccounts, useDisconnectEmailAccount, startGoogleOAuth } from "@/hooks/useEmailAccounts";
+import { Email, useSyncEmails, useBulkMarkEmailsRead, useArchiveEmails, useEmailLabelOptions, EmailFilters } from "@/hooks/useEmails";
 import { LinkedInMessage } from "@/hooks/useLinkedInMessages";
 import { ConnectGmail } from "@/components/inbox/ConnectGmail";
 import { EmailList } from "@/components/inbox/EmailList";
@@ -71,6 +71,7 @@ export default function Inbox() {
   const [activeTab, setActiveTab] = useState<InboxTab>("email");
   const [isSyncingMeetAlfred, setIsSyncingMeetAlfred] = useState(false);
   const [isAutoSyncing, setIsAutoSyncing] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const autoSyncTriggered = useRef(false);
   
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -81,6 +82,7 @@ export default function Inbox() {
   const [filters, setFilters] = useState<EmailFilters>({});
 
   const { data: accounts, isLoading: accountsLoading } = useEmailAccounts();
+  const { data: availableLabels = [] } = useEmailLabelOptions();
   const disconnectAccount = useDisconnectEmailAccount();
   const syncEmails = useSyncEmails();
   const bulkMarkRead = useBulkMarkEmailsRead();
@@ -171,11 +173,33 @@ export default function Inbox() {
     }
   };
 
-  const handleDisconnect = (accountId: string) => {
+  const handleDisconnect = (accountId: string, emailAddress: string) => {
+    // email_accounts cascade-deletes emails and calendar_events on delete — this
+    // permanently destroys every synced email and event for the account, not just
+    // the connection. A broken/expired token is not a reason to disconnect; use
+    // Reconnect instead, which updates the same account's tokens in place.
+    const confirmed = window.confirm(
+      `Disconnect ${emailAddress}? This permanently deletes every synced email and calendar event for this account from the CRM — it cannot be undone. If the connection is just broken (expired or invalid token), use Reconnect instead.`
+    );
+    if (!confirmed) return;
     disconnectAccount.mutate(accountId, {
       onSuccess: () => toast({ title: "Account Disconnected" }),
       onError: (error) => toast({ title: "Error", description: error.message, variant: "destructive" }),
     });
+  };
+
+  const handleReconnect = async () => {
+    setIsReconnecting(true);
+    try {
+      await startGoogleOAuth();
+    } catch (error) {
+      toast({
+        title: "Reconnect Failed",
+        description: error instanceof Error ? error.message : "Failed to start reconnect",
+        variant: "destructive",
+      });
+      setIsReconnecting(false);
+    }
   };
 
   const handleSelectEmail = (email: Email) => setSelectedItem({ type: "email", item: email });
@@ -311,10 +335,18 @@ export default function Inbox() {
                   Email Signature
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleReconnect} disabled={isReconnecting}>
+                  {isReconnecting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Reconnect Gmail
+                </DropdownMenuItem>
                 {accounts?.map((account) => (
                   <DropdownMenuItem
                     key={account.id}
-                    onClick={() => handleDisconnect(account.id)}
+                    onClick={() => handleDisconnect(account.id, account.email_address)}
                     className="text-destructive"
                   >
                     Disconnect {account.email_address}
@@ -353,7 +385,7 @@ export default function Inbox() {
           object that nothing could ever change. */}
       {activeTab === "email" && hasConnectedAccount && (
         <div className="border-b px-6 py-2">
-          <InboxFilters filters={filters} onChange={setFilters} />
+          <InboxFilters filters={filters} onChange={setFilters} availableLabels={availableLabels} />
         </div>
       )}
 

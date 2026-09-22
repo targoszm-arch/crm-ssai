@@ -27,6 +27,38 @@ export function useEmailAccounts() {
   });
 }
 
+/**
+ * Kicks off the Google OAuth consent screen. `google-auth-callback` upserts by
+ * `email_address`, so this is also the reconnect path for an account whose refresh
+ * token Google has rejected (invalid_grant) — it updates that same row's tokens in
+ * place. `prompt=consent` forces Google to reissue a refresh_token even for an
+ * account that already granted access once, which a plain re-auth would otherwise
+ * skip, leaving the old (rejected) refresh_token in place.
+ *
+ * Deliberately NOT "disconnect then reconnect": `email_accounts` cascade-deletes
+ * `emails` and `calendar_events` on delete, so disconnecting a broken account to
+ * get the Connect button back would destroy every synced email and event for it.
+ */
+export async function startGoogleOAuth(): Promise<void> {
+  const { data, error } = await supabase.functions.invoke("get-google-config");
+  if (error) throw new Error(error.message);
+  if (!data.clientId || !data.redirectUri) {
+    throw new Error("Invalid configuration received from server");
+  }
+
+  const scope = encodeURIComponent(
+    "https://www.googleapis.com/auth/gmail.readonly " +
+    "https://www.googleapis.com/auth/gmail.send " +
+    "https://www.googleapis.com/auth/userinfo.email " +
+    "https://www.googleapis.com/auth/calendar " +
+    "https://www.googleapis.com/auth/calendar.events"
+  );
+  const state = "inbox";
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${data.clientId}&redirect_uri=${encodeURIComponent(data.redirectUri)}&response_type=code&scope=${scope}&access_type=offline&prompt=consent&state=${state}`;
+
+  window.location.href = authUrl;
+}
+
 export function useConnectGmail() {
   const queryClient = useQueryClient();
 
