@@ -161,7 +161,7 @@ export function ExternalLMSLeadsTab() {
           toast.error(
             `Saved with ${report.errors.length} failure${report.errors.length === 1 ? "" : "s"} — ` +
             `first: ${report.errors[0]}`,
-            { duration: 15000 },
+            { duration: 8000 },
           );
         } else {
           toast.success(

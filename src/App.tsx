@@ -95,7 +95,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
         <Toaster />
-        <Sonner />
+        <Sonner position="top-right" />
       </TooltipProvider>
     </BrowserRouter>
   </QueryClientProvider>
