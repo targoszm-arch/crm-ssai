@@ -12,6 +12,14 @@ export interface SearchableSelectOption {
   label: string;
   /** Extra text matched by the search box but shown dimmed, e.g. an email or company. */
   hint?: string;
+  /**
+   * Survives the search filter regardless of what's typed — for a synthetic action row like
+   * "Create new contact" or "No contact" that isn't real data to search over. Without this,
+   * cmdk's filter hides it the moment the query doesn't literally match its label, which for
+   * an action row is always: typing a name that has no match leaves no way to act on that,
+   * only "No match found." with nothing to click.
+   */
+  alwaysShow?: boolean;
 }
 
 interface SearchableSelectProps {
@@ -90,6 +98,7 @@ export function SearchableSelect({
             // typing a name or an email finds the row rather than needing its uuid.
             const option = byValue.get(itemValue);
             if (!option) return 0;
+            if (option.alwaysShow) return 1;
             const haystack = `${option.label} ${option.hint ?? ""}`.toLowerCase();
             return haystack.includes(search.toLowerCase()) ? 1 : 0;
           }}

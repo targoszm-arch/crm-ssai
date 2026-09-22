@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDistanceToNow, differenceInDays } from "date-fns";
 import { Mail, RefreshCw, Search, Link2, Link2Off, MailOpen, MoreVertical, Eye, MousePointerClick } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,19 @@ export function EmailList({
 
   const syncEmails = useSyncEmails();
   const markEmailRead = useMarkEmailRead();
+
+  // The open thread panel renders from the `email` object it was selected with —
+  // a snapshot, not a live subscription to this query. Linking a contact (or any
+  // other update) refetches this list and updates the row, but without this the
+  // open panel kept showing the stale snapshot until something else forced a
+  // reselect, which read as "only resolves on page refresh".
+  useEffect(() => {
+    if (!selectedEmail || !emails) return;
+    const fresh = emails.find((e) => e.id === selectedEmail.id);
+    if (fresh && fresh !== selectedEmail) {
+      onSelectEmail(fresh);
+    }
+  }, [emails, selectedEmail, onSelectEmail]);
 
   const handleToggleRead = (e: React.MouseEvent, email: Email) => {
     e.stopPropagation();
