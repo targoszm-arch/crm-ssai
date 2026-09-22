@@ -253,10 +253,14 @@ export type Database = {
           labels: string | null
           last_interaction: string | null
           linkedin_url: string | null
+          naics_code: string | null
+          naics_description: string | null
           next_activity_date: string | null
           peak_focus_client_id: string | null
           peak_focus_url: string | null
           people_count: number | null
+          sic_code: string | null
+          sic_title: string | null
           size: string | null
           stage: string | null
           twitter_followers: number | null
@@ -288,10 +292,14 @@ export type Database = {
           labels?: string | null
           last_interaction?: string | null
           linkedin_url?: string | null
+          naics_code?: string | null
+          naics_description?: string | null
           next_activity_date?: string | null
           peak_focus_client_id?: string | null
           peak_focus_url?: string | null
           people_count?: number | null
+          sic_code?: string | null
+          sic_title?: string | null
           size?: string | null
           stage?: string | null
           twitter_followers?: number | null
@@ -323,10 +331,14 @@ export type Database = {
           labels?: string | null
           last_interaction?: string | null
           linkedin_url?: string | null
+          naics_code?: string | null
+          naics_description?: string | null
           next_activity_date?: string | null
           peak_focus_client_id?: string | null
           peak_focus_url?: string | null
           people_count?: number | null
+          sic_code?: string | null
+          sic_title?: string | null
           size?: string | null
           stage?: string | null
           twitter_followers?: number | null
@@ -2582,6 +2594,24 @@ export type Database = {
           },
         ]
       }
+      naics_codes: {
+        Row: {
+          code: string
+          description: string
+          id: number
+        }
+        Insert: {
+          code: string
+          description: string
+          id?: never
+        }
+        Update: {
+          code?: string
+          description?: string
+          id?: never
+        }
+        Relationships: []
+      }
       newsletter_recipients: {
         Row: {
           contact_id: string | null
@@ -3428,6 +3458,24 @@ export type Database = {
         }
         Relationships: []
       }
+      sic_codes: {
+        Row: {
+          code: string
+          id: number
+          title: string
+        }
+        Insert: {
+          code: string
+          id?: never
+          title: string
+        }
+        Update: {
+          code?: string
+          id?: never
+          title?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           archive: boolean | null
@@ -3997,6 +4045,8 @@ export type Database = {
         Args: { p_contact_id: string; p_link_url: string; p_user_id?: string }
         Returns: Json
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       update_user_consent: {
         Args: {
           consent_type_param: string

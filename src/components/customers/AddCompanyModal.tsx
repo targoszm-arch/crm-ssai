@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUpdateCompany, Company } from "@/hooks/useCompanies";
 import { CountrySelect } from "@/components/shared/CountrySelect";
+import { NaicsCodeSelect } from "@/components/shared/NaicsCodeSelect";
+import { SicCodeSelect } from "@/components/shared/SicCodeSelect";
 import { INDUSTRY_OPTIONS } from "@/lib/constants/industries";
 import { SALES_STAGE_OPTIONS, COMPANY_SIZE_OPTIONS } from "@/lib/constants/companyFields";
 
@@ -49,6 +51,10 @@ const emptyValues = {
   annual_turnover: "",
   linkedin_url: "",
   description: "",
+  naics_code: "",
+  naics_description: "",
+  sic_code: "",
+  sic_title: "",
 };
 
 type FormValues = typeof emptyValues;
@@ -73,6 +79,10 @@ export function AddCompanyModal({ open, onOpenChange, company }: AddCompanyModal
       annual_turnover: company.annual_turnover != null ? String(company.annual_turnover) : "",
       linkedin_url: company.linkedin_url ?? "",
       description: company.description ?? "",
+      naics_code: company.naics_code ?? "",
+      naics_description: company.naics_description ?? "",
+      sic_code: company.sic_code ?? "",
+      sic_title: company.sic_title ?? "",
     });
   }, [open, company]);
 
@@ -101,6 +111,10 @@ export function AddCompanyModal({ open, onOpenChange, company }: AddCompanyModal
       annual_turnover: values.annual_turnover.trim() === "" ? null : Number(values.annual_turnover),
       linkedin_url: nullify(values.linkedin_url),
       description: nullify(values.description),
+      naics_code: nullify(values.naics_code),
+      naics_description: nullify(values.naics_description),
+      sic_code: nullify(values.sic_code),
+      sic_title: nullify(values.sic_title),
     };
 
     update.mutate(
@@ -193,6 +207,32 @@ export function AddCompanyModal({ open, onOpenChange, company }: AddCompanyModal
               placeholder="0"
               value={values.annual_turnover}
               onChange={(e) => set("annual_turnover", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="naics_code">NAICS code</Label>
+            <NaicsCodeSelect
+              id="naics_code"
+              code={values.naics_code}
+              description={values.naics_description}
+              onChange={(code, description) => {
+                set("naics_code", code);
+                set("naics_description", description);
+              }}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="sic_code">SIC code</Label>
+            <SicCodeSelect
+              id="sic_code"
+              code={values.sic_code}
+              title={values.sic_title}
+              onChange={(code, title) => {
+                set("sic_code", code);
+                set("sic_title", title);
+              }}
             />
           </div>
 
