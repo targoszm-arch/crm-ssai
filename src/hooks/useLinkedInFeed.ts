@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { LinkedInMessage } from "./useLinkedInMessages";
+import { searchTokens } from "@/lib/searchTokens";
 
 // Why this exists, and why it is not just useLinkedInMessages with a search box.
 //
@@ -44,8 +45,12 @@ export function useLinkedInFeed(options: UseLinkedInFeedOptions = {}) {
   return useQuery({
     queryKey: ["linkedin-feed", search ?? null, linkedOnly, limit],
     queryFn: async (): Promise<LinkedInFeedItem[]> => {
-      // ilike treats _ and % as wildcards, and LinkedIn text is full of underscores.
-      const pattern = search ? `%${search.replace(/([\\%_])/g, "\\$1")}%` : null;
+      // Every word has to match somewhere (chained .or()/.ilike() calls are AND'd
+      // by PostgREST) — a single ilike.%term% treated a two-word name as one
+      // literal substring, which only matched if it happened to appear in that
+      // exact order and spacing. searchTokens also escapes ilike's own wildcards
+      // (LinkedIn text is full of underscores) and strips filter-syntax characters.
+      const tokens = search ? searchTokens(search) : [];
 
       let messageQuery = supabase
         .from("linkedin_messages")
@@ -58,14 +63,6 @@ export function useLinkedInFeed(options: UseLinkedInFeedOptions = {}) {
         .order("message_timestamp", { ascending: false })
         .limit(limit);
 
-      if (pattern) {
-        // Searching the body alone missed every "what did X say" lookup, where X is
-        // the person, not a word in the message.
-        messageQuery = messageQuery.or(
-          `message_text.ilike.${pattern},sender_name.ilike.${pattern},company_name.ilike.${pattern}`
-        );
-      }
-
       let activityQuery = supabase
         .from("activities")
         .select(
@@ -76,8 +73,13 @@ export function useLinkedInFeed(options: UseLinkedInFeedOptions = {}) {
         .order("occurred_at", { ascending: false })
         .limit(limit);
 
-      if (pattern) {
-        activityQuery = activityQuery.ilike("description", pattern);
+      for (const token of tokens) {
+        // Searching the body alone missed every "what did X say" lookup, where X is
+        // the person, not a word in the message.
+        messageQuery = messageQuery.or(
+          `message_text.ilike.%${token}%,sender_name.ilike.%${token}%,company_name.ilike.%${token}%`
+        );
+        activityQuery = activityQuery.ilike("description", `%${token}%`);
       }
 
       const [messagesRes, activitiesRes] = await Promise.all([

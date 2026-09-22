@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { Linkedin, User, Link2, Search, MessageSquare } from "lucide-react";
@@ -30,6 +30,20 @@ export function LinkedInMessageList({
     search: search || undefined,
     linkedOnly,
   });
+
+  // Same fix as EmailList: the open panel renders from the message object it was
+  // selected with, a snapshot. Re-sync it to the fresh copy whenever the feed
+  // refetches, so linking a contact updates the open panel without a reload.
+  useEffect(() => {
+    if (!selectedMessage || !items) return;
+    const fresh = items.find(
+      (item): item is Extract<LinkedInFeedItem, { kind: "message" }> =>
+        item.kind === "message" && item.message.id === selectedMessage.id
+    );
+    if (fresh && fresh.message !== selectedMessage) {
+      onSelectMessage(fresh.message);
+    }
+  }, [items, selectedMessage, onSelectMessage]);
 
   const searchBox = (
     <div className="p-3 border-b">
