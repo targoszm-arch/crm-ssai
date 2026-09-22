@@ -312,17 +312,17 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
             headed blocks (the third with its own "Social Links" label and a
             Separator above it) for what is, on the page, a single idea: how to
             reach this person and who they work for. One flowing block instead. */}
-        <div className="space-y-3">
+        <div className={isEditing ? "space-y-3" : "flex flex-wrap items-center gap-x-4 gap-y-2"}>
           {contact.companies?.company_name && contact.company_id ? (
             <Link
               to={`/companies/${contact.company_id}`}
-              className="flex items-center gap-3 text-sm text-primary hover:underline"
+              className="flex items-center gap-2 text-sm text-primary hover:underline"
             >
               <Building2 className="h-4 w-4" />
               {contact.companies.company_name}
             </Link>
           ) : contact.companies?.company_name ? (
-            <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-2 text-sm">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span>{contact.companies.company_name}</span>
             </div>
@@ -412,7 +412,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
                 </div>
               )}
               {(contact.linkedin_url || contact.facebook_url || contact.instagram_url) && (
-                <div className="flex flex-wrap gap-2 pt-1">
+                <div className="flex flex-wrap gap-2">
                   {contact.linkedin_url && (
                     <a
                       href={contact.linkedin_url}
