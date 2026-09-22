@@ -365,7 +365,7 @@ export function useEmail(emailId: string | null | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("emails")
-        .select("*")
+        .select("*, contacts (first_name, last_name)")
         .eq("id", emailId!)
         .maybeSingle();
 
@@ -392,7 +392,7 @@ export function useEmailHistory(
     queryFn: async () => {
       let query = supabase
         .from("emails")
-        .select("*")
+        .select("*, contacts (first_name, last_name)")
         .order("received_at", { ascending: false })
         .limit(limit);
 

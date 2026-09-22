@@ -256,6 +256,21 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
               options={[
                 { value: "unlinked", label: "No contact", alwaysShow: true },
                 { value: "create-new", label: "Create new contact", alwaysShow: true },
+                // The general contacts list below is capped server-side and
+                // sorted by last_contacted, so a contact with no recorded
+                // last_contacted (most of them) can be missing from it even
+                // though they're the one this email is actually linked to --
+                // which read as "unlinked" here despite genuinely being
+                // linked. Guarantee the current link always has an entry.
+                ...(email.contact_id && !(contacts ?? []).some((c) => c.id === email.contact_id)
+                  ? [{
+                      value: email.contact_id,
+                      label: email.contacts
+                        ? [email.contacts.first_name, email.contacts.last_name].filter(Boolean).join(" ")
+                        : "Linked contact",
+                      alwaysShow: true,
+                    }]
+                  : []),
                 ...(contacts ?? []).map((contact: Contact) => ({
                   value: contact.id,
                   label: [contact.first_name, contact.last_name].filter(Boolean).join(" ")

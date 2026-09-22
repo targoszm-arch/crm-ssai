@@ -1,6 +1,5 @@
 import { useState, DragEvent } from "react";
-import { FileText, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { FileText } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Deal, useMoveDealToStage } from "@/hooks/useDeals";
@@ -11,7 +10,6 @@ interface PipelineBoardProps {
   stages: PipelineStage[];
   dealsByStage: Record<string, Deal[]>;
   onDealClick: (deal: Deal) => void;
-  onAddDeal: (stage?: string) => void;
   onStageClick: (stage: PipelineStage) => void;
 }
 
@@ -19,7 +17,6 @@ export function PipelineBoard({
   stages,
   dealsByStage,
   onDealClick,
-  onAddDeal,
   onStageClick,
 }: PipelineBoardProps) {
   const [draggedDealId, setDraggedDealId] = useState<string | null>(null);
@@ -129,6 +126,7 @@ export function PipelineBoard({
                       deal={deal}
                       onClick={() => onDealClick(deal)}
                       isDragging={draggedDealId === deal.id}
+                      isClosed={stage.is_won || stage.is_lost}
                     />
                   </div>
                 ))}
@@ -138,19 +136,6 @@ export function PipelineBoard({
                     Drop deals here
                   </div>
                 )}
-              </div>
-
-              {/* Add Deal Button */}
-              <div className="p-2 border-t">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start gap-2 text-muted-foreground"
-                  onClick={() => onAddDeal(stage.name)}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add deal
-                </Button>
               </div>
             </div>
           );
