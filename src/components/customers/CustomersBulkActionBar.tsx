@@ -1,4 +1,4 @@
-import { Trash2, X, Download, Sparkles, Loader2 } from "lucide-react";
+import { Trash2, X, Download, Sparkles, Loader2, Merge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EnrichProviderMenu } from "./EnrichProviderMenu";
 import { AddToListMenu } from "./AddToListMenu";
@@ -23,6 +23,7 @@ interface CustomersBulkActionBarProps {
   onClearSelection: () => void;
   onExport: () => void;
   onEnrich?: (provider: EnrichProvider) => void;
+  onMerge?: () => void;
   isDeleting?: boolean;
   isEnriching?: boolean;
 }
@@ -34,6 +35,7 @@ export function CustomersBulkActionBar({
   onClearSelection,
   onExport,
   onEnrich,
+  onMerge,
   isDeleting,
   isEnriching,
 }: CustomersBulkActionBarProps) {
@@ -55,6 +57,12 @@ export function CustomersBulkActionBar({
             Export CSV
           </Button>
           <AddToListMenu contactIds={selectedIds} />
+          {selectedCount >= 2 && onMerge && (
+            <Button variant="outline" size="sm" onClick={onMerge}>
+              <Merge className="h-4 w-4 mr-1" />
+              Merge duplicates
+            </Button>
+          )}
           <EnrichProviderMenu
             onEnrich={(provider) => onEnrich?.(provider)}
             disabled={isEnriching}
