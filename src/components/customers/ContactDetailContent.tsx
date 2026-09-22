@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -265,7 +266,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
             </div>
           </div>
           {!isEditing ? (
-            <div className="flex gap-1 shrink-0">
+            <div className="flex gap-1 shrink-0 ml-auto">
               <Button
                 variant="ghost"
                 size="icon"
@@ -293,7 +294,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
               </Button>
             </div>
           ) : (
-            <div className="flex gap-1 shrink-0">
+            <div className="flex gap-1 shrink-0 ml-auto">
               <Button variant="ghost" size="icon" onClick={handleCancel}>
                 <X className="h-4 w-4" />
               </Button>
@@ -307,13 +308,25 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
 
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
       <div className="space-y-6">
+        {/* Company, contact details and social links used to be three separately
+            headed blocks (the third with its own "Social Links" label and a
+            Separator above it) for what is, on the page, a single idea: how to
+            reach this person and who they work for. One flowing block instead. */}
         <div className="space-y-3">
-          {contact.companies?.company_name && (
+          {contact.companies?.company_name && contact.company_id ? (
+            <Link
+              to={`/companies/${contact.company_id}`}
+              className="flex items-center gap-3 text-sm text-primary hover:underline"
+            >
+              <Building2 className="h-4 w-4" />
+              {contact.companies.company_name}
+            </Link>
+          ) : contact.companies?.company_name ? (
             <div className="flex items-center gap-3 text-sm">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span>{contact.companies.company_name}</span>
             </div>
-          )}
+          ) : null}
           {isEditing ? (
             <div className="space-y-3">
               <div>
@@ -344,6 +357,33 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
                   placeholder="Work location"
                 />
               </div>
+              <div>
+                <Label htmlFor="linkedin_url" className="text-xs">LinkedIn URL</Label>
+                <Input
+                  id="linkedin_url"
+                  value={formData.linkedin_url}
+                  onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
+                  placeholder="https://linkedin.com/in/..."
+                />
+              </div>
+              <div>
+                <Label htmlFor="facebook_url" className="text-xs">Facebook URL</Label>
+                <Input
+                  id="facebook_url"
+                  value={formData.facebook_url}
+                  onChange={(e) => setFormData({ ...formData, facebook_url: e.target.value })}
+                  placeholder="https://facebook.com/..."
+                />
+              </div>
+              <div>
+                <Label htmlFor="instagram_url" className="text-xs">Instagram URL</Label>
+                <Input
+                  id="instagram_url"
+                  value={formData.instagram_url}
+                  onChange={(e) => setFormData({ ...formData, instagram_url: e.target.value })}
+                  placeholder="https://instagram.com/..."
+                />
+              </div>
             </div>
           ) : (
             <>
@@ -371,92 +411,52 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
                   <span>{contact.work_location}</span>
                 </div>
               )}
+              {(contact.linkedin_url || contact.facebook_url || contact.instagram_url) && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {contact.linkedin_url && (
+                    <a
+                      href={contact.linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-accent"
+                    >
+                      <Linkedin className="h-4 w-4 text-[#0077B5]" />
+                      LinkedIn
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                  {contact.facebook_url && (
+                    <a
+                      href={contact.facebook_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-accent"
+                    >
+                      <Facebook className="h-4 w-4 text-[#1877F2]" />
+                      Facebook
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                  {contact.instagram_url && (
+                    <a
+                      href={contact.instagram_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-accent"
+                    >
+                      <Instagram className="h-4 w-4 text-[#E4405F]" />
+                      Instagram
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
 
-        <>
-          <Separator />
-          <div>
-            <h4 className="text-sm font-medium mb-3">Social Links</h4>
-            {isEditing ? (
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="linkedin_url" className="text-xs">LinkedIn URL</Label>
-                  <Input
-                    id="linkedin_url"
-                    value={formData.linkedin_url}
-                    onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
-                    placeholder="https://linkedin.com/in/..."
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="facebook_url" className="text-xs">Facebook URL</Label>
-                  <Input
-                    id="facebook_url"
-                    value={formData.facebook_url}
-                    onChange={(e) => setFormData({ ...formData, facebook_url: e.target.value })}
-                    placeholder="https://facebook.com/..."
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="instagram_url" className="text-xs">Instagram URL</Label>
-                  <Input
-                    id="instagram_url"
-                    value={formData.instagram_url}
-                    onChange={(e) => setFormData({ ...formData, instagram_url: e.target.value })}
-                    placeholder="https://instagram.com/..."
-                  />
-                </div>
-              </div>
-            ) : (contact.linkedin_url || contact.facebook_url || contact.instagram_url) ? (
-              <div className="flex flex-wrap gap-2">
-                {contact.linkedin_url && (
-                  <a
-                    href={contact.linkedin_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-accent"
-                  >
-                    <Linkedin className="h-4 w-4 text-[#0077B5]" />
-                    LinkedIn
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-                {contact.facebook_url && (
-                  <a
-                    href={contact.facebook_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-accent"
-                  >
-                    <Facebook className="h-4 w-4 text-[#1877F2]" />
-                    Facebook
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-                {contact.instagram_url && (
-                  <a
-                    href={contact.instagram_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-accent"
-                  >
-                    <Instagram className="h-4 w-4 text-[#E4405F]" />
-                    Instagram
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No social links added</p>
-            )}
-          </div>
-        </>
-
         <Separator />
         <div>
-          <h4 className="text-sm font-medium mb-4">History</h4>
           <ContactHistoryTabs
             contact={contact}
             manualNotes={formData.notes}
