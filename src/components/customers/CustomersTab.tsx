@@ -4,6 +4,7 @@ import { CRMDataFilters } from "./CRMDataFilters";
 import { ColumnSelector } from "./ColumnSelector";
 import { FilterableTableHeader } from "./FilterableTableHeader";
 import { CustomersBulkActionBar } from "./CustomersBulkActionBar";
+import { MergeContactsDialog } from "./MergeContactsDialog";
 import { useContacts, useContactFilterOptions, useDeleteContacts, Contact, ContactFilters, ContactSorting } from "@/hooks/useContacts";
 import { useColumnPreferences, ColumnDefinition } from "@/hooks/useColumnPreferences";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,7 @@ export function CustomersTab() {
   const [sorting, setSorting] = useState<ContactSorting>({ column: "last_contacted", direction: "desc" });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isEnriching, setIsEnriching] = useState(false);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -584,6 +586,7 @@ export function CustomersTab() {
         onClearSelection={() => setSelectedIds(new Set())}
         onExport={handleBulkExport}
         onEnrich={handleBulkEnrich}
+        onMerge={() => setMergeDialogOpen(true)}
         isDeleting={deleteContacts.isPending}
         isEnriching={isEnriching}
       />
@@ -592,6 +595,13 @@ export function CustomersTab() {
         columns={columns}
         data={(contacts ?? []) as ContactWithCompany[]}
         emptyMessage="No people found. Try adjusting your search or filters."
+      />
+
+      <MergeContactsDialog
+        contacts={(contacts ?? []).filter((c: any) => selectedIds.has(c.id)) as ContactWithCompany[]}
+        open={mergeDialogOpen}
+        onOpenChange={setMergeDialogOpen}
+        onMerged={() => setSelectedIds(new Set())}
       />
 
     </div>

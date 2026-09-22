@@ -515,6 +515,30 @@ export type Database = {
           },
         ]
       }
+      contacts_merge_backups: {
+        Row: {
+          id: string
+          loser_contact: Json
+          merged_at: string
+          survivor_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          loser_contact: Json
+          merged_at?: string
+          survivor_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          loser_contact?: Json
+          merged_at?: string
+          survivor_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       crm_files: {
         Row: {
           company_id: string | null
@@ -3787,6 +3811,14 @@ export type Database = {
       }
       link_newsletter_recipients_to_contacts: { Args: never; Returns: number }
       match_sequence_replies: { Args: never; Returns: number }
+      merge_contacts: {
+        Args: {
+          p_loser_ids: string[]
+          p_survivor_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       normalise_email_subject: { Args: { subject: string }; Returns: string }
       peak_focus_connect: { Args: { p_password: string }; Returns: string }
       peak_focus_create_task: {
