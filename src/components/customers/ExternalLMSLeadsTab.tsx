@@ -312,7 +312,7 @@ export function ExternalLMSLeadsTab() {
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
             <SelectItem value="new">New (not in CRM)</SelectItem>
-            <SelectItem value="in_crm">Already in CRM</SelectItem>
+            <SelectItem value="in_crm">In CRM</SelectItem>
           </SelectContent>
         </Select>
 
@@ -529,7 +529,7 @@ function buildLmsColumns({ allSelected, onSelectAll, isSelected, onSelectOne, is
       header: "CRM Status",
       cell: (customer: ExternalLMSCustomer) =>
         isInCrm(customer.email) ? (
-          <Badge variant="outline" className="text-muted-foreground">Already in CRM</Badge>
+          <Badge variant="outline" className="text-muted-foreground">In CRM</Badge>
         ) : (
           <Badge className="bg-primary/10 text-primary hover:bg-primary/10">New</Badge>
         ),
