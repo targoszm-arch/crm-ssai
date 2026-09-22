@@ -55,9 +55,15 @@ export default function PersonDetail() {
           <TabsTrigger value="files">Files</TabsTrigger>
         </TabsList>
       </Tabs>
-      {activeTab === "activity" && <div className="max-w-4xl"><ActivityStreamPanel scope={{ contactId: contact.id, companyId: contact.company_id }} onOpenEmail={(emailId) => { setHistoryEmailId(emailId); setHistoryOpen(true); }} /></div>}
+      {activeTab === "activity" && <div className="max-w-4xl"><ActivityStreamPanel scope={{ contactId: contact.id, companyId: contact.company_id }} onOpenEmail={(emailId) => { setHistoryEmailId(emailId); setHistoryOpen(true); }} linkedinUrl={contact.linkedin_url} /></div>}
       {activeTab === "files" && <div className="max-w-4xl"><FilesPanel scope={{ contactId: contact.id, companyId: contact.company_id }} /></div>}
-      <div hidden={activeTab !== "overview"} className="max-w-4xl"><ContactDetailContent contact={contact} onRefetched={refetch} /></div>
+      <div hidden={activeTab !== "overview"}>
+        <ContactDetailContent
+          contact={contact}
+          onRefetched={refetch}
+          onOpenEmail={(emailId) => { setHistoryEmailId(emailId); setHistoryOpen(true); }}
+        />
+      </div>
     </PageShell>
     {/* An anchor with a mailto: href handed the click to whatever the OS has
         registered — Apple Mail here — which is not the CRM and doesn't log

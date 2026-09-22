@@ -43,6 +43,8 @@ interface ContactDetailContentProps {
   contact: ContactWithCompany;
   /** Called after the drawer/page should refresh the cached record it was opened with (e.g. to reflect a rename in a table row). */
   onRefetched?: () => void;
+  /** Opens the email an activity/timeline row describes, via the shared HistoryPanel. */
+  onOpenEmail?: (emailId: string) => void;
 }
 
 function getConnectionStrengthBadge(strength: string | null) {
@@ -70,7 +72,7 @@ function getConnectionStrengthBadge(strength: string | null) {
  * Enrich with AI, Create Deal, inline edit, and history tabs identical in
  * both places instead of maintaining two copies.
  */
-export function ContactDetailContent({ contact: initialContact, onRefetched }: ContactDetailContentProps) {
+export function ContactDetailContent({ contact: initialContact, onRefetched, onOpenEmail }: ContactDetailContentProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
   const [showAddDeal, setShowAddDeal] = useState(false);
@@ -303,7 +305,8 @@ export function ContactDetailContent({ contact: initialContact, onRefetched }: C
         </div>
       </div>
 
-      <div className="mt-6 space-y-6">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
+      <div className="space-y-6">
         <div className="space-y-3">
           {contact.companies?.company_name && (
             <div className="flex items-center gap-3 text-sm">
@@ -450,8 +453,9 @@ export function ContactDetailContent({ contact: initialContact, onRefetched }: C
             )}
           </div>
         </>
+      </div>
 
-        <Separator />
+      <div className="space-y-6">
         <EditableLabels
           labels={contact.labels}
           onSave={async (labels) => {
@@ -549,42 +553,30 @@ export function ContactDetailContent({ contact: initialContact, onRefetched }: C
             </div>
           )}
         </div>
+      </div>
+      </div>
 
-        {contact.labels && (
-          <>
-            <Separator />
-            <div>
-              <h4 className="text-sm font-medium mb-2">Labels</h4>
-              <div className="flex flex-wrap gap-2">
-                {contact.labels.split(",").map((label, idx) => (
-                  <Badge key={idx} variant="outline">{label.trim()}</Badge>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
-        {isEditing && (
-          <div className="flex gap-2 pt-4">
-            <Button variant="outline" className="flex-1" onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button className="flex-1" onClick={handleSave} disabled={updateContact.isPending}>
-              {updateContact.isPending ? "Saving..." : "Save Changes"}
-            </Button>
-          </div>
-        )}
-
-        <Separator />
-        <div>
-          <h4 className="text-sm font-medium mb-4">History</h4>
-          <ContactHistoryTabs
-            contact={contact}
-            manualNotes={formData.notes}
-            isEditing={isEditing}
-            onNotesChange={(notes) => setFormData({ ...formData, notes })}
-          />
+      {isEditing && (
+        <div className="mt-6 flex gap-2">
+          <Button variant="outline" className="flex-1" onClick={handleCancel}>
+            Cancel
+          </Button>
+          <Button className="flex-1" onClick={handleSave} disabled={updateContact.isPending}>
+            {updateContact.isPending ? "Saving..." : "Save Changes"}
+          </Button>
         </div>
+      )}
+
+      <Separator className="mt-6" />
+      <div className="mt-6">
+        <h4 className="text-sm font-medium mb-4">History</h4>
+        <ContactHistoryTabs
+          contact={contact}
+          manualNotes={formData.notes}
+          isEditing={isEditing}
+          onNotesChange={(notes) => setFormData({ ...formData, notes })}
+          onOpenEmail={onOpenEmail}
+        />
       </div>
 
       <AddDealModal
