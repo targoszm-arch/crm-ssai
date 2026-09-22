@@ -12,9 +12,14 @@ interface DealCardProps {
   deal: Deal;
   onClick?: () => void;
   isDragging?: boolean;
+  /** Won or lost. Days-since-created stops meaning "at risk of going stale"
+   *  the moment a deal is closed -- a deal closed the day after it was
+   *  created and one that took 235 days both show the same "done" state,
+   *  so the age badge and its warning triangle are just noise here. */
+  isClosed?: boolean;
 }
 
-export function DealCard({ deal, onClick, isDragging }: DealCardProps) {
+export function DealCard({ deal, onClick, isDragging, isClosed }: DealCardProps) {
   const daysSinceCreation = useMemo(() => {
     return differenceInDays(new Date(), new Date(deal.created_at));
   }, [deal.created_at]);
@@ -30,7 +35,7 @@ export function DealCard({ deal, onClick, isDragging }: DealCardProps) {
     return "bg-red-100 text-red-700";
   }, [daysSinceCreation]);
 
-  const isStale = daysSinceCreation > 14;
+  const isStale = !isClosed && daysSinceCreation > 14;
 
   const labels = parseLabels(deal.labels);
 
@@ -60,9 +65,11 @@ export function DealCard({ deal, onClick, isDragging }: DealCardProps) {
             {isStale && (
               <AlertTriangle className="h-4 w-4 text-amber-500" />
             )}
-            <span className={cn("px-1.5 py-0.5 rounded text-xs font-medium", timeBadgeColor)}>
-              {timeDisplay}
-            </span>
+            {!isClosed && (
+              <span className={cn("px-1.5 py-0.5 rounded text-xs font-medium", timeBadgeColor)}>
+                {timeDisplay}
+              </span>
+            )}
           </div>
         </div>
 

@@ -126,6 +126,7 @@ export function PipelineBoard({
                       deal={deal}
                       onClick={() => onDealClick(deal)}
                       isDragging={draggedDealId === deal.id}
+                      isClosed={stage.is_won || stage.is_lost}
                     />
                   </div>
                 ))}
