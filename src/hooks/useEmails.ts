@@ -91,8 +91,7 @@ export function useEmails(filters: EmailFilters = {}) {
             last_name
           )
         `)
-        .order("received_at", { ascending: false })
-        .limit(100);
+        .order("received_at", { ascending: false });
 
       if (filters.accountId) {
         query = query.eq("account_id", filters.accountId);
@@ -110,25 +109,50 @@ export function useEmails(filters: EmailFilters = {}) {
         query = query.not("contact_id", "is", null);
       }
 
-      if (filters.search) {
-        // Every word has to match somewhere (chained .or() calls are AND'd by
-        // PostgREST), and from_name is searched — a sender's actual name, not
-        // just their address or whatever the subject/snippet happen to contain.
-        for (const token of searchTokens(filters.search)) {
-          query = query.or(
-            `subject.ilike.%${token}%,snippet.ilike.%${token}%,from_email.ilike.%${token}%,from_name.ilike.%${token}%`
-          );
-        }
-      }
-
       if (filters.folder) {
         query = query.eq("folder", filters.folder);
       }
 
-      const { data, error } = await query;
+      // subject/snippet/from_email/from_name only describe the sender. That's the
+      // contact on an inbound email, but on every outbound row (Sent/Archive/Drafts
+      // all carry plenty of these) from_name/from_email are always the mailbox owner
+      // — the other person's name never appears in any of those four columns. So a
+      // server-side ilike over just those columns can never find "Dan Kaminski" on a
+      // sent email, linked contact or not. Fetch a wider, unfiltered page instead and
+      // match client-side against the columns that actually carry the other party:
+      // to_emails (raw recipient addresses) and the joined contact's real name.
+      const tokens = filters.search ? searchTokens(filters.search) : [];
+      query = query.limit(tokens.length ? 500 : 100);
 
+      const { data, error } = await query;
       if (error) throw error;
-      return data as Email[];
+      let results = data as Email[];
+
+      if (tokens.length) {
+        results = results.filter((email) => {
+          const haystacks = [
+            email.subject,
+            email.snippet,
+            email.from_email,
+            email.from_name,
+            ...(email.to_emails ?? []),
+            email.contacts?.first_name,
+            email.contacts?.last_name,
+          ]
+            .filter(Boolean)
+            .map((s) => (s as string).toLowerCase());
+
+          return tokens.every((token) => {
+            // searchTokens backslash-escapes ilike wildcards for the server-side
+            // path; undo that here since a plain substring match needs the literal.
+            const needle = token.replace(/\\([%_\\])/g, "$1").toLowerCase();
+            return haystacks.some((h) => h.includes(needle));
+          });
+        });
+        results = results.slice(0, 100);
+      }
+
+      return results;
     },
   });
 }
