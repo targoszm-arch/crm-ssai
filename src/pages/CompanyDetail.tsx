@@ -1,8 +1,8 @@
 import { useState } from "react";
 import PageShell from "@/components/layout/PageShell";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowUpRight, Building2, Globe2, MapPin, Phone, Plus, Users, Pencil } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, ArrowUpRight, Building2, Globe2, MapPin, Phone, Plus, Users, Pencil, Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,9 @@ import { ActivityStreamPanel } from "@/components/customers/ActivityStreamPanel"
 import { FilesPanel } from "@/components/customers/FilesPanel";
 import { LinkedDealsCard } from "@/components/deals/LinkedDealsCard";
 import { HistoryPanel } from "@/components/customers/HistoryPanel";
+import { EnrichProviderMenu } from "@/components/customers/EnrichProviderMenu";
+import { enrichCompany, type EnrichProvider } from "@/lib/api/enrichment";
+import { toast } from "sonner";
 
 export default function CompanyDetail() {
   const { id } = useParams<{ id: string }>();
@@ -27,13 +30,33 @@ export default function CompanyDetail() {
   const [activeTab, setActiveTab] = useState("overview");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyEmailId, setHistoryEmailId] = useState<string | null>(null);
+  const [isEnriching, setIsEnriching] = useState(false);
+  const queryClient = useQueryClient();
   const { data: company, isLoading, error } = useQuery({ queryKey: ["company-detail", id], queryFn: async () => { const { data, error } = await supabase.from("companies").select("*").eq("id", id).single(); if (error) throw error; return data as Company; }, enabled: !!id });
   const { data: contacts = [], isLoading: contactsLoading } = useContactsByCompany(id || null);
+  const handleEnrich = async (provider: EnrichProvider) => {
+    if (!company) return;
+    setIsEnriching(true);
+    try {
+      const result = await enrichCompany(company.id, provider);
+      queryClient.invalidateQueries({ queryKey: ["company-detail", company.id] });
+      queryClient.invalidateQueries({ queryKey: ["companies"] });
+      toast.success(
+        result.enrichedFields?.length > 0
+          ? `Updated: ${result.enrichedFields.join(", ")}`
+          : result.message || "No new data found.",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to enrich company");
+    } finally {
+      setIsEnriching(false);
+    }
+  };
   if (isLoading) return <div className="p-6"><Skeleton className="h-12 w-full" /><Skeleton className="mt-6 h-96 w-full" /></div>;
   if (error || !company) return <div className="p-8 text-sm text-destructive">Couldn&apos;t load this company.</div>;
   const initials = company.company_name.slice(0, 2).toUpperCase();
   return <div><PageShell>
-    <header className="border-b pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3 text-sm"><Button variant="outline" size="icon" asChild><Link to={`/customers?tab=${returnTab}`} aria-label="Back to companies"><ArrowLeft className="h-4 w-4" /></Link></Button><Link to={`/customers?tab=${returnTab}`} className="text-muted-foreground">Companies</Link><span className="text-muted-foreground">›</span><strong>{company.company_name}</strong></div><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setAddContactOpen(true)}><Plus className="mr-2 h-4 w-4" />Add person</Button><Button variant="outline" size="sm" onClick={() => setEditOpen(true)}><Pencil className="mr-2 h-4 w-4" />Edit company</Button></div></div><div className="mt-5 flex items-center gap-4"><div className="flex size-14 items-center justify-center rounded-xl border bg-background text-xl font-semibold text-primary">{initials}</div><div><h1 className="text-2xl font-semibold">{company.company_name}</h1><div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">{company.industry && <span><Building2 className="mr-1 inline h-4 w-4" />{company.industry}</span>}{(company.website || company.domains) && <span><Globe2 className="mr-1 inline h-4 w-4" />{company.website || company.domains}</span>}</div></div></div></header>
+    <header className="border-b pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3 text-sm"><Button variant="outline" size="icon" asChild><Link to={`/customers?tab=${returnTab}`} aria-label="Back to companies"><ArrowLeft className="h-4 w-4" /></Link></Button><Link to={`/customers?tab=${returnTab}`} className="text-muted-foreground">Companies</Link><span className="text-muted-foreground">›</span><strong>{company.company_name}</strong></div><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setAddContactOpen(true)}><Plus className="mr-2 h-4 w-4" />Add person</Button><EnrichProviderMenu onEnrich={handleEnrich} disabled={isEnriching}><Button variant="outline" size="sm" disabled={isEnriching}>{isEnriching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Enrich</Button></EnrichProviderMenu><Button variant="outline" size="sm" onClick={() => setEditOpen(true)}><Pencil className="mr-2 h-4 w-4" />Edit company</Button></div></div><div className="mt-5 flex items-center gap-4"><div className="flex size-14 items-center justify-center rounded-xl border bg-background text-xl font-semibold text-primary">{initials}</div><div><h1 className="text-2xl font-semibold">{company.company_name}</h1><div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">{company.industry && <span><Building2 className="mr-1 inline h-4 w-4" />{company.industry}</span>}{(company.website || company.domains) && <span><Globe2 className="mr-1 inline h-4 w-4" />{company.website || company.domains}</span>}</div></div></div></header>
     <Tabs value={activeTab} onValueChange={setActiveTab}><TabsList className="bg-transparent"><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="employees">Employees</TabsTrigger><TabsTrigger value="deals">Deals</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger><TabsTrigger value="files">Files</TabsTrigger></TabsList></Tabs>
     {activeTab === "overview" && <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,.9fr)]"><div className="space-y-4"><Card><CardHeader className="border-b"><CardTitle className="text-base">Company summary</CardTitle></CardHeader><CardContent className="space-y-5 p-5"><p className="text-sm text-muted-foreground">{company.description || "No company summary added yet."}</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Industry" value={company.industry} /><Field label="Stage" value={company.connection_strength || "Engaged"} /><Field label="Location" value={company.country} /><Field label="Employees" value={company.employee_range} /></div><div className="grid gap-4 sm:grid-cols-2"><LinkField label="Website" href={(() => { const site = company.website || company.domains; return site ? (site.startsWith("http") ? site : `https://${site}`) : null; })()} text={company.website || company.domains} /><LinkField label="LinkedIn" href={company.linkedin_url} text={company.linkedin_url ? "Open profile" : null} /></div></CardContent></Card><Card><CardHeader className="border-b"><CardTitle className="text-base">CRM details</CardTitle></CardHeader><CardContent className="grid gap-3 p-5 sm:grid-cols-3"><Metric label="Contacts" value={String(contacts.length)} /><Metric label="Employees added" value={String(contacts.length)} /></CardContent></Card></div><Card className="h-fit"><CardHeader><CardTitle className="text-base">Lists</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">No lists assigned.</CardContent></Card></div>}
     {activeTab === "employees" && <Employees contacts={contacts} loading={contactsLoading} companyId={company.id} />}
