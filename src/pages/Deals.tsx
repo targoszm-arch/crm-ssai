@@ -236,7 +236,6 @@ export default function Deals() {
             stages={stages}
             dealsByStage={dealsByStage}
             onDealClick={handleDealClick}
-            onAddDeal={handleAddDeal}
             onStageClick={setWikiStage}
           />
         ) : (
