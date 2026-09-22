@@ -66,7 +66,7 @@ export function useCreateCustomFieldDefinition() {
           field_key: slugify(trimmedLabel),
           label: trimmedLabel,
           field_type: fieldType,
-          select_options: fieldType === "select" ? (selectOptions ?? []).filter(Boolean) : null,
+          select_options: (fieldType === "select" || fieldType === "multiselect") ? (selectOptions ?? []).filter(Boolean) : null,
           position,
         })
         .select()
