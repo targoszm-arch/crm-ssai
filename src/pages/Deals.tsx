@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Plus, Search, LayoutGrid, List, Table, TrendingUp, Settings, ChevronDown, Building2, User, ArrowUpRight } from "lucide-react";
+import { Plus, Search, LayoutGrid, List, Table, TrendingUp, Settings, ChevronDown, Building2, User, ArrowUpRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePipelines, usePipelineStages, type PipelineStage } from "@/hooks/usePipelines";
-import { useDealsByStage, useDeal, Deal } from "@/hooks/useDeals";
+import { useDealsByStage, useDeal, useDeleteDeal, Deal } from "@/hooks/useDeals";
 import { PipelineBoard } from "@/components/deals/PipelineBoard";
 import { AddDealModal } from "@/components/deals/AddDealModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -45,6 +45,8 @@ export default function Deals() {
   // company can point at the deal itself rather than the top of the board.
   const deepLinkedDealId = searchParams.get("deal") || undefined;
   const { data: deepLinkedDeal } = useDeal(deepLinkedDealId);
+
+  const deleteDeal = useDeleteDeal();
 
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();
   const activePipelineId = selectedPipelineId || pipelines?.find(p => p.is_default)?.id || pipelines?.[0]?.id;
@@ -75,6 +77,19 @@ export default function Deals() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("deal");
     setSearchParams(nextParams, { replace: true });
+  };
+
+  const handleDeleteDeal = (deal: Deal) => {
+    // deals.id has NO ACTION foreign keys from emails.deal_id, so a deal with a
+    // linked email fails loudly on delete rather than silently orphaning the
+    // email — that shows up as the raw Postgres error in the toast below.
+    const confirmed = window.confirm(
+      `Delete "${deal.deal_name}"? This permanently removes the deal — it cannot be undone.`
+    );
+    if (!confirmed) return;
+    deleteDeal.mutate(deal.id, {
+      onSuccess: () => closeDealDetail(),
+    });
   };
 
   const totalDeals = Object.values(dealsByStage).reduce((sum, deals) => sum + deals.length, 0);
@@ -341,6 +356,15 @@ export default function Deals() {
                     }}
                   >
                     Edit Deal
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
+                    disabled={deleteDeal.isPending}
+                    onClick={() => handleDeleteDeal(selectedDeal)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                    Delete
                   </Button>
                 </div>
               </TabsContent>
