@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useExternalLMSCustomers, ExternalLMSCustomer } from "@/hooks/useExternalLMSCustomers";
+import { useExternalLMSCustomers, useExistingContactEmails, ExternalLMSCustomer } from "@/hooks/useExternalLMSCustomers";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { EnrollAbandonmentModal } from "@/components/recovery/EnrollAbandonmentModal";
+import { useQueryClient } from "@tanstack/react-query";
 
 /**
  * Pull the real message out of a failed functions.invoke().
@@ -84,6 +85,7 @@ export function ExternalLMSLeadsTab() {
   const [signupType, setSignupType] = useState<string>("");
   const [marketingFilter, setMarketingFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [crmFilter, setCrmFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [localSearch, setLocalSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -91,6 +93,8 @@ export function ExternalLMSLeadsTab() {
   const [isSyncingApollo, setIsSyncingApollo] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "checking" | "saving">("idle");
   const [preview, setPreview] = useState<BackfillReport | null>(null);
+
+  const queryClient = useQueryClient();
 
   const handleSyncToApollo = async () => {
     setIsSyncingApollo(true);
@@ -145,6 +149,9 @@ export function ExternalLMSLeadsTab() {
 
       if (apply) {
         setPreview(null);
+        // New contacts just landed — without this, rows would still show "New" in
+        // the CRM Status column until something else happened to refetch it.
+        queryClient.invalidateQueries({ queryKey: ["existing-contact-emails"] });
         toast.success(
           `Saved to the CRM: ${report.lms_leads_created} new LMS leads, ` +
           `${report.contacts_created} new contacts, ` +
@@ -169,8 +176,12 @@ export function ExternalLMSLeadsTab() {
   const { data: customers, isLoading, isError, error, refetch, isFetching } = useExternalLMSCustomers({
     limit: 500,
   });
+  // Cross-referenced against the live LMS list below to answer "who's new since
+  // last time I looked" without having to run the dry-run preview first.
+  const { data: existingEmails } = useExistingContactEmails();
 
   const isActive = (value: string) => value !== "" && value !== "all";
+  const isInCrm = (email: string) => existingEmails?.has(email.trim().toLowerCase()) ?? false;
 
   const filteredCustomers = (customers ?? []).filter((customer) => {
     // Signup type
@@ -178,6 +189,10 @@ export function ExternalLMSLeadsTab() {
 
     // LMS status
     if (isActive(statusFilter) && customer.status !== statusFilter) return false;
+
+    // Already in the CRM vs. not yet saved
+    if (crmFilter === "new" && isInCrm(customer.email)) return false;
+    if (crmFilter === "in_crm" && !isInCrm(customer.email)) return false;
 
     // Marketing consent
     if (marketingFilter === "true" && customer.marketing_consent !== true) return false;
@@ -290,7 +305,18 @@ export function ExternalLMSLeadsTab() {
           </SelectContent>
         </Select>
 
-        <Button 
+        <Select value={crmFilter} onValueChange={setCrmFilter}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="CRM Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="new">New (not in CRM)</SelectItem>
+            <SelectItem value="in_crm">In CRM</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button
           variant="outline" 
           size="icon"
           onClick={() => refetch()}
@@ -398,6 +424,7 @@ export function ExternalLMSLeadsTab() {
               onSelectAll: handleSelectAll,
               isSelected: (email) => selectedIds.has(email),
               onSelectOne: handleSelectOne,
+              isInCrm,
               onEnroll: (email) => {
                 setSelectedIds(new Set([email]));
                 setEnrollModalOpen(true);
@@ -459,12 +486,13 @@ interface BuildLmsColumnsArgs {
   onSelectAll: (checked: boolean) => void;
   isSelected: (email: string) => boolean;
   onSelectOne: (email: string, checked: boolean) => void;
+  isInCrm: (email: string) => boolean;
   onEnroll: (email: string) => void;
 }
 
 // Renders each column exactly as the previous hand-rolled <table> did — this
 // is a markup swap onto the shared DataTable, not a behavior change.
-function buildLmsColumns({ allSelected, onSelectAll, isSelected, onSelectOne, onEnroll }: BuildLmsColumnsArgs) {
+function buildLmsColumns({ allSelected, onSelectAll, isSelected, onSelectOne, isInCrm, onEnroll }: BuildLmsColumnsArgs) {
   return [
     {
       accessorKey: "select",
@@ -495,6 +523,16 @@ function buildLmsColumns({ allSelected, onSelectAll, isSelected, onSelectOne, on
           </div>
         </div>
       ),
+    },
+    {
+      accessorKey: "crm_status",
+      header: "CRM Status",
+      cell: (customer: ExternalLMSCustomer) =>
+        isInCrm(customer.email) ? (
+          <Badge variant="outline" className="text-muted-foreground">In CRM</Badge>
+        ) : (
+          <Badge className="bg-primary/10 text-primary hover:bg-primary/10">New</Badge>
+        ),
     },
     {
       accessorKey: "status",
