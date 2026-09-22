@@ -31,6 +31,12 @@ export default function PageShell({
     <div
       className={cn(
         "flex min-w-0 flex-col gap-6",
+        // A stacked page scrolls, so its last section otherwise lands flush
+        // against the browser's bottom edge with nothing below it — a save
+        // bar or the last card sits right on the viewport edge with no
+        // room to click it comfortably. A fill page doesn't need this: it's
+        // viewport-height and whatever scrolls inside it manages its own end.
+        variant === "stacked" && "pb-10",
         // `flex-1` only on a fill page: on a stacked page it would stretch a
         // short page's last section down the screen to absorb the slack.
         variant === "fill" && "min-h-0 flex-1 gap-4",
