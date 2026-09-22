@@ -1,4 +1,4 @@
-import { Trash2, X, Download, Tag, Sparkles, Loader2 } from "lucide-react";
+import { Trash2, X, Download, Tag, Sparkles, Loader2, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EnrichProviderMenu } from "./EnrichProviderMenu";
 import { AddToListMenu } from "./AddToListMenu";
@@ -23,8 +23,10 @@ interface OrganisationsBulkActionBarProps {
   onClearSelection: () => void;
   onExport: () => void;
   onEnrich?: (provider: EnrichProvider) => void;
+  onScoreWithAi?: () => void;
   isDeleting?: boolean;
   isEnriching?: boolean;
+  isScoringWithAi?: boolean;
 }
 
 export function OrganisationsBulkActionBar({
@@ -34,8 +36,10 @@ export function OrganisationsBulkActionBar({
   onClearSelection,
   onExport,
   onEnrich,
+  onScoreWithAi,
   isDeleting,
   isEnriching,
+  isScoringWithAi,
 }: OrganisationsBulkActionBarProps) {
   if (selectedCount === 0) return null;
 
@@ -76,7 +80,14 @@ export function OrganisationsBulkActionBar({
               Enrich Selected
             </Button>
           </EnrichProviderMenu>
-          
+
+          {onScoreWithAi && (
+            <Button variant="outline" size="sm" onClick={onScoreWithAi} disabled={isScoringWithAi}>
+              {isScoringWithAi ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Brain className="h-4 w-4 mr-1" />}
+              Score with AI
+            </Button>
+          )}
+
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button 

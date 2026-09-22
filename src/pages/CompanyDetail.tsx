@@ -21,6 +21,7 @@ import { EditableLabels } from "@/components/customers/EditableLabels";
 import { useUpdateCompany } from "@/hooks/useCompanies";
 import { useListsForEntity } from "@/hooks/useLists";
 import { CustomFieldsCard } from "@/components/shared/CustomFieldsCard";
+import { AiFieldsCard } from "@/components/customers/AiFieldsCard";
 import { format } from "date-fns";
 
 export default function CompanyDetail() {
@@ -79,6 +80,8 @@ export default function CompanyDetail() {
       </div>
 
       <div className="space-y-4">
+        <AiFieldsCard company={company} />
+
         <Card><CardHeader><CardTitle className="text-base">Labels</CardTitle></CardHeader><CardContent className="p-5 pt-0"><EditableLabels labels={company.labels} isLoading={updateCompany.isPending} onSave={async (labels) => { await updateCompany.mutateAsync({ id: company.id, labels }); queryClient.invalidateQueries({ queryKey: ["company-detail", company.id] }); }} /></CardContent></Card>
 
         <Card><CardHeader><CardTitle className="text-base">Company Details</CardTitle></CardHeader><CardContent className="p-5 pt-0">{hasCompanyDetails ? <div className="space-y-3">{company.categories && <DetailRow icon={Tag} label="Categories" value={company.categories} />}{company.annual_turnover != null && <DetailRow icon={Landmark} label="Annual Revenue" value={new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(company.annual_turnover)} />}{company.funding_raised != null && <DetailRow icon={Landmark} label="Funding Raised" value={new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(company.funding_raised)} />}{company.foundation_date && <DetailRow icon={Users2} label="Founded" value={format(new Date(company.foundation_date), "MMM yyyy")} />}{company.twitter_followers != null && <DetailRow icon={Twitter} label="Twitter Followers" value={company.twitter_followers.toLocaleString()} />}</div> : <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground"><Sparkles className="h-3.5 w-3.5" />Click Enrich to fill in company details.</div>}</CardContent></Card>

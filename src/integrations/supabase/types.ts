@@ -78,6 +78,106 @@ export type Database = {
           },
         ]
       }
+      ai_field_definitions: {
+        Row: {
+          active: boolean
+          created_at: string
+          entity_type: string
+          id: string
+          key: string
+          kind: string
+          label: string
+          position: number
+          prompt_template: string
+          tier_options: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          entity_type?: string
+          id?: string
+          key: string
+          kind: string
+          label: string
+          position?: number
+          prompt_template: string
+          tier_options?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          entity_type?: string
+          id?: string
+          key?: string
+          kind?: string
+          label?: string
+          position?: number
+          prompt_template?: string
+          tier_options?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_field_values: {
+        Row: {
+          ai_field_definition_id: string
+          company_id: string
+          computed_at: string
+          evidence: string | null
+          id: string
+          model: string | null
+          user_id: string
+          value: string | null
+        }
+        Insert: {
+          ai_field_definition_id: string
+          company_id: string
+          computed_at?: string
+          evidence?: string | null
+          id?: string
+          model?: string | null
+          user_id: string
+          value?: string | null
+        }
+        Update: {
+          ai_field_definition_id?: string
+          company_id?: string
+          computed_at?: string
+          evidence?: string | null
+          id?: string
+          model?: string | null
+          user_id?: string
+          value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_field_values_ai_field_definition_id_fkey"
+            columns: ["ai_field_definition_id"]
+            isOneToOne: false
+            referencedRelation: "ai_field_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_field_values_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_field_values_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+        ]
+      }
       calendar_events: {
         Row: {
           account_id: string | null
