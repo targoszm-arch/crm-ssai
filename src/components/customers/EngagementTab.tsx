@@ -1,11 +1,12 @@
 import { Contact } from "@/hooks/useContacts";
+import { useEngagementStats } from "@/hooks/useEngagementStats";
 import { format } from "date-fns";
-import { 
-  Mail, 
-  Calendar, 
-  Activity, 
-  TrendingUp, 
-  Clock 
+import {
+  Mail,
+  Calendar,
+  Activity,
+  TrendingUp,
+  Clock
 } from "lucide-react";
 
 interface EngagementTabProps {
@@ -13,17 +14,19 @@ interface EngagementTabProps {
 }
 
 export function EngagementTab({ contact }: EngagementTabProps) {
+  const { data: engagement } = useEngagementStats(contact.id);
+
   const stats = [
     {
       icon: Mail,
       label: "Email Messages",
-      value: contact.email_messages_count || 0,
+      value: engagement?.emailMessages ?? "…",
       color: "text-blue-500",
     },
     {
       icon: Activity,
       label: "Completed Activities",
-      value: contact.done_activities || 0,
+      value: engagement?.completedActivities ?? "…",
       color: "text-green-500",
     },
     {
