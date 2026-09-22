@@ -29,10 +29,12 @@ function slugify(label: string): string {
     .replace(/^_+|_+$/g, "") || "field";
 }
 
+export type CustomFieldType = "text" | "number" | "checkbox" | "select" | "multiselect";
+
 interface CreateCustomFieldInput {
   entityType: CustomFieldEntityType;
   label: string;
-  fieldType: "text" | "number" | "date" | "select";
+  fieldType: CustomFieldType;
   selectOptions?: string[];
 }
 
