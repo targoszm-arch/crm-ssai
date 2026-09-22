@@ -359,6 +359,14 @@ export default function Inbox() {
           {currentAccount && activeTab === "email" && !isMobile && (
             <span className="text-sm text-muted-foreground">{currentAccount.email_address}</span>
           )}
+
+          {/* Same row as the tabs/view toggle/settings, not a second bar
+              underneath -- it used to render in its own bordered strip below
+              the header, which is the same "why is this its own row" problem
+              as everywhere else in this app that got fixed today. */}
+          {activeTab === "email" && hasConnectedAccount && (
+            <InboxFilters filters={filters} onChange={setFilters} availableLabels={availableLabels} />
+          )}
         </div>
       </div>
 
@@ -377,15 +385,6 @@ export default function Inbox() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-      )}
-
-      {/* Same story as the header controls: the redesign removed this row but
-          kept the `filters` state, so EmailList was still being handed a filter
-          object that nothing could ever change. */}
-      {activeTab === "email" && hasConnectedAccount && (
-        <div className="border-b px-6 py-2">
-          <InboxFilters filters={filters} onChange={setFilters} availableLabels={availableLabels} />
         </div>
       )}
 
