@@ -122,40 +122,56 @@ serve(async (req: Request): Promise<Response> => {
       if (threadEmails?.length) emailsToUpdate = threadEmails;
     }
 
-    // Call Gmail for every reply before updating the local read state.
+    // Try Gmail for every reply, but a failure there (wrong scope, token
+    // hiccup, Gmail outage) must never block the local read state -- that
+    // used to throw before the database update ran at all, so the CRM's own
+    // unread badge stayed wrong for a reason that had nothing to do with the
+    // CRM. Best-effort against Gmail, unconditional against the local table.
     const modifyBody = isRead
       ? { removeLabelIds: ["UNREAD"] }
       : { addLabelIds: ["UNREAD"] };
 
     const updatedLabels = new Map<string, string[]>();
+    let gmailSyncFailed = false;
     for (const threadEmail of emailsToUpdate) {
-      const gmailResponse = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${threadEmail.gmail_id}/modify`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify(modifyBody),
+      try {
+        const gmailResponse = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${threadEmail.gmail_id}/modify`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify(modifyBody),
+          }
+        );
+        if (!gmailResponse.ok) {
+          const errorText = await gmailResponse.text();
+          console.error(`Gmail API error for ${threadEmail.id}:`, errorText);
+          gmailSyncFailed = true;
+          continue;
         }
-      );
-      if (!gmailResponse.ok) {
-        const errorText = await gmailResponse.text();
-        console.error("Gmail API error:", errorText);
-        throw new Error(`Failed to update Gmail: ${gmailResponse.status}`);
+        const gmailResult = await gmailResponse.json();
+        updatedLabels.set(threadEmail.id, gmailResult.labelIds || threadEmail.labels || []);
+      } catch (gmailError) {
+        console.error(`Gmail request failed for ${threadEmail.id}:`, gmailError);
+        gmailSyncFailed = true;
       }
-      const gmailResult = await gmailResponse.json();
-      updatedLabels.set(threadEmail.id, gmailResult.labelIds || threadEmail.labels || []);
     }
 
-    // Update local database
+    // Update local database regardless of Gmail's outcome. Only overwrite
+    // `labels` where Gmail actually confirmed the new set -- otherwise leave
+    // the stored labels alone rather than guessing.
     for (const threadEmail of emailsToUpdate) {
+      const patch: { is_read: boolean; labels?: string[] } = { is_read: isRead };
+      const confirmedLabels = updatedLabels.get(threadEmail.id);
+      if (confirmedLabels) patch.labels = confirmedLabels;
       const { error: updateError } = await supabase
         .from("emails")
-        .update({ is_read: isRead, labels: updatedLabels.get(threadEmail.id) })
+        .update(patch)
         .eq("id", threadEmail.id);
       if (updateError) throw new Error(`Failed to update local database: ${updateError.message}`);
     }
 
-    console.log(`Successfully marked email ${emailId} as ${isRead ? 'read' : 'unread'}`);
+    console.log(`Successfully marked email ${emailId} as ${isRead ? 'read' : 'unread'} locally${gmailSyncFailed ? " (Gmail sync failed for one or more messages)" : ""}`);
 
     return new Response(
       JSON.stringify({
@@ -163,6 +179,7 @@ serve(async (req: Request): Promise<Response> => {
         emailId,
         isRead,
         updatedCount: emailsToUpdate.length,
+        gmailSyncFailed,
       }),
       {
         status: 200,

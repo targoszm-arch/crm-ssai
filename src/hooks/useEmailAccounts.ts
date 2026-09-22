@@ -46,8 +46,13 @@ export async function startGoogleOAuth(): Promise<void> {
     throw new Error("Invalid configuration received from server");
   }
 
+  // gmail.modify (not gmail.readonly) -- marking a message read/unread is a
+  // label change (removing/adding UNREAD), which readonly explicitly
+  // forbids. Every mark-as-read call was failing with a 403 from Gmail
+  // because the connected account only ever had readonly + send. modify is
+  // a superset of readonly, so this isn't losing anything.
   const scope = encodeURIComponent(
-    "https://www.googleapis.com/auth/gmail.readonly " +
+    "https://www.googleapis.com/auth/gmail.modify " +
     "https://www.googleapis.com/auth/gmail.send " +
     "https://www.googleapis.com/auth/userinfo.email " +
     "https://www.googleapis.com/auth/calendar " +
