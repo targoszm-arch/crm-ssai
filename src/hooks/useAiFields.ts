@@ -139,6 +139,44 @@ export function useDeleteAiFieldDefinition() {
   });
 }
 
+/** The single "who's selling" profile injected into every tier (Fit Score-style) AI
+ * field's prompt -- offering, ICP, pricing, differentiation, social proof. Qualifier
+ * fields don't need it: they're fact-checks about the prospect, not about the seller. */
+export function useAiSenderProfile() {
+  return useQuery({
+    queryKey: ["ai-sender-profile"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ai_sender_profile")
+        .select("*")
+        .maybeSingle();
+      if (error) throw error;
+      return data as Tables<"ai_sender_profile"> | null;
+    },
+  });
+}
+
+export function useSaveAiSenderProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (content: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase
+        .from("ai_sender_profile")
+        .upsert({ user_id: user.id, content: content.trim() }, { onConflict: "user_id" })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Tables<"ai_sender_profile">;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ai-sender-profile"] });
+    },
+  });
+}
+
 export interface ScoreAiFieldsResult {
   definitionId: string;
   key: string;

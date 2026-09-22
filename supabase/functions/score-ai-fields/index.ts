@@ -45,8 +45,11 @@ Line 2: the single strongest piece of evidence, quoted verbatim from the context
 }
 
 // Fixed close wrapped around a tier definition's rubric text -- the rubric itself
-// (ICP criteria, scoring bands, disqualifiers) is the user-configurable part.
-function buildTierPrompt(def: AiFieldDefinition, contextBlock: string, today: string): string {
+// (ICP criteria, scoring bands, disqualifiers) is the user-configurable part. The
+// sender profile (who is doing the selling) is separate, editable independently under
+// Settings > Company Profile, and only tier fields need it -- a qualifier is a fact
+// check about the prospect and doesn't change based on who's asking.
+function buildTierPrompt(def: AiFieldDefinition, contextBlock: string, today: string, senderProfile: string | null): string {
   const options = (def.tier_options || []).join(", ");
   return `${def.prompt_template}
 
@@ -54,7 +57,7 @@ FINAL OUTPUT REQUIREMENT:
 Start your response with exactly one of these labels, spelled exactly as shown, and nothing before it: ${options}.
 After the label, write 1-2 concise paragraphs justifying the score using the account data below and, where the rubric calls for it, naming the change signals found.
 
-ACCOUNT DATA:
+${senderProfile ? `SENDER COMPANY CONTEXT (the company selling, whose ICP this rubric describes):\n${senderProfile}\n\n` : ""}ACCOUNT DATA (the prospect being scored):
 ${contextBlock}
 
 Today's date: ${today}`;
@@ -178,6 +181,13 @@ serve(async (req: Request): Promise<Response> => {
       });
     }
 
+    const { data: senderProfileRow } = await supabase
+      .from("ai_sender_profile")
+      .select("content")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const senderProfile = senderProfileRow?.content ?? null;
+
     const contextBlock = buildContextBlock(company);
     const today = new Date().toISOString().split("T")[0];
     const model = "gpt-4o-mini";
@@ -186,7 +196,7 @@ serve(async (req: Request): Promise<Response> => {
 
     for (const def of definitions as AiFieldDefinition[]) {
       const prompt = def.kind === "tier"
-        ? buildTierPrompt(def, contextBlock, today)
+        ? buildTierPrompt(def, contextBlock, today, senderProfile)
         : buildQualifierPrompt(def, contextBlock);
 
       const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
