@@ -152,11 +152,24 @@ export function ExternalLMSLeadsTab() {
         // New contacts just landed — without this, rows would still show "New" in
         // the CRM Status column until something else happened to refetch it.
         queryClient.invalidateQueries({ queryKey: ["existing-contact-emails"] });
-        toast.success(
-          `Saved to the CRM: ${report.lms_leads_created} new LMS leads, ` +
-          `${report.contacts_created} new contacts, ` +
-          `${report.contacts_matched} matched to existing contacts.`,
-        );
+        // report.errors is real per-row failures (the counts above are incremented
+        // before the write is attempted, so they say nothing about whether it
+        // succeeded). This used to be dropped on the floor here — only the dry-run
+        // preview ever showed it — so a run where every single insert failed still
+        // reported "Saved" with a straight face. Never again silently.
+        if (report.errors?.length > 0) {
+          toast.error(
+            `Saved with ${report.errors.length} failure${report.errors.length === 1 ? "" : "s"} — ` +
+            `first: ${report.errors[0]}`,
+            { duration: 8000 },
+          );
+        } else {
+          toast.success(
+            `Saved to the CRM: ${report.lms_leads_created} new LMS leads, ` +
+            `${report.contacts_created} new contacts, ` +
+            `${report.contacts_matched} matched to existing contacts.`,
+          );
+        }
       } else {
         setPreview(report);
       }

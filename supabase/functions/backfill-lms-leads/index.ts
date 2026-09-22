@@ -207,11 +207,16 @@ Deno.serve(async (req) => {
           const { first, last } = splitName(c.full_name, email);
           const { data: created, error } = await supabase
             .from("contacts")
+            // contacts.name is a generated column (first_name || ' ' || last_name) —
+            // Postgres rejects an explicit value for it outright (error 428C9). That
+            // rejection is why every new-contact insert here has been silently
+            // failing: the function reported "48 new contacts" while creating zero,
+            // because the error was pushed to report.errors and the UI's apply path
+            // never displays that array — only the dry-run preview does.
             .insert({
               user_id: user.id,
               first_name: first,
               last_name: last,
-              name: c.full_name?.trim() || `${first}${last ? " " + last : ""}`,
               email,
               title: c.role_type ?? null,
               source: "lms",

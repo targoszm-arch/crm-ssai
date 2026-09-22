@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tables } from "@/integrations/supabase/types";
+import { applyTokenSearch } from "@/lib/searchTokens";
 
 export type Deal = Tables<"deals"> & {
   contacts?: Tables<"contacts"> | null;
@@ -45,9 +46,7 @@ export function useDeals(filters?: DealFilters) {
         query = query.eq("company_id", filters.companyId);
       }
       
-      if (filters?.search) {
-        query = query.ilike("deal_name", `%${filters.search}%`);
-      }
+      query = applyTokenSearch(query, ["deal_name"], filters?.search);
       
       const { data, error } = await query;
       

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables, TablesInsert } from "@/integrations/supabase/types";
+import { applyTokenSearch } from "@/lib/searchTokens";
 
 export type Contact = Tables<"contacts"> & {
   connection_strength?: string;
@@ -49,12 +50,7 @@ export function useContacts(
     queryFn: async () => {
       let query = supabase.from("contacts").select("*, companies!contacts_company_id_fkey(company_name)");
 
-      // Apply search filter
-      if (filters.search) {
-        query = query.or(
-          `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`
-        );
-      }
+      query = applyTokenSearch(query, ["first_name", "last_name", "email", "phone"], filters.search);
 
       // Apply multi-select filters
       if (filters.companyIds && filters.companyIds.length > 0) {

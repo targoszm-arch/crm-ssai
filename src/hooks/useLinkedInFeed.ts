@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { LinkedInMessage } from "./useLinkedInMessages";
-import { searchTokens } from "@/lib/searchTokens";
+import { applyTokenSearch } from "@/lib/searchTokens";
 
 // Why this exists, and why it is not just useLinkedInMessages with a search box.
 //
@@ -45,13 +45,6 @@ export function useLinkedInFeed(options: UseLinkedInFeedOptions = {}) {
   return useQuery({
     queryKey: ["linkedin-feed", search ?? null, linkedOnly, limit],
     queryFn: async (): Promise<LinkedInFeedItem[]> => {
-      // Every word has to match somewhere (chained .or()/.ilike() calls are AND'd
-      // by PostgREST) — a single ilike.%term% treated a two-word name as one
-      // literal substring, which only matched if it happened to appear in that
-      // exact order and spacing. searchTokens also escapes ilike's own wildcards
-      // (LinkedIn text is full of underscores) and strips filter-syntax characters.
-      const tokens = search ? searchTokens(search) : [];
-
       let messageQuery = supabase
         .from("linkedin_messages")
         .select(
@@ -73,14 +66,10 @@ export function useLinkedInFeed(options: UseLinkedInFeedOptions = {}) {
         .order("occurred_at", { ascending: false })
         .limit(limit);
 
-      for (const token of tokens) {
-        // Searching the body alone missed every "what did X say" lookup, where X is
-        // the person, not a word in the message.
-        messageQuery = messageQuery.or(
-          `message_text.ilike.%${token}%,sender_name.ilike.%${token}%,company_name.ilike.%${token}%`
-        );
-        activityQuery = activityQuery.ilike("description", `%${token}%`);
-      }
+      // Searching the body alone missed every "what did X say" lookup, where X is
+      // the person, not a word in the message.
+      messageQuery = applyTokenSearch(messageQuery, ["message_text", "sender_name", "company_name"], search);
+      activityQuery = applyTokenSearch(activityQuery, ["description"], search);
 
       const [messagesRes, activitiesRes] = await Promise.all([
         messageQuery,
