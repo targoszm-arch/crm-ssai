@@ -11,6 +11,7 @@ import { useCreateContact } from "@/hooks/useContacts";
 import { useCompanies, useCreateCompany } from "@/hooks/useCompanies";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CountrySelect } from "@/components/shared/CountrySelect";
 
 interface AddContactModalProps {
   open: boolean;
@@ -292,11 +293,10 @@ export function AddContactModal({
             </div>
             <div className="space-y-2">
               <Label htmlFor="work_location">Work Location</Label>
-              <Input
+              <CountrySelect
                 id="work_location"
                 value={formData.work_location}
-                onChange={(e) => handleChange("work_location", e.target.value)}
-                placeholder="San Francisco, CA"
+                onChange={(value) => handleChange("work_location", value)}
               />
             </div>
           </div>

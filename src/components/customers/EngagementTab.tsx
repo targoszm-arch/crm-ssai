@@ -64,7 +64,7 @@ export function EngagementTab({ contact, company }: EngagementTabProps) {
             <div>
               <p className="text-xs text-muted-foreground">Last Contacted</p>
               <p className="text-sm font-medium">
-                {format(new Date(contact.last_contacted), "MMM dd, yyyy 'at' h:mm a")}
+                {format(new Date(contact.last_contacted), "dd/MM/yyyy 'at' h:mm a")}
               </p>
             </div>
           </div>
@@ -76,7 +76,7 @@ export function EngagementTab({ contact, company }: EngagementTabProps) {
             <div>
               <p className="text-xs text-muted-foreground">Last Interaction</p>
               <p className="text-sm font-medium">
-                {format(new Date(company.last_interaction), "MMM dd, yyyy 'at' h:mm a")}
+                {format(new Date(company.last_interaction), "dd/MM/yyyy 'at' h:mm a")}
               </p>
             </div>
           </div>
@@ -88,7 +88,7 @@ export function EngagementTab({ contact, company }: EngagementTabProps) {
             <div>
               <p className="text-xs text-muted-foreground">Next Contact Date</p>
               <p className="text-sm font-medium">
-                {format(new Date(contact.next_to_contact), "MMM dd, yyyy")}
+                {format(new Date(contact.next_to_contact), "dd/MM/yyyy")}
               </p>
             </div>
           </div>

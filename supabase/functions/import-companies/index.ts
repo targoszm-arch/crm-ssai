@@ -68,7 +68,61 @@ serve(async (req) => {
     
     console.log("CSV Headers (first 15):", headers.slice(0, 15));
     console.log("Total headers:", headers.length);
-    
+
+    // Custom fields the user defined for companies (e.g. Buying intent score,
+    // Buying intent topics, Company signals) -- a CSV column matching a
+    // definition's label fills it without a code change or migration per field.
+    const { data: customFieldDefs } = await supabase
+      .from("custom_field_definitions")
+      .select("id, field_key, label, field_type, select_options")
+      .eq("entity_type", "company")
+      .eq("user_id", userId);
+
+    // Values found in a select/multiselect column that aren't in the field's
+    // option list yet -- appended to the definition once, after the import,
+    // rather than silently dropping values the CSV actually contains.
+    const newOptionsByDefId = new Map<string, Set<string>>();
+
+    function parseCustomFields(pick: (aliases: string[]) => any): Record<string, unknown> {
+      const values: Record<string, unknown> = {};
+      for (const def of customFieldDefs || []) {
+        const raw = pick([def.label]);
+        if (raw === null || raw === undefined) continue;
+        const value = String(raw).trim();
+        if (!value) continue;
+
+        if (def.field_type === "select") {
+          const options: string[] = def.select_options || [];
+          const match = options.find((o) => o.toLowerCase() === value.toLowerCase());
+          if (match) values[def.field_key] = match;
+        } else if (def.field_type === "multiselect") {
+          const options: string[] = def.select_options || [];
+          const resolved: string[] = [];
+          for (const part of value.split(/[,;|]/).map((p) => p.trim()).filter(Boolean)) {
+            const match = options.find((o) => o.toLowerCase() === part.toLowerCase());
+            if (match) {
+              resolved.push(match);
+            } else {
+              resolved.push(part);
+              if (!newOptionsByDefId.has(def.id)) newOptionsByDefId.set(def.id, new Set());
+              newOptionsByDefId.get(def.id)!.add(part);
+            }
+          }
+          if (resolved.length > 0) values[def.field_key] = resolved;
+        } else if (def.field_type === "number") {
+          const n = parseFloat(value.replace(/,/g, ""));
+          if (!isNaN(n)) values[def.field_key] = n;
+        } else if (def.field_type === "checkbox") {
+          values[def.field_key] = /^(true|yes|y|1)$/i.test(value);
+        } else {
+          values[def.field_key] = value;
+        }
+      }
+      return values;
+    }
+
+    const companyCustomFields: Record<string, unknown>[] = [];
+
     const companies: Array<{
       company_name: string;
       user_id: string;
@@ -150,7 +204,10 @@ serve(async (req) => {
           country: pick(["Organization - Country of Address", "Country", "Primary location > Country", "Country/Region", "HQ Country"]),
           client_id: pick(["Organization - ID", "ID", "Company ID", "Account ID"]),
           last_interaction: parseTimestamp(pick(["Organization - Last activity date", "Last activity date", "Last interaction", "Last Activity"])),
-          stage: mapLabel(labelsValue),
+          // An explicit stage column (Apollo's "Account stage", or "Stage")
+          // wins when it names a real stage; otherwise fall back to the old
+          // labels-based guess so a file with neither still gets something.
+          stage: matchStageOption(pick(["Account Stage", "Stage", "Organization - Stage", "Sales Stage"])) ?? mapLabel(labelsValue),
         };
 
         if (i === 1) {
@@ -161,6 +218,7 @@ serve(async (req) => {
 
         if (company.company_name && company.company_name !== "Unknown" && company.company_name !== "-") {
           companies.push(company);
+          companyCustomFields.push(parseCustomFields(pick));
         }
       } catch (e) {
         errors.push({ line: i, error: e.message });
@@ -175,7 +233,7 @@ serve(async (req) => {
     // Only fetch companies belonging to this user
     const { data: existingCompanies, error: fetchError } = await supabase
       .from("companies")
-      .select("id, company_name")
+      .select("id, company_name, custom_fields")
       .eq("user_id", userId);
 
     if (fetchError) {
@@ -183,7 +241,7 @@ serve(async (req) => {
       throw new Error(`Failed to fetch existing companies: ${fetchError.message}`);
     }
 
-    const existingMap = new Map<string, { id: string; company_name: string }>();
+    const existingMap = new Map<string, { id: string; company_name: string; custom_fields: Record<string, unknown> | null }>();
     for (const company of existingCompanies || []) {
       const key = company.company_name.toLowerCase().trim();
       if (!existingMap.has(key)) {
@@ -193,30 +251,35 @@ serve(async (req) => {
 
     console.log(`Found ${existingMap.size} unique existing companies by name`);
 
-    const toUpdate: Array<{ id: string; data: typeof companies[0] }> = [];
-    const toInsert: typeof companies = [];
+    const toUpdate: Array<{ id: string; data: typeof companies[0]; customFields: Record<string, unknown> }> = [];
+    const toInsert: Array<typeof companies[0] & { custom_fields: Record<string, unknown> }> = [];
 
-    for (const company of companies) {
+    companies.forEach((company, idx) => {
+      const parsedCustomFields = companyCustomFields[idx] || {};
       const key = company.company_name.toLowerCase().trim();
       const existing = existingMap.get(key);
 
       if (existing) {
-        toUpdate.push({ id: existing.id, data: company });
+        // Merge, don't replace -- a CSV that only carries "Buying intent score"
+        // must not wipe out a "Company signals" value set some other way.
+        const mergedCustomFields = { ...(existing.custom_fields || {}), ...parsedCustomFields };
+        toUpdate.push({ id: existing.id, data: company, customFields: mergedCustomFields });
       } else {
-        toInsert.push(company);
+        toInsert.push({ ...company, custom_fields: parsedCustomFields });
       }
-    }
+    });
 
     console.log(`To update: ${toUpdate.length}, To insert: ${toInsert.length}`);
 
     let updated = 0;
     let inserted = 0;
 
-    for (const { id, data } of toUpdate) {
+    for (const { id, data, customFields } of toUpdate) {
       const { error: updateError } = await supabase
         .from("companies")
         .update({
           ...data,
+          custom_fields: customFields,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
@@ -235,7 +298,7 @@ serve(async (req) => {
     const chunkSize = 100;
     for (let i = 0; i < toInsert.length; i += chunkSize) {
       const chunk = toInsert.slice(i, i + chunkSize);
-      
+
       const { error } = await supabase
         .from("companies")
         .insert(chunk);
@@ -297,6 +360,25 @@ serve(async (req) => {
       }
     }
 
+    // Grow multiselect custom field option lists with values the CSV actually
+    // used, once, rather than per row -- values already matched an option
+    // case-insensitively above and were left out of newOptionsByDefId.
+    let customFieldOptionsAdded = 0;
+    for (const [defId, newValues] of newOptionsByDefId.entries()) {
+      const def = (customFieldDefs || []).find((d) => d.id === defId);
+      if (!def) continue;
+      const merged = Array.from(new Set([...(def.select_options || []), ...newValues]));
+      const { error: optionsError } = await supabase
+        .from("custom_field_definitions")
+        .update({ select_options: merged })
+        .eq("id", defId);
+      if (optionsError) {
+        console.log(`Error growing options for ${def.label}:`, optionsError.message);
+      } else {
+        customFieldOptionsAdded += newValues.size;
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -306,6 +388,7 @@ serve(async (req) => {
         total: companies.length,
         rowsParsed: lines.length - 1,
         detectedHeaders: headers.slice(0, 40),
+        customFieldOptionsAdded,
         errors: errors.slice(0, 10),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -394,6 +477,19 @@ function buildPicker(record: Record<string, any>) {
     }
     return null;
   };
+}
+
+// Kept in sync with src/lib/constants/companyFields.ts SALES_STAGE_OPTIONS --
+// Deno functions can't import from src/, so this is a deliberate duplicate.
+const SALES_STAGE_OPTIONS = [
+  "Discovery", "Contact Made", "Cold Lead", "Warm Lead", "Hot Lead",
+  "Marketing Qualified", "Sales Qualified", "Demo Done", "Prospect", "Partner",
+];
+
+function matchStageOption(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  return SALES_STAGE_OPTIONS.find((option) => option.toLowerCase() === normalized) ?? null;
 }
 
 function mapLabel(label: string | null): string {

@@ -78,6 +78,127 @@ export type Database = {
           },
         ]
       }
+      ai_field_definitions: {
+        Row: {
+          active: boolean
+          created_at: string
+          entity_type: string
+          id: string
+          key: string
+          kind: string
+          label: string
+          position: number
+          prompt_template: string
+          tier_options: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          entity_type?: string
+          id?: string
+          key: string
+          kind: string
+          label: string
+          position?: number
+          prompt_template: string
+          tier_options?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          entity_type?: string
+          id?: string
+          key?: string
+          kind?: string
+          label?: string
+          position?: number
+          prompt_template?: string
+          tier_options?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_field_values: {
+        Row: {
+          ai_field_definition_id: string
+          company_id: string
+          computed_at: string
+          evidence: string | null
+          id: string
+          model: string | null
+          user_id: string
+          value: string | null
+        }
+        Insert: {
+          ai_field_definition_id: string
+          company_id: string
+          computed_at?: string
+          evidence?: string | null
+          id?: string
+          model?: string | null
+          user_id: string
+          value?: string | null
+        }
+        Update: {
+          ai_field_definition_id?: string
+          company_id?: string
+          computed_at?: string
+          evidence?: string | null
+          id?: string
+          model?: string | null
+          user_id?: string
+          value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_field_values_ai_field_definition_id_fkey"
+            columns: ["ai_field_definition_id"]
+            isOneToOne: false
+            referencedRelation: "ai_field_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_field_values_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_field_values_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+        ]
+      }
+      ai_sender_profile: {
+        Row: {
+          content: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       calendar_events: {
         Row: {
           account_id: string | null
@@ -238,6 +359,7 @@ export type Database = {
           connection_strength: string | null
           country: string | null
           created_at: string
+          custom_fields: Json
           description: string | null
           domains: string | null
           done_activities: number | null
@@ -252,10 +374,14 @@ export type Database = {
           labels: string | null
           last_interaction: string | null
           linkedin_url: string | null
+          naics_code: string | null
+          naics_description: string | null
           next_activity_date: string | null
           peak_focus_client_id: string | null
           peak_focus_url: string | null
           people_count: number | null
+          sic_code: string | null
+          sic_title: string | null
           size: string | null
           stage: string | null
           twitter_followers: number | null
@@ -272,6 +398,7 @@ export type Database = {
           connection_strength?: string | null
           country?: string | null
           created_at?: string
+          custom_fields?: Json
           description?: string | null
           domains?: string | null
           done_activities?: number | null
@@ -286,10 +413,14 @@ export type Database = {
           labels?: string | null
           last_interaction?: string | null
           linkedin_url?: string | null
+          naics_code?: string | null
+          naics_description?: string | null
           next_activity_date?: string | null
           peak_focus_client_id?: string | null
           peak_focus_url?: string | null
           people_count?: number | null
+          sic_code?: string | null
+          sic_title?: string | null
           size?: string | null
           stage?: string | null
           twitter_followers?: number | null
@@ -306,6 +437,7 @@ export type Database = {
           connection_strength?: string | null
           country?: string | null
           created_at?: string
+          custom_fields?: Json
           description?: string | null
           domains?: string | null
           done_activities?: number | null
@@ -320,10 +452,14 @@ export type Database = {
           labels?: string | null
           last_interaction?: string | null
           linkedin_url?: string | null
+          naics_code?: string | null
+          naics_description?: string | null
           next_activity_date?: string | null
           peak_focus_client_id?: string | null
           peak_focus_url?: string | null
           people_count?: number | null
+          sic_code?: string | null
+          sic_title?: string | null
           size?: string | null
           stage?: string | null
           twitter_followers?: number | null
@@ -343,6 +479,7 @@ export type Database = {
           country: string | null
           created_at: string
           current_job_start_date: string | null
+          custom_fields: Json
           department: string | null
           do_not_contact: boolean
           done_activities: number | null
@@ -393,6 +530,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           current_job_start_date?: string | null
+          custom_fields?: Json
           department?: string | null
           do_not_contact?: boolean
           done_activities?: number | null
@@ -443,6 +581,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           current_job_start_date?: string | null
+          custom_fields?: Json
           department?: string | null
           do_not_contact?: boolean
           done_activities?: number | null
@@ -596,6 +735,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      custom_field_definitions: {
+        Row: {
+          created_at: string
+          entity_type: string
+          field_key: string
+          field_type: string
+          id: string
+          label: string
+          position: number
+          select_options: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_type: string
+          field_key: string
+          field_type?: string
+          id?: string
+          label: string
+          position?: number
+          select_options?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_type?: string
+          field_key?: string
+          field_type?: string
+          id?: string
+          label?: string
+          position?: number
+          select_options?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       data_export_requests: {
         Row: {
@@ -1890,6 +2068,79 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_qualifications: {
+        Row: {
+          champions_identification: Json
+          company_id: string | null
+          completed_at: string | null
+          contact_id: string
+          cost_qualification: Json
+          created_at: string
+          id: string
+          problem_identification: Json
+          process_qualification: Json
+          status: string
+          success_metrics: Json
+          time_qualification: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          champions_identification?: Json
+          company_id?: string | null
+          completed_at?: string | null
+          contact_id: string
+          cost_qualification?: Json
+          created_at?: string
+          id?: string
+          problem_identification?: Json
+          process_qualification?: Json
+          status?: string
+          success_metrics?: Json
+          time_qualification?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          champions_identification?: Json
+          company_id?: string | null
+          completed_at?: string | null
+          contact_id?: string
+          cost_qualification?: Json
+          created_at?: string
+          id?: string
+          problem_identification?: Json
+          process_qualification?: Json
+          status?: string
+          success_metrics?: Json
+          time_qualification?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_qualifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_qualifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "peak_focus_client_scope"
+            referencedColumns: ["crm_company_id"]
+          },
+          {
+            foreignKeyName: "lead_qualifications_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           company_id: string | null
@@ -2463,6 +2714,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      naics_codes: {
+        Row: {
+          code: string
+          description: string
+          id: number
+        }
+        Insert: {
+          code: string
+          description: string
+          id?: never
+        }
+        Update: {
+          code?: string
+          description?: string
+          id?: never
+        }
+        Relationships: []
       }
       newsletter_recipients: {
         Row: {
@@ -3310,6 +3579,24 @@ export type Database = {
         }
         Relationships: []
       }
+      sic_codes: {
+        Row: {
+          code: string
+          id: number
+          title: string
+        }
+        Insert: {
+          code: string
+          id?: never
+          title: string
+        }
+        Update: {
+          code?: string
+          id?: never
+          title?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           archive: boolean | null
@@ -3879,6 +4166,8 @@ export type Database = {
         Args: { p_contact_id: string; p_link_url: string; p_user_id?: string }
         Returns: Json
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       update_user_consent: {
         Args: {
           consent_type_param: string

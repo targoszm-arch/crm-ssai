@@ -37,6 +37,10 @@ import { EntityHistoryTabs } from "./EntityHistoryTabs";
 import { EditableLabels } from "./EditableLabels";
 import { AddDealModal } from "@/components/deals/AddDealModal";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import { CountrySelect } from "@/components/shared/CountrySelect";
+import { CustomFieldsCard } from "@/components/shared/CustomFieldsCard";
+import { LeadQualificationCard } from "./LeadQualificationCard";
+import { format } from "date-fns";
 
 export type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -91,6 +95,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
     instagram_url: "",
     notes: "",
     company_id: "",
+    next_to_contact: "",
   });
 
   const updateContact = useUpdateContact();
@@ -130,6 +135,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
         instagram_url: contact.instagram_url || "",
         notes: contact.notes || "",
         company_id: contact.company_id || "",
+        next_to_contact: contact.next_to_contact ? format(new Date(contact.next_to_contact), "yyyy-MM-dd") : "",
       });
     }
   }, [contact]);
@@ -142,6 +148,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
         id: contact.id,
         ...formData,
         company_id: formData.company_id || null,
+        next_to_contact: formData.next_to_contact ? new Date(formData.next_to_contact).toISOString() : null,
       });
       toast({
         title: "Contact updated",
@@ -173,6 +180,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
         instagram_url: contact.instagram_url || "",
         notes: contact.notes || "",
         company_id: contact.company_id || "",
+        next_to_contact: contact.next_to_contact ? format(new Date(contact.next_to_contact), "yyyy-MM-dd") : "",
       });
     }
     setIsEditing(false);
@@ -433,11 +441,19 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
             </div>
             <div>
               <Label htmlFor="work_location" className="text-xs">Location</Label>
-              <Input
+              <CountrySelect
                 id="work_location"
                 value={formData.work_location}
-                onChange={(e) => setFormData({ ...formData, work_location: e.target.value })}
-                placeholder="Work location"
+                onChange={(value) => setFormData({ ...formData, work_location: value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="next_to_contact" className="text-xs">Next to contact</Label>
+              <Input
+                id="next_to_contact"
+                type="date"
+                value={formData.next_to_contact}
+                onChange={(e) => setFormData({ ...formData, next_to_contact: e.target.value })}
               />
             </div>
             <div>
@@ -483,6 +499,8 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
       </div>
 
       <div className="space-y-6">
+        <LeadQualificationCard contact={contact} />
+
         <EditableLabels
           labels={contact.labels}
           onSave={async (labels) => {
@@ -494,6 +512,15 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
             });
           }}
           isLoading={updateContact.isPending}
+        />
+
+        <CustomFieldsCard
+          entityType="contact"
+          values={(contact.custom_fields as Record<string, unknown>) ?? {}}
+          onSave={async (customFields) => {
+            await updateContact.mutateAsync({ id: contact.id, custom_fields: customFields as never });
+            refetch();
+          }}
         />
 
         <Separator />

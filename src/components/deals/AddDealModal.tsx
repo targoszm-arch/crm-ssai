@@ -41,6 +41,9 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { usePipelines, usePipelineStages } from "@/hooks/usePipelines";
 import { useCreateDeal, useUpdateDeal, Deal } from "@/hooks/useDeals";
 import { LabelSelector } from "@/components/shared/LabelSelector";
+import { INDUSTRY_OPTIONS } from "@/lib/constants/industries";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const formSchema = z.object({
   deal_name: z.string().min(1, "Title is required"),
@@ -62,6 +65,35 @@ const formSchema = z.object({
 });
 
 type FormData = z.infer<typeof formSchema>;
+
+// Mirrors the deals_require_lead_qualification trigger's own logic -- a
+// contact needs its own completed form; a company-only deal needs any one
+// contact at that company to have one.
+async function hasCompletedLeadQualification(contactId?: string, companyId?: string): Promise<boolean> {
+  if (contactId) {
+    const { count } = await supabase
+      .from("lead_qualifications")
+      .select("id", { count: "exact", head: true })
+      .eq("contact_id", contactId)
+      .eq("status", "completed");
+    return (count ?? 0) > 0;
+  }
+  if (companyId) {
+    const { data: contactIds } = await supabase
+      .from("contacts")
+      .select("id")
+      .eq("company_id", companyId);
+    const ids = (contactIds ?? []).map((c) => c.id);
+    if (ids.length === 0) return false;
+    const { count } = await supabase
+      .from("lead_qualifications")
+      .select("id", { count: "exact", head: true })
+      .in("contact_id", ids)
+      .eq("status", "completed");
+    return (count ?? 0) > 0;
+  }
+  return false;
+}
 
 interface AddDealModalProps {
   open: boolean;
@@ -169,6 +201,18 @@ export function AddDealModal({
         form.setError("pipeline_id", { message: "A pipeline is required" });
         return;
       }
+
+      // The database rejects this too (trigger on deals), so this can't be
+      // routed around by any other client -- this check exists only to give
+      // a clear message and a way out instead of a raw Postgres error.
+      const qualified = await hasCompletedLeadQualification(dealData.contact_id, dealData.company_id);
+      if (!qualified) {
+        toast.error(
+          "A completed Lead Qualification form is required before creating this deal. Open the contact's People page and fill it in first.",
+        );
+        return;
+      }
+
       await createDeal.mutateAsync({ ...dealData, pipeline_id });
     }
 
@@ -509,14 +553,9 @@ export function AddDealModal({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="technology">Technology</SelectItem>
-                          <SelectItem value="finance">Finance</SelectItem>
-                          <SelectItem value="healthcare">Healthcare</SelectItem>
-                          <SelectItem value="retail">Retail</SelectItem>
-                          <SelectItem value="manufacturing">Manufacturing</SelectItem>
-                          <SelectItem value="consulting">Consulting</SelectItem>
-                          <SelectItem value="education">Education</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
+                          {INDUSTRY_OPTIONS.map((option) => (
+                            <SelectItem key={option} value={option}>{option}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />

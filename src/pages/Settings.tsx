@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import FinanceSettings from "@/components/finance/FinanceSettings";
+import AiFieldsSettings from "@/components/settings/AiFieldsSettings";
+import AiSenderProfileSettings from "@/components/settings/AiSenderProfileSettings";
 
 const WEBHOOK_URL = "https://getqcxnjsohtlagscmfc.supabase.co/functions/v1/lms-webhook";
 
@@ -149,6 +151,10 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      <AiSenderProfileSettings />
+
+      <AiFieldsSettings />
 
       <FinanceSettings />
     </PageShell>);

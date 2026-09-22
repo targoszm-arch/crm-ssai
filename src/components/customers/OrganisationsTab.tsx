@@ -17,6 +17,7 @@ import { OrganisationsBulkActionBar } from "./OrganisationsBulkActionBar";
 import { renderLabels } from "@/lib/labelColors";
 import { toast } from "sonner";
 import { enrichCompanies, type EnrichProvider } from "@/lib/api/enrichment";
+import { scoreCompaniesWithAi } from "@/lib/api/aiScoring";
 import { useQueryClient } from "@tanstack/react-query";
 
 function getConnectionStrengthBadge(strength: string | null) {
@@ -74,6 +75,7 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
   const [preselectedCompanyId, setPreselectedCompanyId] = useState<string | undefined>();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isEnriching, setIsEnriching] = useState(false);
+  const [isScoringWithAi, setIsScoringWithAi] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -213,6 +215,26 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
       toast.error("Enrichment failed");
     } finally {
       setIsEnriching(false);
+    }
+  };
+
+  const handleBulkScoreWithAi = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setIsScoringWithAi(true);
+    try {
+      const result = await scoreCompaniesWithAi(ids, (current, total) => {
+        toast.loading(`Scoring ${current} of ${total} with AI...`, { id: "bulk-ai-score" });
+      });
+      toast.dismiss("bulk-ai-score");
+      toast.success(`Scored ${result.succeeded} organisation${result.succeeded !== 1 ? "s" : ""}${result.failed > 0 ? `, ${result.failed} failed` : ""}`);
+      queryClient.invalidateQueries({ queryKey: ["ai-field-values"] });
+      setSelectedIds(new Set());
+    } catch {
+      toast.dismiss("bulk-ai-score");
+      toast.error("Scoring with AI failed");
+    } finally {
+      setIsScoringWithAi(false);
     }
   };
 
@@ -558,8 +580,10 @@ export function OrganisationsTab({ onAddContact }: OrganisationsTabProps) {
         onClearSelection={() => setSelectedIds(new Set())}
         onExport={handleExportCSV}
         onEnrich={handleBulkEnrich}
+        onScoreWithAi={handleBulkScoreWithAi}
         isDeleting={deleteCompanies.isPending}
         isEnriching={isEnriching}
+        isScoringWithAi={isScoringWithAi}
       />
 
       <DataTable
