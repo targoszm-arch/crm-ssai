@@ -67,6 +67,30 @@ serve(async (req) => {
 
     console.log(`Loaded ${companyMap.size} companies for matching`);
 
+    // Fetch existing contacts for this user, keyed by lowercased email, so a
+    // re-upload or an overlapping list enriches what's already here instead
+    // of inserting the same person again. Every previous import just called
+    // insert() unconditionally, which is how the CRM ended up with duplicate
+    // rows for the same address from more than one source.
+    const { data: existingContactsData, error: existingContactsError } = await supabase
+      .from("contacts")
+      .select("*")
+      .eq("user_id", userId)
+      .not("email", "is", null);
+
+    if (existingContactsError) {
+      throw new Error(`Failed to fetch existing contacts: ${existingContactsError.message}`);
+    }
+
+    const existingByEmail = new Map<string, Record<string, any>>();
+    existingContactsData?.forEach((existing) => {
+      if (existing.email) {
+        existingByEmail.set(existing.email.toLowerCase().trim(), existing);
+      }
+    });
+
+    console.log(`Loaded ${existingByEmail.size} existing contacts for email matching`);
+
     // Parse CSV — tolerate a BOM, \r\n / \r line endings, and comma/semicolon/tab/pipe delimiters.
     const normalizedCsv = csvData.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
     const lines = normalizedCsv.split("\n");
@@ -76,8 +100,24 @@ serve(async (req) => {
     console.log("CSV Headers:", headers.slice(0, 15), "delimiter:", JSON.stringify(delimiter));
     
     const contacts = [];
+    const enrichments: { id: string; updates: Record<string, any> }[] = [];
     const errors = [];
     let matchedCount = 0;
+
+    // Enriching never touches identity or the match key itself — only "fill
+    // in a blank" fields. first_name/last_name are excluded even though
+    // they're writable elsewhere: a CSV row with no name column falls back
+    // to firstName === "Unknown" above, and that fallback must never
+    // overwrite a real name already on file.
+    const ENRICHABLE_FIELDS = [
+      "company_id", "title", "phone", "work_location", "linkedin_url",
+      "facebook_url", "instagram_url", "last_contacted", "last_email_received",
+      "notes", "connection_strength", "labels", "function", "marketing_status",
+      "seniority_level", "next_recommended_action", "buying_signals",
+      "pain_point", "interest_level", "lqs", "email_messages_count", "done_activities",
+    ];
+
+    const isBlank = (value: any) => value === null || value === undefined || value === "";
 
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
@@ -152,7 +192,19 @@ serve(async (req) => {
           done_activities: parseInt(pick(["Person - Done activities", "Done activities"])) || 0,
         };
 
-        if (contact.first_name && contact.first_name !== "Unknown") {
+        const existing = contact.email ? existingByEmail.get(contact.email.toLowerCase().trim()) : undefined;
+
+        if (existing) {
+          const updates: Record<string, any> = {};
+          for (const field of ENRICHABLE_FIELDS) {
+            if (isBlank(existing[field]) && !isBlank((contact as Record<string, any>)[field])) {
+              updates[field] = (contact as Record<string, any>)[field];
+            }
+          }
+          if (Object.keys(updates).length > 0) {
+            enrichments.push({ id: existing.id, updates });
+          }
+        } else if (contact.first_name && contact.first_name !== "Unknown") {
           contacts.push(contact);
         }
       } catch (e) {
@@ -160,7 +212,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Parsed ${contacts.length} contacts, ${matchedCount} matched to companies`);
+    console.log(`Parsed ${contacts.length} new contacts, ${enrichments.length} to enrich, ${matchedCount} matched to companies`);
 
     const chunkSize = 100;
     let inserted = 0;
@@ -182,10 +234,34 @@ serve(async (req) => {
 
     console.log(`Inserted ${inserted} contacts`);
 
+    // Enrichments each touch a different set of columns, so they can't share
+    // one bulk upsert request — run them with bounded concurrency instead of
+    // one at a time so a few thousand matches doesn't take a few thousand
+    // sequential round trips.
+    let enriched = 0;
+    const enrichConcurrency = 20;
+    for (let i = 0; i < enrichments.length; i += enrichConcurrency) {
+      const batch = enrichments.slice(i, i + enrichConcurrency);
+      const results = await Promise.all(
+        batch.map(({ id, updates }) => supabase.from("contacts").update(updates).eq("id", id)),
+      );
+      results.forEach((result, idx) => {
+        if (result.error) {
+          console.log(`Error enriching contact ${batch[idx].id}:`, result.error.message);
+          errors.push({ contactId: batch[idx].id, error: result.error.message });
+        } else {
+          enriched++;
+        }
+      });
+    }
+
+    console.log(`Enriched ${enriched} existing contacts`);
+
     return new Response(
       JSON.stringify({
         success: true,
         imported: inserted,
+        enriched,
         total: contacts.length,
         matched: matchedCount,
         rowsParsed: lines.length - 1,

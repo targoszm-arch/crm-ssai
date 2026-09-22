@@ -248,20 +248,93 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
                 </div>
               </div>
             ) : (
-              <>
-                <h2 className="text-xl font-semibold truncate">{fullName}</h2>
-                {contact.title && (
-                  <p className="text-sm text-muted-foreground mt-0.5">{contact.title}</p>
-                )}
-              </>
+              <h2 className="text-xl font-semibold truncate">{fullName}</h2>
             )}
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {/* Everything about this person that isn't the name itself --
+                title, status badges, who they work for, and how to reach
+                them -- is one flowing row, not a stack of one-thing-per-line
+                blocks. It only wraps to a second line when it doesn't fit. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-sm">
+              {!isEditing && contact.title && (
+                <span className="text-muted-foreground">{contact.title}</span>
+              )}
               {getConnectionStrengthBadge(contact.connection_strength)}
               {contact.interest_level && (
                 <Badge variant="secondary">{contact.interest_level}</Badge>
               )}
               {contact.marketing_status && (
                 <Badge variant="outline">{contact.marketing_status}</Badge>
+              )}
+              {contact.companies?.company_name && contact.company_id ? (
+                <Link
+                  to={`/companies/${contact.company_id}`}
+                  className="flex items-center gap-2 text-primary hover:underline"
+                >
+                  <Building2 className="h-4 w-4" />
+                  {contact.companies.company_name}
+                </Link>
+              ) : contact.companies?.company_name ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Building2 className="h-4 w-4" />
+                  <span>{contact.companies.company_name}</span>
+                </div>
+              ) : null}
+              {!isEditing && contact.email && (
+                <a
+                  href={`mailto:${contact.email}`}
+                  className="flex items-center gap-2 text-primary hover:underline"
+                >
+                  <Mail className="h-4 w-4" />
+                  {contact.email}
+                </a>
+              )}
+              {!isEditing && contact.phone && (
+                <a href={`tel:${contact.phone}`} className="flex items-center gap-2 hover:text-primary">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  {contact.phone}
+                </a>
+              )}
+              {!isEditing && contact.work_location && (
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span>{contact.work_location}</span>
+                </div>
+              )}
+              {!isEditing && contact.linkedin_url && (
+                <a
+                  href={contact.linkedin_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md border hover:bg-accent"
+                >
+                  <Linkedin className="h-4 w-4 text-[#0077B5]" />
+                  LinkedIn
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+              {!isEditing && contact.facebook_url && (
+                <a
+                  href={contact.facebook_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md border hover:bg-accent"
+                >
+                  <Facebook className="h-4 w-4 text-[#1877F2]" />
+                  Facebook
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+              {!isEditing && contact.instagram_url && (
+                <a
+                  href={contact.instagram_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md border hover:bg-accent"
+                >
+                  <Instagram className="h-4 w-4 text-[#E4405F]" />
+                  Instagram
+                  <ExternalLink className="h-3 w-3" />
+                </a>
               )}
             </div>
           </div>
@@ -308,152 +381,69 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
 
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
       <div className="space-y-6">
-        {/* Company, contact details and social links used to be three separately
-            headed blocks (the third with its own "Social Links" label and a
-            Separator above it) for what is, on the page, a single idea: how to
-            reach this person and who they work for. One flowing block instead. */}
-        <div className={isEditing ? "space-y-3" : "flex flex-wrap items-center gap-x-4 gap-y-2"}>
-          {contact.companies?.company_name && contact.company_id ? (
-            <Link
-              to={`/companies/${contact.company_id}`}
-              className="flex items-center gap-2 text-sm text-primary hover:underline"
-            >
-              <Building2 className="h-4 w-4" />
-              {contact.companies.company_name}
-            </Link>
-          ) : contact.companies?.company_name ? (
-            <div className="flex items-center gap-2 text-sm">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <span>{contact.companies.company_name}</span>
+        {/* View mode shows nothing here -- company, email, phone, location and
+            social links all live in the one flowing row under the name now.
+            Editing still needs stacked labeled inputs, which is a form, not
+            a display row, so that stays here and only here. */}
+        {isEditing && (
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="email" className="text-xs">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="Email address"
+              />
             </div>
-          ) : null}
-          {isEditing ? (
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="email" className="text-xs">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="Email address"
-                />
-              </div>
-              <div>
-                <Label htmlFor="phone" className="text-xs">Phone</Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="Phone number"
-                />
-              </div>
-              <div>
-                <Label htmlFor="work_location" className="text-xs">Location</Label>
-                <Input
-                  id="work_location"
-                  value={formData.work_location}
-                  onChange={(e) => setFormData({ ...formData, work_location: e.target.value })}
-                  placeholder="Work location"
-                />
-              </div>
-              <div>
-                <Label htmlFor="linkedin_url" className="text-xs">LinkedIn URL</Label>
-                <Input
-                  id="linkedin_url"
-                  value={formData.linkedin_url}
-                  onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
-                  placeholder="https://linkedin.com/in/..."
-                />
-              </div>
-              <div>
-                <Label htmlFor="facebook_url" className="text-xs">Facebook URL</Label>
-                <Input
-                  id="facebook_url"
-                  value={formData.facebook_url}
-                  onChange={(e) => setFormData({ ...formData, facebook_url: e.target.value })}
-                  placeholder="https://facebook.com/..."
-                />
-              </div>
-              <div>
-                <Label htmlFor="instagram_url" className="text-xs">Instagram URL</Label>
-                <Input
-                  id="instagram_url"
-                  value={formData.instagram_url}
-                  onChange={(e) => setFormData({ ...formData, instagram_url: e.target.value })}
-                  placeholder="https://instagram.com/..."
-                />
-              </div>
+            <div>
+              <Label htmlFor="phone" className="text-xs">Phone</Label>
+              <Input
+                id="phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="Phone number"
+              />
             </div>
-          ) : (
-            <>
-              {contact.email && (
-                <a
-                  href={`mailto:${contact.email}`}
-                  className="flex items-center gap-3 text-sm text-primary hover:underline"
-                >
-                  <Mail className="h-4 w-4" />
-                  {contact.email}
-                </a>
-              )}
-              {contact.phone && (
-                <a
-                  href={`tel:${contact.phone}`}
-                  className="flex items-center gap-3 text-sm hover:text-primary"
-                >
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  {contact.phone}
-                </a>
-              )}
-              {contact.work_location && (
-                <div className="flex items-center gap-3 text-sm">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                  <span>{contact.work_location}</span>
-                </div>
-              )}
-              {(contact.linkedin_url || contact.facebook_url || contact.instagram_url) && (
-                <div className="flex flex-wrap gap-2">
-                  {contact.linkedin_url && (
-                    <a
-                      href={contact.linkedin_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-accent"
-                    >
-                      <Linkedin className="h-4 w-4 text-[#0077B5]" />
-                      LinkedIn
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
-                  {contact.facebook_url && (
-                    <a
-                      href={contact.facebook_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-accent"
-                    >
-                      <Facebook className="h-4 w-4 text-[#1877F2]" />
-                      Facebook
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
-                  {contact.instagram_url && (
-                    <a
-                      href={contact.instagram_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-accent"
-                    >
-                      <Instagram className="h-4 w-4 text-[#E4405F]" />
-                      Instagram
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            <div>
+              <Label htmlFor="work_location" className="text-xs">Location</Label>
+              <Input
+                id="work_location"
+                value={formData.work_location}
+                onChange={(e) => setFormData({ ...formData, work_location: e.target.value })}
+                placeholder="Work location"
+              />
+            </div>
+            <div>
+              <Label htmlFor="linkedin_url" className="text-xs">LinkedIn URL</Label>
+              <Input
+                id="linkedin_url"
+                value={formData.linkedin_url}
+                onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
+                placeholder="https://linkedin.com/in/..."
+              />
+            </div>
+            <div>
+              <Label htmlFor="facebook_url" className="text-xs">Facebook URL</Label>
+              <Input
+                id="facebook_url"
+                value={formData.facebook_url}
+                onChange={(e) => setFormData({ ...formData, facebook_url: e.target.value })}
+                placeholder="https://facebook.com/..."
+              />
+            </div>
+            <div>
+              <Label htmlFor="instagram_url" className="text-xs">Instagram URL</Label>
+              <Input
+                id="instagram_url"
+                value={formData.instagram_url}
+                onChange={(e) => setFormData({ ...formData, instagram_url: e.target.value })}
+                placeholder="https://instagram.com/..."
+              />
+            </div>
+          </div>
+        )}
 
         <Separator />
         <div>
