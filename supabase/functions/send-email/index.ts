@@ -147,6 +147,7 @@ serve(async (req: Request): Promise<Response> => {
     const { data: storedEmail, error: storeError } = await supabase
       .from("emails")
       .insert({
+        user_id: user.id,
         account_id: accountId,
         gmail_id: `pending-${Date.now()}`, // Temporary ID until we get the real one
         thread_id: null,

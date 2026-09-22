@@ -5,23 +5,22 @@ import { Target, Loader2, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface LeadsTabProps {
-  contactId: string;
+  scope: { contactId?: string | null; companyId?: string | null };
 }
 
-export function LeadsTab({ contactId }: LeadsTabProps) {
+export function LeadsTab({ scope }: LeadsTabProps) {
+  const { contactId, companyId } = scope;
   const { data: leads, isLoading } = useQuery({
-    queryKey: ["contact-leads", contactId],
+    queryKey: ["entity-leads", contactId, companyId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("leads")
-        .select("*")
-        .eq("contact_id", contactId)
-        .order("created_at", { ascending: false });
-      
+      let query = supabase.from("leads").select("*");
+      query = contactId ? query.eq("contact_id", contactId) : query.eq("company_id", companyId!);
+      const { data, error } = await query.order("created_at", { ascending: false });
+
       if (error) throw error;
       return data || [];
     },
-    enabled: !!contactId,
+    enabled: !!contactId || !!companyId,
   });
 
   if (isLoading) {
@@ -37,7 +36,7 @@ export function LeadsTab({ contactId }: LeadsTabProps) {
       <div className="text-center py-8 text-muted-foreground">
         <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
         <p className="text-sm">No leads yet</p>
-        <p className="text-xs mt-1">Leads associated with this contact will appear here</p>
+        <p className="text-xs mt-1">Leads associated with {contactId ? "this contact" : "this company"} will appear here</p>
       </div>
     );
   }

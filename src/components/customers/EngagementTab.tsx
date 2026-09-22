@@ -1,4 +1,5 @@
 import { Contact } from "@/hooks/useContacts";
+import { Company } from "@/hooks/useCompanies";
 import { useEngagementStats } from "@/hooks/useEngagementStats";
 import { format } from "date-fns";
 import {
@@ -10,11 +11,12 @@ import {
 } from "lucide-react";
 
 interface EngagementTabProps {
-  contact: Contact;
+  contact?: Contact;
+  company?: Company;
 }
 
-export function EngagementTab({ contact }: EngagementTabProps) {
-  const { data: engagement } = useEngagementStats(contact.id);
+export function EngagementTab({ contact, company }: EngagementTabProps) {
+  const { data: engagement } = useEngagementStats({ contactId: contact?.id, companyId: company?.id });
 
   const stats = [
     {
@@ -29,18 +31,18 @@ export function EngagementTab({ contact }: EngagementTabProps) {
       value: engagement?.completedActivities ?? "…",
       color: "text-green-500",
     },
-    {
-      icon: TrendingUp,
-      label: "Lead Quality Score",
-      value: contact.lqs || "-",
-      color: "text-yellow-500",
-    },
+    ...(contact
+      ? [{ icon: TrendingUp, label: "Lead Quality Score", value: contact.lqs || "-", color: "text-yellow-500" }]
+      : []),
   ];
 
+  // companies.next_activity_date is a stale one-time CSV-import snapshot
+  // (see CLAUDE.md) -- last_interaction and created_at are live columns, so
+  // only those are shown here.
   return (
     <div className="space-y-6">
       {/* Engagement Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className={`grid gap-3 ${stats.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
         {stats.map((stat) => (
           <div key={stat.label} className="p-3 rounded-lg border bg-card text-center">
             <stat.icon className={`h-5 w-5 mx-auto mb-2 ${stat.color}`} />
@@ -55,8 +57,8 @@ export function EngagementTab({ contact }: EngagementTabProps) {
         <h5 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Timeline
         </h5>
-        
-        {contact.last_contacted && (
+
+        {contact?.last_contacted && (
           <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
             <Clock className="h-4 w-4 text-muted-foreground" />
             <div>
@@ -68,7 +70,19 @@ export function EngagementTab({ contact }: EngagementTabProps) {
           </div>
         )}
 
-        {contact.next_to_contact && (
+        {company?.last_interaction && (
+          <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="text-xs text-muted-foreground">Last Interaction</p>
+              <p className="text-sm font-medium">
+                {format(new Date(company.last_interaction), "MMM dd, yyyy 'at' h:mm a")}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {contact?.next_to_contact && (
           <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <div>
@@ -80,7 +94,7 @@ export function EngagementTab({ contact }: EngagementTabProps) {
           </div>
         )}
 
-        {contact.last_email_received && (
+        {contact?.last_email_received && (
           <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
             <Mail className="h-4 w-4 text-muted-foreground" />
             <div>
@@ -92,13 +106,13 @@ export function EngagementTab({ contact }: EngagementTabProps) {
           </div>
         )}
 
-        {contact.created_at && (
+        {(contact?.created_at || company?.created_at) && (
           <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
             <Activity className="h-4 w-4 text-muted-foreground" />
             <div>
-              <p className="text-xs text-muted-foreground">Contact Created</p>
+              <p className="text-xs text-muted-foreground">{contact ? "Contact Created" : "Company Added"}</p>
               <p className="text-sm font-medium">
-                {format(new Date(contact.created_at), "MMM dd, yyyy")}
+                {format(new Date((contact?.created_at ?? company?.created_at)!), "MMM dd, yyyy")}
               </p>
             </div>
           </div>
@@ -106,13 +120,13 @@ export function EngagementTab({ contact }: EngagementTabProps) {
       </div>
 
       {/* Connection Strength */}
-      {contact.connection_strength && (
+      {(contact?.connection_strength || company?.connection_strength) && (
         <div className="space-y-2">
           <h5 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             Connection
           </h5>
           <div className="p-3 rounded-lg border bg-card">
-            <p className="text-sm font-medium">{contact.connection_strength}</p>
+            <p className="text-sm font-medium">{contact?.connection_strength || company?.connection_strength}</p>
             <p className="text-xs text-muted-foreground mt-1">
               Based on interaction frequency and engagement
             </p>

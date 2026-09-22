@@ -179,33 +179,29 @@ export function EditableLabels({ labels, onSave, isLoading }: EditableLabelsProp
   const displayLabels = labels ? labels.split(",").map(l => l.trim()).filter(Boolean).map(parseLabel) : [];
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium">Labels</h4>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleStartEditing}>
-          <Pencil className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+    <div className="flex items-center gap-2 flex-wrap">
+      <h4 className="text-sm font-medium shrink-0">Labels</h4>
       {displayLabels.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {displayLabels.map((label, i) => {
-            const color = LABEL_COLORS[label.colorIndex];
-            return (
-              <span
-                key={i}
-                className={cn(
-                  "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border",
-                  color.bg, color.text, color.border
-                )}
-              >
-                {label.text}
-              </span>
-            );
-          })}
-        </div>
+        displayLabels.map((label, i) => {
+          const color = LABEL_COLORS[label.colorIndex];
+          return (
+            <span
+              key={i}
+              className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border",
+                color.bg, color.text, color.border
+              )}
+            >
+              {label.text}
+            </span>
+          );
+        })
       ) : (
         <p className="text-sm text-muted-foreground">No labels added</p>
       )}
+      <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" onClick={handleStartEditing}>
+        <Pencil className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 }

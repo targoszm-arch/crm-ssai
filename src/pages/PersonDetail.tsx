@@ -46,16 +46,14 @@ export default function PersonDetail() {
           twice on one page. ContactDetailContent's is the more complete one
           (it also carries Create Deal, Enrich and Edit), so it's the only one
           now. Same reasoning removed the separate Overview/Activity/Files page
-          tabs: ContactHistoryTabs below already covers activity and files as
+          tabs: EntityHistoryTabs below already covers activity and files as
           tabs of its own — a second tab strip for the same page was the
           "why two separate tabs" complaint, not two different concerns. */}
-      <div className="mt-6">
-        <ContactDetailContent
-          contact={contact}
-          onRefetched={refetch}
-          onOpenEmail={(emailId) => { setHistoryEmailId(emailId); setHistoryOpen(true); }}
-        />
-      </div>
+      <ContactDetailContent
+        contact={contact}
+        onRefetched={refetch}
+        onOpenEmail={(emailId) => { setHistoryEmailId(emailId); setHistoryOpen(true); }}
+      />
     </PageShell>
     <HistoryPanel
       open={historyOpen}

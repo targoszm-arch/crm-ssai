@@ -21,24 +21,26 @@ export interface MeetingNote {
   updated_at: string;
 }
 
-export function useMeetingNotes(contactId: string | undefined) {
-  return useQuery({
-    queryKey: ["meeting-notes", contactId],
-    queryFn: async () => {
-      if (!contactId) return [];
+export interface MeetingNotesScope {
+  contactId?: string | null;
+  companyId?: string | null;
+}
 
-      const { data, error } = await supabase
-        .from("meeting_notes")
-        .select("*")
-        .eq("contact_id", contactId)
-        .order("meeting_date", { ascending: false });
+export function useMeetingNotes(scope: MeetingNotesScope) {
+  const { contactId, companyId } = scope;
+  return useQuery({
+    queryKey: ["meeting-notes", contactId, companyId],
+    queryFn: async () => {
+      let query = supabase.from("meeting_notes").select("*");
+      query = contactId ? query.eq("contact_id", contactId) : query.eq("company_id", companyId!);
+      const { data, error } = await query.order("meeting_date", { ascending: false });
 
       if (error) throw error;
-      
+
       // Type assertion since the table is new and types may not be generated yet
       return (data || []) as unknown as MeetingNote[];
     },
-    enabled: !!contactId,
+    enabled: !!contactId || !!companyId,
   });
 }
 

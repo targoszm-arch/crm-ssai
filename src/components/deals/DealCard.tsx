@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Building2, Users, AlertTriangle, DollarSign } from "lucide-react";
+import { Building2, Users, AlertTriangle, DollarSign, Layers } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -89,6 +89,13 @@ export function DealCard({ deal, onClick, isDragging, isClosed }: DealCardProps)
 
         {/* Value and details */}
         <div className="flex items-center gap-2 flex-wrap">
+          {deal.product && (
+            <Badge variant="secondary" className="gap-1 bg-violet-100 text-violet-700 hover:bg-violet-100">
+              <Layers className="h-3 w-3" />
+              {deal.product}
+            </Badge>
+          )}
+
           {deal.deal_value && (
             <Badge variant="secondary" className="gap-1">
               <DollarSign className="h-3 w-3" />

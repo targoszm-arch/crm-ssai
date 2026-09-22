@@ -1,4 +1,4 @@
-import { useMeetingNotes } from "@/hooks/useMeetingNotes";
+import { useMeetingNotes, type MeetingNotesScope } from "@/hooks/useMeetingNotes";
 import { MeetingNoteCard } from "./MeetingNoteCard";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -9,56 +9,61 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 
 interface NotesTabProps {
-  contactId: string;
-  manualNotes: string;
-  isEditing: boolean;
-  onNotesChange: (notes: string) => void;
+  scope: MeetingNotesScope;
+  /** Omitted for scopes with no manual-notes column (e.g. companies) — the
+   * section is hidden entirely rather than shown as permanently empty. */
+  manualNotes?: string;
+  isEditing?: boolean;
+  onNotesChange?: (notes: string) => void;
 }
 
-export function NotesTab({ contactId, manualNotes, isEditing, onNotesChange }: NotesTabProps) {
-  const { data: meetingNotes, isLoading } = useMeetingNotes(contactId);
+export function NotesTab({ scope, manualNotes, isEditing, onNotesChange }: NotesTabProps) {
+  const { data: meetingNotes, isLoading } = useMeetingNotes(scope);
   const [manualOpen, setManualOpen] = useState(true);
   const [meetingsOpen, setMeetingsOpen] = useState(true);
+  const hasManualNotes = onNotesChange !== undefined;
 
   return (
     <div className="space-y-4">
       {/* Manual Notes Section */}
-      <Collapsible open={manualOpen} onOpenChange={setManualOpen}>
-        <CollapsibleTrigger asChild>
-          <Button variant="ghost" size="sm" className="w-full justify-between px-2 h-9">
-            <span className="text-sm font-medium flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Manual Notes
-            </span>
-            {manualOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
-          {isEditing ? (
-            <div>
-              <Label htmlFor="manual-notes" className="text-xs text-muted-foreground">
-                Personal notes about this contact
-              </Label>
-              <Textarea
-                id="manual-notes"
-                value={manualNotes}
-                onChange={(e) => onNotesChange(e.target.value)}
-                placeholder="Add your notes about this contact..."
-                rows={4}
-                className="mt-1"
-              />
-            </div>
-          ) : manualNotes ? (
-            <div className="p-3 rounded-lg border bg-card">
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{manualNotes}</p>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic p-3">
-              No manual notes. Click edit to add notes.
-            </p>
-          )}
-        </CollapsibleContent>
-      </Collapsible>
+      {hasManualNotes && (
+        <Collapsible open={manualOpen} onOpenChange={setManualOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="w-full justify-between px-2 h-9">
+              <span className="text-sm font-medium flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Manual Notes
+              </span>
+              {manualOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2">
+            {isEditing ? (
+              <div>
+                <Label htmlFor="manual-notes" className="text-xs text-muted-foreground">
+                  Personal notes about this contact
+                </Label>
+                <Textarea
+                  id="manual-notes"
+                  value={manualNotes}
+                  onChange={(e) => onNotesChange(e.target.value)}
+                  placeholder="Add your notes about this contact..."
+                  rows={4}
+                  className="mt-1"
+                />
+              </div>
+            ) : manualNotes ? (
+              <div className="p-3 rounded-lg border bg-card">
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{manualNotes}</p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic p-3">
+                No manual notes. Click edit to add notes.
+              </p>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
 
       {/* Meeting Notes from Fireflies */}
       <Collapsible open={meetingsOpen} onOpenChange={setMeetingsOpen}>

@@ -83,7 +83,9 @@ export function useCreateDeal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (deal: Partial<Tables<"deals">>) => {
+    // pipeline_id is NOT NULL in the database (20260922184032) -- required
+    // here too, so a caller can't compile a create that the DB would reject.
+    mutationFn: async (deal: Partial<Tables<"deals">> & { pipeline_id: string }) => {
       // deals.user_id has no database default and the INSERT policy is
       // `with_check (auth.uid() = user_id)`, so omitting it does not create an
       // ownerless row — it fails the policy outright. Every create through this

@@ -384,11 +384,11 @@ export default function Deals() {
               </TabsContent>
 
               <TabsContent value="emails">
-                {selectedDeal.contact_id ? (
-                  <EmailsTab contactId={selectedDeal.contact_id} />
+                {selectedDeal.contact_id || selectedDeal.company_id ? (
+                  <EmailsTab scope={{ contactId: selectedDeal.contact_id, companyId: selectedDeal.company_id }} />
                 ) : (
                   <p className="text-muted-foreground text-sm py-8 text-center">
-                    No contact linked to this deal yet, so there's no mailbox to pull emails from.
+                    No contact or company linked to this deal yet, so there's no mailbox to pull emails from.
                   </p>
                 )}
               </TabsContent>

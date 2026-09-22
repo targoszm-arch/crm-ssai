@@ -33,7 +33,7 @@ import { EnrichProviderMenu } from "./EnrichProviderMenu";
 import { toast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ContactHistoryTabs } from "./ContactHistoryTabs";
+import { EntityHistoryTabs } from "./EntityHistoryTabs";
 import { EditableLabels } from "./EditableLabels";
 import { AddDealModal } from "@/components/deals/AddDealModal";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
@@ -472,7 +472,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
 
         <Separator />
         <div>
-          <ContactHistoryTabs
+          <EntityHistoryTabs
             contact={contact}
             manualNotes={formData.notes}
             isEditing={isEditing}

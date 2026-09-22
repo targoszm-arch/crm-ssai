@@ -1,14 +1,14 @@
-import { useLMSLeadsByContact, useLMSLeadByEmail, LMSLead } from "@/hooks/useLMSLeads";
+import { useLMSLeadsByContact, useLMSLeadsByCompany, useLMSLeadByEmail, LMSLead } from "@/hooks/useLMSLeads";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  GraduationCap, 
-  CheckCircle2, 
-  XCircle, 
-  Mail, 
-  Building2, 
-  Target, 
+import {
+  GraduationCap,
+  CheckCircle2,
+  XCircle,
+  Mail,
+  Building2,
+  Target,
   BookOpen,
   Calendar,
   CreditCard
@@ -16,20 +16,24 @@ import {
 import { format } from "date-fns";
 
 interface LMSLeadsTabProps {
-  contactId: string;
+  scope: { contactId?: string | null; companyId?: string | null };
   contactEmail?: string | null;
 }
 
-export function LMSLeadsTab({ contactId, contactEmail }: LMSLeadsTabProps) {
+export function LMSLeadsTab({ scope, contactEmail }: LMSLeadsTabProps) {
+  const { contactId, companyId } = scope;
   const { data: leadsByContact, isLoading: isLoadingByContact } = useLMSLeadsByContact(contactId);
+  const { data: leadsByCompany, isLoading: isLoadingByCompany } = useLMSLeadsByCompany(companyId);
   const { data: leadByEmail, isLoading: isLoadingByEmail } = useLMSLeadByEmail(
-    leadsByContact?.length === 0 ? contactEmail : null
+    contactId && leadsByContact?.length === 0 ? contactEmail : null
   );
 
-  const isLoading = isLoadingByContact || isLoadingByEmail;
-  
-  // Combine results - prefer contact-linked leads, fallback to email match
-  const leads = leadsByContact?.length ? leadsByContact : leadByEmail ? [leadByEmail] : [];
+  const isLoading = isLoadingByContact || isLoadingByCompany || isLoadingByEmail;
+
+  // Combine results - prefer directly-linked leads, fallback to email match for a contact
+  const leads = contactId
+    ? (leadsByContact?.length ? leadsByContact : leadByEmail ? [leadByEmail] : [])
+    : (leadsByCompany || []);
 
   if (isLoading) {
     return (
@@ -43,7 +47,7 @@ export function LMSLeadsTab({ contactId, contactEmail }: LMSLeadsTabProps) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
         <GraduationCap className="h-12 w-12 mb-2 opacity-50" />
-        <p>No LMS registrations found for this contact</p>
+        <p>No LMS registrations found for {contactId ? "this contact" : "this company"}</p>
       </div>
     );
   }
@@ -58,7 +62,7 @@ export function LMSLeadsTab({ contactId, contactEmail }: LMSLeadsTabProps) {
 }
 
 function LMSLeadCard({ lead }: { lead: LMSLead }) {
-  const creditsPercentage = lead.credits_total > 0 
+  const creditsPercentage = lead.credits_total > 0
     ? Math.round((lead.credits_used / lead.credits_total) * 100)
     : 0;
 

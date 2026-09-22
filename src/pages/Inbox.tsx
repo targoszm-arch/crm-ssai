@@ -388,25 +388,32 @@ export default function Inbox() {
         </div>
       )}
 
-      {/* Bulk Action Bar */}
-      {selectedEmails.length > 0 && (
-        <div className="flex justify-center py-2 border-b bg-muted/50">
-          <BulkActionBar
-            selectedCount={selectedEmails.length}
-            onMarkRead={handleBulkMarkRead}
-            onMarkUnread={handleBulkMarkUnread}
-            onArchive={handleBulkArchive}
-            onClearSelection={() => setSelectedEmails([])}
-            isLoading={bulkMarkRead.isPending || archiveEmails.isPending}
-          />
-        </div>
-      )}
-
       {/* Content */}
       {showConnectPrompt ? (
         <div className="flex items-center justify-center flex-1 p-8"><ConnectGmail /></div>
       ) : (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="relative flex-1 flex overflow-hidden">
+          {/* Bulk Action Bar — floats over the content on selection instead of
+              sitting in normal flow. It used to be a row between the header and
+              the three-pane content, so selecting a row pushed the entire
+              mailbox down by the bar's height and shifted it back up on
+              deselect. Absolute + a relative content wrapper means selection
+              never changes anyone else's layout. */}
+          {selectedEmails.length > 0 && (
+            <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2">
+              <div className="rounded-lg border bg-card shadow-md">
+                <BulkActionBar
+                  selectedCount={selectedEmails.length}
+                  onMarkRead={handleBulkMarkRead}
+                  onMarkUnread={handleBulkMarkUnread}
+                  onArchive={handleBulkArchive}
+                  onClearSelection={() => setSelectedEmails([])}
+                  isLoading={bulkMarkRead.isPending || archiveEmails.isPending}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Desktop InboxSidebar */}
           {!isMobile && activeTab === "email" && (
             <div
