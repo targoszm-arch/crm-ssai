@@ -305,7 +305,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
       <div className="space-y-6">
         <div className="space-y-3">
           {contact.companies?.company_name && (
@@ -453,6 +453,18 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
             )}
           </div>
         </>
+
+        <Separator />
+        <div>
+          <h4 className="text-sm font-medium mb-4">History</h4>
+          <ContactHistoryTabs
+            contact={contact}
+            manualNotes={formData.notes}
+            isEditing={isEditing}
+            onNotesChange={(notes) => setFormData({ ...formData, notes })}
+            onOpenEmail={onOpenEmail}
+          />
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -566,18 +578,6 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
           </Button>
         </div>
       )}
-
-      <Separator className="mt-6" />
-      <div className="mt-6">
-        <h4 className="text-sm font-medium mb-4">History</h4>
-        <ContactHistoryTabs
-          contact={contact}
-          manualNotes={formData.notes}
-          isEditing={isEditing}
-          onNotesChange={(notes) => setFormData({ ...formData, notes })}
-          onOpenEmail={onOpenEmail}
-        />
-      </div>
 
       <AddDealModal
         open={showAddDeal}
