@@ -27,6 +27,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { Contact, useUpdateContact } from "@/hooks/useContacts";
+import { useCompanies } from "@/hooks/useCompanies";
 import { enrichContact, type EnrichProvider } from "@/lib/api/enrichment";
 import { EnrichProviderMenu } from "./EnrichProviderMenu";
 import { toast } from "@/hooks/use-toast";
@@ -35,6 +36,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ContactHistoryTabs } from "./ContactHistoryTabs";
 import { EditableLabels } from "./EditableLabels";
 import { AddDealModal } from "@/components/deals/AddDealModal";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
 
 export type ContactWithCompany = Contact & {
   companies?: { company_name: string } | null;
@@ -88,10 +90,12 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
     facebook_url: "",
     instagram_url: "",
     notes: "",
+    company_id: "",
   });
 
   const updateContact = useUpdateContact();
   const queryClient = useQueryClient();
+  const { data: companies } = useCompanies();
 
   const { data: freshContact, refetch } = useQuery({
     queryKey: ["contact-detail", initialContact?.id],
@@ -125,6 +129,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
         facebook_url: contact.facebook_url || "",
         instagram_url: contact.instagram_url || "",
         notes: contact.notes || "",
+        company_id: contact.company_id || "",
       });
     }
   }, [contact]);
@@ -136,6 +141,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
       await updateContact.mutateAsync({
         id: contact.id,
         ...formData,
+        company_id: formData.company_id || null,
       });
       toast({
         title: "Contact updated",
@@ -166,6 +172,7 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
         facebook_url: contact.facebook_url || "",
         instagram_url: contact.instagram_url || "",
         notes: contact.notes || "",
+        company_id: contact.company_id || "",
       });
     }
     setIsEditing(false);
@@ -387,6 +394,24 @@ export function ContactDetailContent({ contact: initialContact, onRefetched, onO
             a display row, so that stays here and only here. */}
         {isEditing && (
           <div className="space-y-3">
+            <div>
+              <Label htmlFor="company" className="text-xs">Company</Label>
+              <SearchableSelect
+                id="company"
+                value={formData.company_id || "none"}
+                onChange={(value) => setFormData({ ...formData, company_id: value === "none" ? "" : value })}
+                options={[
+                  { value: "none", label: "No company", alwaysShow: true },
+                  ...(companies ?? []).map((company) => ({
+                    value: company.id,
+                    label: company.company_name,
+                  })),
+                ]}
+                placeholder="Select company"
+                searchPlaceholder="Search companies..."
+                emptyText="No company found."
+              />
+            </div>
             <div>
               <Label htmlFor="email" className="text-xs">Email</Label>
               <Input
