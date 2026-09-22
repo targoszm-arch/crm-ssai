@@ -299,6 +299,42 @@ export function useUpdateEmailLabels() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["email-label-options"] });
+    },
+  });
+}
+
+/**
+ * Every label currently in use across all emails, as raw "name:colorIndex" tokens
+ * deduped by name — powers the Labels filter's option list. email_labels lives on
+ * each row with no lookup table of its own, so the filter has no way to know what
+ * labels exist without a scan; unfiltered and account-wide on purpose; the picker
+ * should offer every label that's ever been used, not just ones in the current view.
+ */
+export function useEmailLabelOptions() {
+  return useQuery({
+    queryKey: ["email-label-options"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("emails")
+        .select("email_labels")
+        .not("email_labels", "is", null);
+
+      if (error) throw error;
+
+      const seen = new Set<string>();
+      const options: string[] = [];
+      for (const row of data ?? []) {
+        for (const token of (row.email_labels ?? "").split(",")) {
+          const trimmed = token.trim();
+          if (!trimmed) continue;
+          const name = trimmed.split(":")[0].trim().toLowerCase();
+          if (seen.has(name)) continue;
+          seen.add(name);
+          options.push(trimmed);
+        }
+      }
+      return options;
     },
   });
 }

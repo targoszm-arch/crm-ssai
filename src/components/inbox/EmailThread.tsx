@@ -18,13 +18,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Email, useSendEmail, useLinkEmailToContact, useMarkEmailRead } from "@/hooks/useEmails";
+import { Email, useSendEmail, useLinkEmailToContact, useMarkEmailRead, useUpdateEmailLabels } from "@/hooks/useEmails";
 import { EmailAccount } from "@/hooks/useEmailAccounts";
 import { useContacts, Contact } from "@/hooks/useContacts";
 import { useGenerateEmailReply, ReplyTone } from "@/hooks/useEmailReply";
 import { useEmailSignature } from "@/hooks/useEmailSignature";
 import { RichTextComposer } from "@/components/shared/RichTextComposer";
 import { AddContactModal } from "@/components/customers/AddContactModal";
+import { EditableLabels } from "@/components/customers/EditableLabels";
 import { toast } from "@/hooks/use-toast";
 import { Tables } from "@/integrations/supabase/types";
 
@@ -45,6 +46,7 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
   const sendEmail = useSendEmail();
   const linkEmail = useLinkEmailToContact();
   const markEmailRead = useMarkEmailRead();
+  const updateLabels = useUpdateEmailLabels();
   const generateReply = useGenerateEmailReply();
   const { data: contacts, refetch: refetchContacts } = useContacts({});
   const { data: signature } = useEmailSignature();
@@ -201,6 +203,21 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
     );
   };
 
+  const handleSaveLabels = async (labels: string) => {
+    await updateLabels.mutateAsync(
+      { emailId: email.id, labels },
+      {
+        onError: (error) => {
+          toast({
+            title: "Couldn't save labels",
+            description: error.message,
+            variant: "destructive",
+          });
+        },
+      }
+    );
+  };
+
   const handleTemplateSelect = (template: EmailTemplate) => {
     const content = template.body_html || template.body_text || "";
     setReplyBody(content);
@@ -267,6 +284,15 @@ export function EmailThread({ email, account, onClose }: EmailThreadProps) {
             </Badge>
           )}
         </div>
+      </div>
+
+      {/* Labels */}
+      <div className="flex-shrink-0 px-4 py-3 border-b">
+        <EditableLabels
+          labels={email.email_labels}
+          onSave={handleSaveLabels}
+          isLoading={updateLabels.isPending}
+        />
       </div>
 
       {/* Add Contact Modal */}

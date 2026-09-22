@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useEmailAccounts, useDisconnectEmailAccount, startGoogleOAuth } from "@/hooks/useEmailAccounts";
-import { Email, useSyncEmails, useBulkMarkEmailsRead, useArchiveEmails, EmailFilters } from "@/hooks/useEmails";
+import { Email, useSyncEmails, useBulkMarkEmailsRead, useArchiveEmails, useEmailLabelOptions, EmailFilters } from "@/hooks/useEmails";
 import { LinkedInMessage } from "@/hooks/useLinkedInMessages";
 import { ConnectGmail } from "@/components/inbox/ConnectGmail";
 import { EmailList } from "@/components/inbox/EmailList";
@@ -82,6 +82,7 @@ export default function Inbox() {
   const [filters, setFilters] = useState<EmailFilters>({});
 
   const { data: accounts, isLoading: accountsLoading } = useEmailAccounts();
+  const { data: availableLabels = [] } = useEmailLabelOptions();
   const disconnectAccount = useDisconnectEmailAccount();
   const syncEmails = useSyncEmails();
   const bulkMarkRead = useBulkMarkEmailsRead();
@@ -384,7 +385,7 @@ export default function Inbox() {
           object that nothing could ever change. */}
       {activeTab === "email" && hasConnectedAccount && (
         <div className="border-b px-6 py-2">
-          <InboxFilters filters={filters} onChange={setFilters} />
+          <InboxFilters filters={filters} onChange={setFilters} availableLabels={availableLabels} />
         </div>
       )}
 
