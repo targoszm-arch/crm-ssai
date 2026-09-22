@@ -90,6 +90,32 @@ export function useListMembers(listId: string | undefined) {
   });
 }
 
+/**
+ * The reverse of useListMembers: which lists a given contact or company
+ * belongs to. Nothing needed this until the company detail page's "Lists"
+ * card turned out to be hardcoded "No lists assigned." with zero query
+ * behind it, even though list membership itself is real and already
+ * writable from the Organisations bulk action bar.
+ */
+export function useListsForEntity(entity: { contactId?: string; companyId?: string }) {
+  const key = entity.contactId ?? entity.companyId ?? null;
+  return useQuery({
+    queryKey: ["lists-for-entity", entity.contactId, entity.companyId],
+    enabled: !!key,
+    queryFn: async (): Promise<{ id: string; name: string }[]> => {
+      let query = supabase.from("list_members").select("list:lists(id, name)");
+      query = entity.contactId
+        ? query.eq("contact_id", entity.contactId)
+        : query.eq("company_id", entity.companyId!);
+      const { data, error } = await query;
+      if (error) throw error;
+      return ((data ?? []) as unknown as { list: { id: string; name: string } | null }[])
+        .map((row) => row.list)
+        .filter((list): list is { id: string; name: string } => !!list);
+    },
+  });
+}
+
 export function useCreateList() {
   const queryClient = useQueryClient();
   return useMutation({

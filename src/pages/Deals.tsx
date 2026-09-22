@@ -26,6 +26,8 @@ import { PageActions } from "@/components/layout/PageActions";
 import { StageWikiSheet } from "@/components/deals/StageWikiSheet";
 import PageShell from "@/components/layout/PageShell";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ActivityStreamPanel } from "@/components/customers/ActivityStreamPanel";
+import { EmailsTab } from "@/components/customers/EmailsTab";
 
 type ViewMode = "kanban" | "list" | "table" | "forecast";
 
@@ -51,7 +53,7 @@ export default function Deals() {
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();
   const activePipelineId = selectedPipelineId || pipelines?.find(p => p.is_default)?.id || pipelines?.[0]?.id;
   const { data: stages } = usePipelineStages(activePipelineId);
-  const { dealsByStage, isLoading: dealsLoading } = useDealsByStage(activePipelineId);
+  const { dealsByStage, isLoading: dealsLoading } = useDealsByStage(activePipelineId, search);
 
   const activePipeline = pipelines?.find(p => p.id === activePipelineId);
 
@@ -369,15 +371,26 @@ export default function Deals() {
               </TabsContent>
               
               <TabsContent value="activities">
-                <p className="text-muted-foreground text-sm py-8 text-center">
-                  No activities yet
-                </p>
+                {selectedDeal.contact_id || selectedDeal.company_id ? (
+                  <ActivityStreamPanel
+                    scope={{ contactId: selectedDeal.contact_id, companyId: selectedDeal.company_id }}
+                    showPerson={!selectedDeal.contact_id}
+                  />
+                ) : (
+                  <p className="text-muted-foreground text-sm py-8 text-center">
+                    No contact or company linked to this deal yet, so there's nothing to pull activity from.
+                  </p>
+                )}
               </TabsContent>
-              
+
               <TabsContent value="emails">
-                <p className="text-muted-foreground text-sm py-8 text-center">
-                  No emails linked
-                </p>
+                {selectedDeal.contact_id || selectedDeal.company_id ? (
+                  <EmailsTab scope={{ contactId: selectedDeal.contact_id, companyId: selectedDeal.company_id }} />
+                ) : (
+                  <p className="text-muted-foreground text-sm py-8 text-center">
+                    No contact or company linked to this deal yet, so there's no mailbox to pull emails from.
+                  </p>
+                )}
               </TabsContent>
             </Tabs>
           )}

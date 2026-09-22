@@ -235,6 +235,20 @@ export function LinkedInMessageView({ message, onClose }: LinkedInMessageViewPro
               options={[
                 { value: "unlinked", label: "No contact", alwaysShow: true },
                 { value: "create-new", label: "Create new contact", alwaysShow: true },
+                // The general contacts list is capped/sorted server-side, so a
+                // contact with no last_contacted date can be missing from it
+                // even though they're who this message is actually linked to --
+                // which reads as "unlinked" here despite genuinely being linked.
+                // Same bug and same fix as EmailThread's picker.
+                ...(message.connection?.contact_id && !(contacts ?? []).some((c) => c.id === message.connection?.contact_id)
+                  ? [{
+                      value: message.connection.contact_id,
+                      label: message.connection.contacts
+                        ? [message.connection.contacts.first_name, message.connection.contacts.last_name].filter(Boolean).join(" ")
+                        : "Linked contact",
+                      alwaysShow: true,
+                    }]
+                  : []),
                 ...(contacts ?? []).map((contact: Contact) => ({
                   value: contact.id,
                   label: [contact.first_name, contact.last_name].filter(Boolean).join(" ")

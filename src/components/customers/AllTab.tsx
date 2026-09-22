@@ -89,7 +89,7 @@ export function AllTab({ contact, onOpenEmail }: AllTabProps) {
     },
   });
 
-  const { data: meetingNotes, isLoading: notesLoading } = useMeetingNotes(contact.id);
+  const { data: meetingNotes, isLoading: notesLoading } = useMeetingNotes({ contactId: contact.id });
 
   const isLoading = emailsLoading || tasksLoading || eventsLoading || dealsLoading || notesLoading;
 

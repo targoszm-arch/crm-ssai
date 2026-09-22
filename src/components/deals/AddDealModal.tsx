@@ -58,6 +58,7 @@ const formSchema = z.object({
   notes: z.string().optional(),
   industry: z.string().optional(),
   type: z.string().optional(),
+  product: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -111,6 +112,7 @@ export function AddDealModal({
     notes: initialData?.notes || "",
     industry: initialData?.industry || undefined,
     type: initialData?.type || undefined,
+    product: initialData?.product || undefined,
   }), [initialData, initialStage, defaultPipeline?.id, stages]);
 
   const form = useForm<FormData>({
@@ -154,15 +156,20 @@ export function AddDealModal({
   }, [stages, form, initialStage, initialData?.id]);
 
   const onSubmit = async (data: FormData) => {
+    const { pipeline_id, ...rest } = data;
     const dealData = {
-      ...data,
+      ...rest,
       expected_close_date: data.expected_close_date?.toISOString(),
     };
 
     if (initialData?.id) {
-      await updateDeal.mutateAsync({ id: initialData.id, ...dealData });
+      await updateDeal.mutateAsync({ id: initialData.id, pipeline_id, ...dealData });
     } else {
-      await createDeal.mutateAsync(dealData);
+      if (!pipeline_id) {
+        form.setError("pipeline_id", { message: "A pipeline is required" });
+        return;
+      }
+      await createDeal.mutateAsync({ ...dealData, pipeline_id });
     }
 
     onOpenChange(false);
@@ -439,6 +446,7 @@ export function AddDealModal({
                           <SelectItem value="linkedin">LinkedIn</SelectItem>
                           <SelectItem value="email">Email</SelectItem>
                           <SelectItem value="website">Website</SelectItem>
+                          <SelectItem value="llm">LLM</SelectItem>
                           <SelectItem value="referral">Referral</SelectItem>
                           <SelectItem value="cold_call">Cold Call</SelectItem>
                           <SelectItem value="event">Event</SelectItem>
@@ -533,6 +541,28 @@ export function AddDealModal({
                           <SelectItem value="expansion">Expansion</SelectItem>
                           <SelectItem value="renewal">Renewal</SelectItem>
                           <SelectItem value="upsell">Upsell</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="product"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Product</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select product" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Skill Studio AI">Skill Studio AI</SelectItem>
+                          <SelectItem value="Content Lab">Content Lab</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

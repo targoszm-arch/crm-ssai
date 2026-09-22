@@ -650,9 +650,10 @@ export type Database = {
           lead_source: string | null
           notes: string | null
           owner_id: string | null
-          pipeline_id: string | null
+          pipeline_id: string
           position: number | null
           probability: number | null
+          product: string | null
           source_channel: string | null
           source_channel_id: string | null
           stage: string | null
@@ -673,9 +674,10 @@ export type Database = {
           lead_source?: string | null
           notes?: string | null
           owner_id?: string | null
-          pipeline_id?: string | null
+          pipeline_id: string
           position?: number | null
           probability?: number | null
+          product?: string | null
           source_channel?: string | null
           source_channel_id?: string | null
           stage?: string | null
@@ -696,9 +698,10 @@ export type Database = {
           lead_source?: string | null
           notes?: string | null
           owner_id?: string | null
-          pipeline_id?: string | null
+          pipeline_id?: string
           position?: number | null
           probability?: number | null
+          product?: string | null
           source_channel?: string | null
           source_channel_id?: string | null
           stage?: string | null

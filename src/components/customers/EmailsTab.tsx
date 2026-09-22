@@ -6,24 +6,22 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface EmailsTabProps {
-  contactId: string;
+  scope: { contactId?: string | null; companyId?: string | null };
 }
 
-export function EmailsTab({ contactId }: EmailsTabProps) {
+export function EmailsTab({ scope }: EmailsTabProps) {
+  const { contactId, companyId } = scope;
   const { data: emails, isLoading } = useQuery({
-    queryKey: ["contact-emails", contactId],
+    queryKey: ["entity-emails", contactId, companyId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("emails")
-        .select("*")
-        .eq("contact_id", contactId)
-        .order("received_at", { ascending: false })
-        .limit(30);
-      
+      let query = supabase.from("emails").select("*");
+      query = contactId ? query.eq("contact_id", contactId) : query.eq("company_id", companyId!);
+      const { data, error } = await query.order("received_at", { ascending: false }).limit(30);
+
       if (error) throw error;
       return data || [];
     },
-    enabled: !!contactId,
+    enabled: !!contactId || !!companyId,
   });
 
   if (isLoading) {
@@ -39,7 +37,7 @@ export function EmailsTab({ contactId }: EmailsTabProps) {
       <div className="text-center py-8 text-muted-foreground">
         <Mail className="h-8 w-8 mx-auto mb-2 opacity-50" />
         <p className="text-sm">No emails yet</p>
-        <p className="text-xs mt-1">Connect your email to see conversations with this contact</p>
+        <p className="text-xs mt-1">Connect your email to see conversations with {contactId ? "this contact" : "this company"}</p>
       </div>
     );
   }
