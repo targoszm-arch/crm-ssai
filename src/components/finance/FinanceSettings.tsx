@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useTaxRates, useUpdateTaxRate } from "@/components/finance/useFinanceTransactions";
 import { RevolutConnect } from "@/components/finance/RevolutConnect";
+import { readErrorBody } from "@/components/finance/functionError";
 
 /**
  * Finance settings.
@@ -64,27 +65,6 @@ const CONNECTIONS = [
     help: "Google Cloud → OAuth2 credentials with the gmail.readonly scope.",
   },
 ] as const;
-
-/**
- * The JSON body of a failed `functions.invoke`, or null.
- *
- * FunctionsHttpError carries the raw Response on `context`. Reading it is the
- * only way to see what the function actually said about a non-2xx, and a
- * function that answers 400 with a reason is being helpful, not broken.
- *
- * Returns null rather than throwing on anything unexpected — a relay error, a
- * network failure and an HTML error page all have no JSON body, and none of
- * them should turn a status check into an exception.
- */
-async function readErrorBody(error: unknown): Promise<unknown | null> {
-  const context = (error as { context?: unknown } | null)?.context;
-  if (!context || typeof (context as Response).json !== "function") return null;
-  try {
-    return await (context as Response).clone().json();
-  } catch {
-    return null;
-  }
-}
 
 function ConnectionRow({ conn }: { conn: (typeof CONNECTIONS)[number] }) {
   const [state, setState] = useState<ConnState>("unknown");
