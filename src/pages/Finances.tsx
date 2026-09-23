@@ -28,6 +28,7 @@ const FinanceGrid = lazy(() =>
 import { ReconcilePanel } from "@/components/finance/ReconcilePanel";
 import { AccountantPack } from "@/components/finance/AccountantPack";
 import { findDuplicateGroups, evidenceLostIfDeleted } from "@/components/finance/duplicateUtils";
+import { describeSyncError } from "@/components/finance/functionError";
 import { ReceiptReviewDialog } from "@/components/finance/ReceiptReviewDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -373,7 +374,9 @@ export default function FinancePage() {
       if (error) throw error;
       toast.success(`Synced ${fnData.synced} Stripe transactions`);
     } catch (err) {
-      toast.error(`Stripe sync failed: ${String(err)}`);
+      const { notConfigured, message } = await describeSyncError(err);
+      if (notConfigured) toast.warning(`Stripe is not connected. ${message}`, { duration: 10000 });
+      else toast.error(`Stripe sync failed: ${message}`);
     } finally {
       setSyncing(false);
     }
@@ -387,7 +390,9 @@ export default function FinancePage() {
       if (error) throw error;
       toast.success(`Synced ${fnData.synced} Revolut transactions`);
     } catch (err) {
-      toast.error(`Revolut sync failed: ${String(err)}`);
+      const { notConfigured, message } = await describeSyncError(err);
+      if (notConfigured) toast.warning(`Revolut is not connected. ${message}`, { duration: 10000 });
+      else toast.error(`Revolut sync failed: ${message}`);
     } finally {
       setSyncingRevolut(false);
     }
@@ -411,7 +416,9 @@ export default function FinancePage() {
       }
       if (fnData.synced > 0) setReceiptReviewOpen(true);
     } catch (err) {
-      toast.error(`Gmail sync failed: ${String(err)}`);
+      const { notConfigured, message } = await describeSyncError(err);
+      if (notConfigured) toast.warning(`Gmail is not connected. ${message}`, { duration: 10000 });
+      else toast.error(`Gmail sync failed: ${message}`);
     } finally {
       setSyncingGmail(false);
     }
