@@ -24,10 +24,26 @@ interface ReviewForm {
   transaction_date: string;
   amount_eur: string;
   vat_treatment: string;
-  vat_amount_eur: string;
+  tax_rate_pct: string;
   description: string;
   category: string;
   notes_text: string;
+}
+
+/** Tax inside a tax-inclusive total: gross × rate / (100 + rate), in cents. */
+function taxFromGross(grossCents: number, ratePct: number): number {
+  if (!ratePct || ratePct <= 0) return 0;
+  return Math.round((grossCents * ratePct) / (100 + ratePct));
+}
+
+/** The rate to show for a receipt: the stored one, else the one implied by its
+ *  stored tax and net amounts (older rows only carry the amount). */
+function initialRatePct(tx: FinanceTransaction): string {
+  if (tx.tax_rate_percent != null) return String(tx.tax_rate_percent);
+  const vat = tx.vat_amount_cents ?? 0;
+  const gross = tx.amount_eur_cents ?? 0;
+  if (vat > 0 && gross > vat) return String(Math.round((vat / (gross - vat)) * 10000) / 100);
+  return "";
 }
 
 function getPdfPath(tx: FinanceTransaction): string | null {
@@ -161,7 +177,7 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
       transaction_date: tx.transaction_date,
       amount_eur: tx.amount_eur_cents ? String((tx.amount_eur_cents / 100).toFixed(2)) : "",
       vat_treatment: tx.vat_treatment ?? "none",
-      vat_amount_eur: tx.vat_amount_cents ? String((tx.vat_amount_cents / 100).toFixed(2)) : "",
+      tax_rate_pct: initialRatePct(tx),
       description: tx.description ?? "",
       category: tx.category ?? "none",
       notes_text: getNotesText(tx),
@@ -172,13 +188,16 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
   useEffect(() => { if (open) { setIndex(0); setPendingDelete(null); } }, [open]);
 
   const vatTreatment = watch("vat_treatment");
+  const grossPreviewCents = Math.round(parseFloat(watch("amount_eur") || "0") * 100);
+  const taxPreviewCents = taxFromGross(grossPreviewCents, parseFloat(watch("tax_rate_pct") || "0"));
 
   const onSave = handleSubmit(async (form) => {
     if (!tx) return;
     setSaving(true);
     try {
       const amountCents = Math.round(parseFloat(form.amount_eur || "0") * 100);
-      const vatCents = Math.round(parseFloat(form.vat_amount_eur || "0") * 100);
+      const ratePct = form.tax_rate_pct.trim() === "" ? null : parseFloat(form.tax_rate_pct);
+      const vatCents = taxFromGross(amountCents, ratePct ?? 0);
 
       // Preserve pdf_path in notes
       const pdfPath = getPdfPath(tx);
@@ -194,6 +213,7 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
         net_cents: amountCents - vatCents,
         vat_treatment: form.vat_treatment === "none" ? null : form.vat_treatment,
         vat_amount_cents: vatCents,
+        tax_rate_percent: ratePct,
         description: form.description || null,
         category: form.category === "none" ? null : form.category,
         notes: Object.keys(newNotes).length ? JSON.stringify(newNotes) : null,
@@ -298,8 +318,13 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
                     <Input type="number" step="0.01" placeholder="0.00" {...register("amount_eur")} />
                   </div>
                   <div className="space-y-1">
-                    <Label>Tax amount</Label>
-                    <Input type="number" step="0.01" placeholder="0.00" {...register("vat_amount_eur")} />
+                    <Label>Tax %</Label>
+                    <Input type="number" step="0.01" min="0" max="100" placeholder="e.g. 23" {...register("tax_rate_pct")} />
+                    {taxPreviewCents > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Tax {(taxPreviewCents / 100).toFixed(2)} · net {((grossPreviewCents - taxPreviewCents) / 100).toFixed(2)}
+                      </p>
+                    )}
                   </div>
                 </div>
 
