@@ -196,8 +196,16 @@ export function ReceiptReviewDialog({ open, onClose }: Props) {
     setSaving(true);
     try {
       const amountCents = Math.round(parseFloat(form.amount_eur || "0") * 100);
-      const ratePct = form.tax_rate_pct.trim() === "" ? null : parseFloat(form.tax_rate_pct);
-      const vatCents = taxFromGross(amountCents, ratePct ?? 0);
+      // An untouched rate on a row that stored only an amount is a rounded
+      // display of that amount, not a rate anyone entered. Recomputing from it
+      // can move the stored tax by a cent (€107.02 / €2.36 shows 2.25%, which
+      // gives back €2.35), so keep what was stored until the rate or total changes.
+      const untouched =
+        tx.tax_rate_percent == null &&
+        form.tax_rate_pct === initialRatePct(tx) &&
+        amountCents === (tx.amount_eur_cents ?? 0);
+      const ratePct = untouched || form.tax_rate_pct.trim() === "" ? null : parseFloat(form.tax_rate_pct);
+      const vatCents = untouched ? tx.vat_amount_cents ?? 0 : taxFromGross(amountCents, ratePct ?? 0);
 
       // Preserve pdf_path in notes
       const pdfPath = getPdfPath(tx);
