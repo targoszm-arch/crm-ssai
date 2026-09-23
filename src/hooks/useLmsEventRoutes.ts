@@ -70,6 +70,13 @@ export const LMS_EVENT_NAMES = [
   "convert_ppt_to_course_started",
   "create_video_started",
   "candace_used",
+  // Billing, sent by the LMS stripe-webhook rather than track-posthog-event.
+  // free_subscription_created fires once per signup — every account gets a Free Stripe
+  // subscription seconds after registering, so this is the onboarding trigger.
+  // paid_subscription_started fires once per paid subscription (Starter and up), on
+  // whichever of subscription.created / checkout.session.completed activates it first.
+  "free_subscription_created",
+  "paid_subscription_started",
 ] as const;
 
 export function useLmsEventRoutes() {
