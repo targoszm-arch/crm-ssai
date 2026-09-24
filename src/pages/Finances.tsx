@@ -702,6 +702,7 @@ export default function FinancePage() {
                 <SelectItem value="all">All sources</SelectItem>
                 <SelectItem value="stripe">Stripe</SelectItem>
                 <SelectItem value="revolut">Revolut</SelectItem>
+                <SelectItem value="n26">N26</SelectItem>
                 <SelectItem value="paypal">PayPal</SelectItem>
                 <SelectItem value="gmail">Gmail receipts</SelectItem>
                 <SelectItem value="receipt_log">Receipt log</SelectItem>

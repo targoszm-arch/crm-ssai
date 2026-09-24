@@ -18,7 +18,7 @@ import { normaliseWho } from "@/components/finance/duplicateUtils";
  */
 
 /** Sources that are bank movements rather than documents. */
-const BANK_SOURCES = new Set(["revolut", "stripe", "paypal"]);
+const BANK_SOURCES = new Set(["revolut", "n26", "stripe", "paypal"]);
 /** Sources that are documents rather than movements. */
 const RECEIPT_SOURCES = new Set(["gmail", "receipt_log"]);
 
