@@ -7,7 +7,7 @@ export interface FinanceTransaction {
   id: string;
   // Widened by 20260916120000: the Gmail receipt sync writes 'gmail' and the
   // spreadsheet backfill writes 'receipt_log'.
-  source: "stripe" | "revolut" | "paypal" | "manual" | "gmail" | "receipt_log";
+  source: "stripe" | "revolut" | "n26" | "paypal" | "manual" | "gmail" | "receipt_log";
   source_id: string | null;
   // 'transfer' added 17 Sep 2026. Money moving between Magda's own Revolut
   // pockets is neither income nor expense; 179 such rows carrying EUR 38,846

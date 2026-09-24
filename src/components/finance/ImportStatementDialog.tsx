@@ -14,7 +14,7 @@ import { DuplicateReviewDialog, DuplicateReviewItem } from "@/components/finance
 import { FinanceTransaction } from "@/components/finance/useFinanceTransactions";
 
 /**
- * Import a Revolut or PayPal statement export.
+ * Import a Revolut, N26 or PayPal statement export.
  *
  * This exists because the API route needs a key that may never be issued —
  * Revolut Business API access is a paid plan feature — and a statement CSV is
@@ -26,7 +26,7 @@ import { FinanceTransaction } from "@/components/finance/useFinanceTransactions"
  * wrong is how a pipeline counts the same money twice.
  */
 
-type SourceKind = "revolut" | "paypal";
+type SourceKind = "revolut" | "paypal" | "n26";
 
 interface ParsedRow {
   source_id: string;
@@ -37,7 +37,9 @@ interface ParsedRow {
   currency: string;
   amount_eur_cents: number | null;
   fee_cents: number;
-  type: "income" | "expense" | "refund" | "fee";
+  type: "income" | "expense" | "refund" | "fee" | "transfer";
+  /** A card payment's original currency and amount, where it was not EUR. */
+  original?: { currency: string; amount: string };
 }
 
 /** Minimal RFC4180 splitter — quoted fields may contain commas and newlines. */
@@ -128,10 +130,93 @@ async function hashId(prefix: string, parts: string[]): Promise<string> {
   return `${prefix}_${hex.slice(0, 20)}`;
 }
 
+/**
+ * An N26 export announces itself: "Booking Date" and "Amount (EUR)" appear in
+ * no Revolut or PayPal file. Detected rather than chosen, because the first
+ * N26 file went in under Revolut and nothing stopped it.
+ */
+function isN26(headers: string[]): boolean {
+  const norm = headers.map(h => h.trim().toLowerCase());
+  return norm.includes("booking date") && norm.includes("amount (eur)");
+}
+
+/**
+ * N26 needs its own mapping, not the generic column guesser.
+ *
+ * "Amount (EUR)" is always the euro amount that left the account. The
+ * generic guesser found "Original Currency" for the currency column, so a
+ * USD 100 card payment was stored as 85.47 *USD* — and the FX sync then
+ * converted 85.47 to euro a second time. The currency of an N26 row is EUR,
+ * full stop; the card's original currency is kept in raw_data.
+ *
+ * Transfers between N26 Spaces ("Instant Savings", "Main Account", "Bills")
+ * are recognised structurally: a transfer with no partner IBAN cannot have
+ * gone to anybody outside the account. Every external transfer carries one.
+ */
+async function parseN26(rows: string[][]): Promise<ParsedRow[]> {
+  const headers = rows[0];
+  const col = (name: string) => findExactCol(headers, name);
+  const dateCol = col("Booking Date");
+  const nameCol = col("Partner Name");
+  const ibanCol = col("Partner Iban");
+  const typeCol = col("Type");
+  const refCol = col("Payment Reference");
+  const amtCol = col("Amount (EUR)");
+  const origAmtCol = col("Original Amount");
+  const origCurCol = col("Original Currency");
+
+  const out: ParsedRow[] = [];
+  const occurrences = new Map<string, number>();
+
+  for (const r of rows.slice(1)) {
+    const date = toDate(r[dateCol] ?? "");
+    if (!date) continue;
+    const signed = toCents(r[amtCol] ?? "");
+    if (signed === 0) continue;
+
+    const description = (refCol !== -1 ? r[refCol] ?? "" : "").trim() || "(no description)";
+    const counterparty = (nameCol !== -1 ? r[nameCol] ?? "" : "").trim() || null;
+    const rawType = (typeCol !== -1 ? r[typeCol] ?? "" : "").trim().toLowerCase();
+    const iban = (ibanCol !== -1 ? r[ibanCol] ?? "" : "").trim();
+    const amount = Math.abs(signed);
+
+    let type: ParsedRow["type"];
+    if (rawType.includes("refund")) type = "refund";
+    else if (rawType.includes("transfer") && !iban) type = "transfer";
+    else type = signed > 0 ? "income" : "expense";
+
+    // Direction is not in the key: a stored row keeps only the absolute
+    // amount, and the key has to be recomputable from what is stored (the
+    // migration that relabelled the first N26 import does exactly that).
+    const baseKey = [date, description, String(amount), counterparty ?? ""];
+    const seen = (occurrences.get(baseKey.join("|")) ?? 0) + 1;
+    occurrences.set(baseKey.join("|"), seen);
+    const sourceId = await hashId("n26", seen === 1 ? baseKey : [...baseKey, `#${seen}`]);
+
+    const origCur = (origCurCol !== -1 ? r[origCurCol] ?? "" : "").trim().toUpperCase();
+    out.push({
+      source_id: sourceId,
+      transaction_date: date,
+      description,
+      counterparty_name: counterparty,
+      amount_cents: amount,
+      currency: "EUR",
+      amount_eur_cents: amount,
+      fee_cents: 0,
+      type,
+      original: origCur && origCur !== "EUR"
+        ? { currency: origCur, amount: (r[origAmtCol] ?? "").trim() }
+        : undefined,
+    });
+  }
+  return out;
+}
+
 async function parseStatement(text: string, kind: SourceKind): Promise<ParsedRow[]> {
   const rows = parseCsv(text);
   if (rows.length < 2) return [];
   const headers = rows[0];
+  if (kind === "n26") return parseN26(rows);
 
   const dateCol = findCol(headers, "Date completed (UTC)", "Completed Date", "Date completed", "Date");
   const descCol = findCol(headers, "Description", "Reference", "Item Title", "Subject");
@@ -237,7 +322,15 @@ export function ImportStatementDialog() {
   const onFile = async (file: File) => {
     try {
       const text = await file.text();
-      const parsed = await parseStatement(text, kind);
+      // The file decides, not the picker: an N26 export parsed as Revolut
+      // is how the first one got its currencies wrong.
+      const firstLine = parseCsv(text.split("\n", 1)[0] ?? "")[0] ?? [];
+      const detected: SourceKind = isN26(firstLine) ? "n26" : kind === "n26" ? "revolut" : kind;
+      if (detected !== kind) {
+        setKind(detected);
+        if (detected === "n26") toast.info("This is an N26 export — importing it as N26.");
+      }
+      const parsed = await parseStatement(text, detected);
       setRows(parsed);
       setFileName(file.name);
       if (parsed.length === 0) toast.warning("No completed transactions found in that file.");
@@ -269,7 +362,9 @@ export function ImportStatementDialog() {
         subject: r.description,
         counterparty_name: r.counterparty_name,
         is_reconciled: false,
-        raw_data: { imported_from: fileName },
+        raw_data: r.original
+          ? { imported_from: fileName, original_currency: r.original.currency, original_amount: r.original.amount }
+          : { imported_from: fileName },
       }));
 
       // Postgres rejects an ON CONFLICT DO UPDATE that would affect the same
@@ -320,9 +415,27 @@ export function ImportStatementDialog() {
         .select("*");
       if (error) throw error;
 
-      const dups = findIncomingDuplicates(rows, (existing ?? []) as FinanceTransaction[], kind);
+      // A row whose exact id is already stored is the same statement line
+      // imported before. The database would ignore it anyway, so it is not a
+      // question worth asking — putting 299 of those to her one at a time,
+      // defaulted to Skip, is what made an overlapping file look rejected.
+      const stored = new Set(
+        ((existing ?? []) as FinanceTransaction[])
+          .filter(t => t.source === kind && t.source_id)
+          .map(t => t.source_id as string),
+      );
+      const fresh = rows.filter(r => !stored.has(r.source_id));
+      const already = rows.length - fresh.length;
+      if (fresh.length === 0) {
+        toast.info(`All ${rows.length} rows in this file are already imported.`);
+        return;
+      }
+      if (already > 0) toast.info(`${already} rows already imported; checking the other ${fresh.length}.`);
+      setRows(fresh);
+
+      const dups = findIncomingDuplicates(fresh, (existing ?? []) as FinanceTransaction[], kind);
       if (dups.length === 0) {
-        await insertRows(rows);
+        await insertRows(fresh);
         return;
       }
 
@@ -357,12 +470,15 @@ export function ImportStatementDialog() {
 
   /** Declined rows are simply not written; approved ones join the import. */
   const applyDuplicateDecisions = (declined: Set<string>) => {
+    // Indices refer to `rows` as narrowed in doImport, which set it before
+    // opening this dialog.
     const skip = new Set([...declined].map(Number));
     void insertRows(rows.filter((_, i) => !skip.has(i)));
   };
 
   const total = rows.reduce(
-    (s, r) => s + (r.type === "expense" || r.type === "fee" ? -1 : 1) * (r.amount_eur_cents ?? r.amount_cents),
+    (s, r) => r.type === "transfer" ? s
+      : s + (r.type === "expense" || r.type === "fee" ? -1 : 1) * (r.amount_eur_cents ?? r.amount_cents),
     0,
   );
 
@@ -398,7 +514,7 @@ export function ImportStatementDialog() {
         <DialogHeader>
           <DialogTitle>Import a bank statement</DialogTitle>
           <DialogDescription>
-            Upload a Revolut Business or PayPal CSV export. Rows are matched on their own
+            Upload a Revolut Business, N26 or PayPal CSV export (N26 files are recognised automatically). Rows are matched on their own
             contents, so re-importing an overlapping period updates instead of duplicating.
           </DialogDescription>
         </DialogHeader>
@@ -408,6 +524,7 @@ export function ImportStatementDialog() {
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="revolut">Revolut</SelectItem>
+              <SelectItem value="n26">N26</SelectItem>
               <SelectItem value="paypal">PayPal</SelectItem>
             </SelectContent>
           </Select>

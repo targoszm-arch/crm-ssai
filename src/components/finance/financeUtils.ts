@@ -33,6 +33,7 @@ export const VAT_TREATMENT_COLORS: Record<string, string> = {
 export const SOURCE_COLORS: Record<string, string> = {
   stripe: "bg-violet-100 text-violet-800",
   revolut: "bg-sky-100 text-sky-800",
+  n26: "bg-teal-100 text-teal-800",
   paypal: "bg-blue-100 text-blue-800",
   manual: "bg-orange-100 text-orange-800",
 };
