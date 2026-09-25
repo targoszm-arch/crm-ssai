@@ -159,23 +159,46 @@ export function EmailTemplateEditor({ value, onChange, className }: EmailTemplat
     lastValueRef.current = value;
   }, [value, mode]);
 
-  // Save cursor position before opening dialogs
+  // Save cursor position before opening dialogs. Only keep it if the
+  // selection is actually inside the editor - otherwise insertHTML later
+  // silently no-ops (e.g. clicking the image toolbar button before ever
+  // clicking into the editor body leaves window.getSelection() pointing
+  // at an unrelated part of the page).
   const saveCursorPosition = useCallback(() => {
     const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
+    if (
+      selection &&
+      selection.rangeCount > 0 &&
+      editorRef.current?.contains(selection.getRangeAt(0).commonAncestorContainer)
+    ) {
       savedCursorRangeRef.current = selection.getRangeAt(0).cloneRange();
+    } else {
+      savedCursorRangeRef.current = null;
     }
   }, []);
 
-  // Restore cursor and focus editor before inserting content
+  // Restore cursor and focus editor before inserting content. Falls back to
+  // the end of the editor content when there's no valid saved range, so
+  // insertHTML always has somewhere valid to land.
   const restoreCursorAndFocus = useCallback(() => {
-    if (editorRef.current) {
-      editorRef.current.focus();
-      if (savedCursorRangeRef.current) {
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(savedCursorRangeRef.current);
-      }
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    const hasValidSavedRange =
+      savedCursorRangeRef.current &&
+      editorRef.current.contains(savedCursorRangeRef.current.commonAncestorContainer);
+
+    if (hasValidSavedRange && savedCursorRangeRef.current) {
+      selection.removeAllRanges();
+      selection.addRange(savedCursorRangeRef.current);
+    } else {
+      const range = document.createRange();
+      range.selectNodeContents(editorRef.current);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
     }
   }, []);
 
