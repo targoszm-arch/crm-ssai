@@ -35,7 +35,7 @@ import {
   centsToEur, centsToNum, VAT_TREATMENT_LABELS, VAT_TREATMENT_COLORS,
   SOURCE_COLORS, TYPE_COLORS, CATEGORIES, getVatPeriods, exportToCsv,
   ACCOUNTING_CATEGORIES, ACCOUNTING_CATEGORY_LABELS, ACCOUNTING_CATEGORY_STATEMENT,
-  STATEMENT_COLORS, DateRange, EMPTY_RANGE, inRange, rangeLabel } from "@/components/finance/financeUtils";
+  STATEMENT_COLORS, isExcludedFromAccounts, DateRange, EMPTY_RANGE, inRange, rangeLabel } from "@/components/finance/financeUtils";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as ChartTooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
 import { PageActions } from "@/components/layout/PageActions";
@@ -274,8 +274,9 @@ export default function FinancePage() {
 
   // ── Summary metrics ────────────────────────────────────────────────────
   const metrics = useMemo(() => {
-    const income = txs.filter(t => t.type === "income");
-    const expenses = txs.filter(t => t.type === "expense");
+    const booked = txs.filter(t => !isExcludedFromAccounts(t));
+    const income = booked.filter(t => t.type === "income");
+    const expenses = booked.filter(t => t.type === "expense");
     const totalIncome = income.reduce((s, t) => s + (t.amount_eur_cents ?? t.amount_cents), 0);
     const totalExpenses = expenses.reduce((s, t) => s + (t.amount_eur_cents ?? t.amount_cents), 0);
     // Euro, for the same reason the period table uses it: `vat_amount_cents`
@@ -309,7 +310,7 @@ export default function FinancePage() {
     for (const y of years) {
       for (let i = 0; i < 12; i++) {
         const key = `${y}-${String(i + 1).padStart(2, "0")}`;
-        const inMonth = txs.filter(t => t.transaction_date.startsWith(key));
+        const inMonth = txs.filter(t => t.transaction_date.startsWith(key) && !isExcludedFromAccounts(t));
         const short = new Date(y, i, 1).toLocaleString("en-IE", { month: "short" });
         buckets.push({
           month: multi ? `${short} ${String(y).slice(2)}` : short,

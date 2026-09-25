@@ -110,7 +110,7 @@ export function exportToCsv(rows: Record<string, unknown>[], filename: string) {
 
 export interface AccountingCategoryGroup {
   group: string;
-  statement: "pl" | "cogs" | "income" | "asset" | "liability";
+  statement: "pl" | "cogs" | "income" | "asset" | "liability" | "excluded";
   options: { value: string; label: string }[];
 }
 
@@ -183,7 +183,28 @@ export const ACCOUNTING_CATEGORIES: AccountingCategoryGroup[] = [
       { value: "vat_control",             label: "VAT Control Account" },
     ],
   },
+  {
+    // Rows kept for the audit trail but outside the accounts entirely. The
+    // codes predate this group: they were written straight into the table
+    // (25 Sep 2026) to take EUR 457,549 of Gmail mis-parses out of the P&L —
+    // an ROI-calculator PDF read as an EUR 85,938 expense, a cold pitch as
+    // EUR 50,000. Nothing read them, so every total still counted those rows.
+    // Now every total goes through isExcludedFromAccounts().
+    group: "Excluded (not in the accounts)",
+    statement: "excluded",
+    options: [
+      { value: "EXCLUDED_MISPARSED",         label: "Excluded – Mis-parsed, not a transaction" },
+      { value: "EXCLUDED_NON_TRADING",       label: "Excluded – Non-trading" },
+      { value: "EXCLUDED_PERSONAL",          label: "Excluded – Personal" },
+      { value: "EXCLUDED_INTERNAL_TRANSFER", label: "Excluded – Internal transfer" },
+    ],
+  },
 ];
+
+/** True for a row that is on the ledger for the record but in no total. */
+export function isExcludedFromAccounts(t: { accounting_category: string | null }): boolean {
+  return ACCOUNTING_CATEGORY_STATEMENT[t.accounting_category ?? ""] === "excluded";
+}
 
 export const ACCOUNTING_CATEGORY_LABELS: Record<string, string> =
   Object.fromEntries(
@@ -202,6 +223,7 @@ export const STATEMENT_COLORS: Record<AccountingCategoryGroup["statement"], stri
   income:    "bg-emerald-100 text-emerald-800",
   asset:     "bg-sky-100 text-sky-800",
   liability: "bg-rose-100 text-rose-800",
+  excluded:  "bg-slate-100 text-slate-500 line-through",
 };
 
 /** Format a stored rate for the cell: "Tax on Sales (23%)". */
