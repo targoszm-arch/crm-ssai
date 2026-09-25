@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { CheckCircle2, CircleDashed, Tag, Percent, ArrowLeftRight, Trash2, X, Loader2 } from "lucide-react";
+import { CheckCircle2, CircleDashed, Tag, Percent, ArrowLeftRight, Trash2, X, Loader2, FileSearch } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +44,8 @@ export function FinanceBulkActionBar({ selected, taxRates, onClear }: Props) {
   const bulkUpdate = useBulkUpdateTransactions();
   const bulkDelete = useBulkDeleteTransactions();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [finding, setFinding] = useState(false);
+  const qc = useQueryClient();
 
   if (selected.length === 0) return null;
 
@@ -49,7 +53,7 @@ export function FinanceBulkActionBar({ selected, taxRates, onClear }: Props) {
   const n = selected.length;
   const rows = `${n} transaction${n === 1 ? "" : "s"}`;
   const total = selected.reduce((s, t) => s + (t.amount_eur_cents ?? t.amount_cents), 0);
-  const busy = bulkUpdate.isPending || bulkDelete.isPending;
+  const busy = bulkUpdate.isPending || bulkDelete.isPending || finding;
   // Rows from a live feed come back on the next sync if deleted; say so.
   const fromFeed = selected.filter(t => ["revolut", "stripe", "gmail"].includes(t.source)).length;
 
@@ -61,11 +65,47 @@ export function FinanceBulkActionBar({ selected, taxRates, onClear }: Props) {
       }),
     });
 
+  /**
+   * Searches Gmail for the receipt behind each ticked line and attaches the
+   * best match to that line (find-receipts). Only for these rows — never a
+   * sweep of the mailbox.
+   */
+  const findReceipts = async () => {
+    if (n > 50) { toast.warning("Select at most 50 lines at a time."); return; }
+    setFinding(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("find-receipts", { body: { ids } });
+      if (error) throw error;
+      const results = (data?.results ?? []) as { status: string }[];
+      const matched = results.filter(r => r.status === "matched").length;
+      const already = results.filter(r => r.status === "already_has_receipt").length;
+      const none = results.filter(r => r.status === "no_match").length;
+      toast.success(`Receipts: ${matched} found${already ? `, ${already} already had one` : ""}${none ? `, ${none} not found` : ""}`, {
+        description: data?.timed_out
+          ? "Stopped at the time limit — run it again on the rest."
+          : matched ? "Attached in the Filename and Gmail columns." : undefined,
+        duration: 8000,
+      });
+      qc.invalidateQueries({ queryKey: ["finance_transactions"] });
+    } catch (err) {
+      toast.error("Could not search for receipts", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setFinding(false);
+    }
+  };
+
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-primary/5 px-3 py-2">
       <span className="mr-1 text-sm font-medium">
         {rows} selected <span className="font-normal text-muted-foreground">· {centsToEur(total)}</span>
       </span>
+
+      <Button variant="outline" size="sm" disabled={busy} onClick={findReceipts}>
+        {finding ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileSearch className="mr-1 h-4 w-4" />}
+        Find receipts
+      </Button>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

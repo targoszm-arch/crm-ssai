@@ -461,13 +461,29 @@ export function ImportStatementDialog() {
           .filter(t => t.source === kind && t.source_id)
           .map(t => t.source_id as string),
       );
-      const fresh = rows.filter(r => !stored.has(r.source_id));
-      const already = rows.length - fresh.length;
+      // Lines she deleted stay deleted. A delete leaves a tombstone
+      // (finance_sync_tombstones); without this check a re-imported statement
+      // would put every deleted line straight back, since a missing row has
+      // nothing for the upsert to conflict with.
+      const { data: tombs, error: tombErr } = await supabase
+        .from("finance_sync_tombstones")
+        .select("source_id")
+        .eq("source", kind);
+      if (tombErr) throw tombErr;
+      const deleted = new Set((tombs ?? []).map(t => t.source_id as string));
+
+      const fresh = rows.filter(r => !stored.has(r.source_id) && !deleted.has(r.source_id));
+      const skippedDeleted = rows.filter(r => !stored.has(r.source_id) && deleted.has(r.source_id)).length;
+      const already = rows.length - fresh.length - skippedDeleted;
+      const note = [
+        already > 0 ? `${already} already imported` : "",
+        skippedDeleted > 0 ? `${skippedDeleted} you deleted before, left out` : "",
+      ].filter(Boolean).join("; ");
       if (fresh.length === 0) {
-        toast.info(`All ${rows.length} rows in this file are already imported.`);
+        toast.info(`Nothing new in this file — ${note || "every row is already imported"}.`);
         return;
       }
-      if (already > 0) toast.info(`${already} rows already imported; checking the other ${fresh.length}.`);
+      if (note) toast.info(`${note}; checking the other ${fresh.length}.`);
       setRows(fresh);
 
       const dups = findIncomingDuplicates(fresh, (existing ?? []) as FinanceTransaction[], kind);

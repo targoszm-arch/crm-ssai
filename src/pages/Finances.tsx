@@ -363,14 +363,43 @@ export default function FinancePage() {
     return rows;
   }, [txs, dateRange, typeFilter, sourceFilter, categoryFilter]);
 
+  // ── Sync to current ───────────────────────────────────────────────────
+  // A sync starts a few days before the newest row already stored for that
+  // source, not from the start of history. Re-pulling everything re-inserted
+  // rows she had deleted (pocket-to-pocket transfers) and was slower for no
+  // gain. Three days of overlap catch transactions that completed after the
+  // last sync. Deleted rows are also tombstoned server-side, so the overlap
+  // cannot bring those back either. With nothing stored yet, the whole history.
+  const syncStartFor = (
+    source: string,
+    fallback: string,
+    overlapDays = 3,
+    include: (t: FinanceTransaction) => boolean = () => true,
+  ): string => {
+    const latest = allTxs
+      .filter(t => t.source === source && include(t))
+      .reduce<string | null>((m, t) => (m === null || t.transaction_date > m ? t.transaction_date : m), null);
+    if (!latest) return fallback;
+    const d = new Date(`${latest}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - overlapDays);
+    return d.toISOString().slice(0, 10);
+  };
+
   // ── Stripe sync ────────────────────────────────────────────────────────
   const handleStripeSync = async () => {
     setSyncing(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
+      // Anchored on charges only: a charge row's date is Stripe's `created`,
+      // the same field `created[gte]` filters on, whereas a payout row's date
+      // is its arrival date and would push the window past charges created
+      // before it. Fourteen days of overlap because the function keeps only
+      // succeeded charges, and a bank-debit charge can take that long to
+      // succeed after it is created; a shorter window would skip it forever.
+      const since = syncStartFor("stripe", "2025-01-01", 14, t => !(t.source_id ?? "").startsWith("payout_"));
       const { data: fnData, error } = await supabase.functions.invoke("sync-stripe-income", {
-        body: { limit: 100 },
+        body: { since_timestamp: Math.floor(new Date(`${since}T00:00:00Z`).getTime() / 1000) },
       });
       if (error) throw error;
       toast.success(`Synced ${fnData.synced} Stripe transactions`);
@@ -387,13 +416,11 @@ export default function FinancePage() {
   const handleRevolutSync = async () => {
     setSyncingRevolut(true);
     try {
-      // The whole account history, every time. The ledger is the Revolut feed
-      // and nothing else (25 Sep 2026), so a 90-day window left everything
-      // older than that missing. The function pages through it and the insert
-      // skips rows already stored, so repeating the full range costs nothing.
-      const { data: fnData, error } = await supabase.functions.invoke("sync-revolut", { body: { from: "2025-01-01" } });
+      const from = syncStartFor("revolut", "2025-01-01");
+      const { data: fnData, error } = await supabase.functions.invoke("sync-revolut", { body: { from } });
       if (error) throw error;
-      toast.success(`Synced ${fnData.synced} Revolut transactions`);
+      toast.success(`Revolut synced from ${from}: ${fnData.synced} checked`
+        + (fnData.deleted_skipped ? `, ${fnData.deleted_skipped} you deleted kept out` : ""));
     } catch (err) {
       const { notConfigured, message } = await describeSyncError(err);
       if (notConfigured) toast.warning(`Revolut is not connected. ${message}`, { duration: 10000 });
@@ -494,7 +521,7 @@ export default function FinancePage() {
         <PageActions>
           <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={syncing || syncingGmail || syncingRevolut}>
             <RefreshCw className={cn("h-4 w-4 mr-2", (syncing || syncingGmail || syncingRevolut) && "animate-spin")} />
-            {(syncing || syncingGmail || syncingRevolut) ? "Syncing…" : "Refresh all"}
+            {(syncing || syncingGmail || syncingRevolut) ? "Syncing…" : "Sync to current"}
           </Button>
           {pendingReceipts.length > 0 && (
             <Button size="sm" onClick={() => setReceiptReviewOpen(true)}>

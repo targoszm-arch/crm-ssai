@@ -170,6 +170,17 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Deleted rows stay deleted — see sync-revolut and finance_sync_tombstones.
+    {
+      const { data: tomb, error: tombErr } = await supabase
+        .from("finance_sync_tombstones").select("source_id").eq("source", "stripe");
+      if (tombErr) throw tombErr;
+      const dead = new Set((tomb ?? []).map(t => t.source_id as string));
+      const live = upsertRows.filter(r => !dead.has(r.source_id as string));
+      upsertRows.length = 0;
+      upsertRows.push(...live);
+    }
+
     if (upsertRows.length === 0) {
       return new Response(
         JSON.stringify({ synced: 0, message: "No new transactions" }),
