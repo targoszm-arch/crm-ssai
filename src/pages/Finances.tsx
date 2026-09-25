@@ -430,8 +430,12 @@ export default function FinancePage() {
   };
 
   // ── Refresh all ───────────────────────────────────────────────────────
+  // The two money feeds only. The ledger is what Revolut and Stripe report
+  // (25 Sep 2026); Gmail receipts are documents, and harvesting them on every
+  // refresh put 323 of them back an hour after they were cleared out. The
+  // Gmail card keeps its own button for when she wants them.
   const handleRefreshAll = async () => {
-    await Promise.all([handleStripeSync(), handleRevolutSync(), handleGmailSync()]);
+    await Promise.all([handleStripeSync(), handleRevolutSync()]);
   };
 
   // ── CSV export ─────────────────────────────────────────────────────────
