@@ -71,12 +71,24 @@ export const LMS_EVENT_NAMES = [
   "create_video_started",
   "candace_used",
   // Billing, sent by the LMS stripe-webhook rather than track-posthog-event.
-  // free_subscription_created fires once per signup — every account gets a Free Stripe
-  // subscription seconds after registering, so this is the onboarding trigger.
+  // free_subscription_created fires once per signup for accounts that still get the old
+  // auto-provisioned Free Stripe subscription — a shrinking minority since most signups
+  // now go through a Starter-trial Stripe Checkout instead (see account_created below).
   // paid_subscription_activated fires once per paid subscription (Starter and up), on
   // whichever of subscription.created / checkout.session.completed activates it first.
   "free_subscription_created",
   "paid_subscription_activated",
+  // account_created fires once per signup, at the auth.users insert (track-user-signup),
+  // regardless of whether the person ever completes a Stripe checkout. This is the
+  // reliable onboarding trigger: as of Sep 2026, 17 of the last 21 signups never got a
+  // free_subscription_created event at all, because the primary signup flow now routes
+  // through a Starter-plan trial Checkout Session that most people abandon before it
+  // creates a subscription.
+  "account_created",
+  // trial_checkout_abandoned fires from the LMS stripe-webhook on checkout.session.expired
+  // for a signup_trial session that was never completed (Stripe expires these ~24h after
+  // creation) — the "you started but didn't finish" recovery trigger.
+  "trial_checkout_abandoned",
 ] as const;
 
 export function useLmsEventRoutes() {
