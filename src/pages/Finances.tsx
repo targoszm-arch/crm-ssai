@@ -387,7 +387,11 @@ export default function FinancePage() {
   const handleRevolutSync = async () => {
     setSyncingRevolut(true);
     try {
-      const { data: fnData, error } = await supabase.functions.invoke("sync-revolut", { body: { days: 90 } });
+      // The whole account history, every time. The ledger is the Revolut feed
+      // and nothing else (25 Sep 2026), so a 90-day window left everything
+      // older than that missing. The function pages through it and the insert
+      // skips rows already stored, so repeating the full range costs nothing.
+      const { data: fnData, error } = await supabase.functions.invoke("sync-revolut", { body: { from: "2025-01-01" } });
       if (error) throw error;
       toast.success(`Synced ${fnData.synced} Revolut transactions`);
     } catch (err) {

@@ -24,6 +24,7 @@
  *   {"action":"exchange","code":"oa_prod_…"}  one-time / re-auth bootstrap
  *   {"action":"status"}                       is a refresh token stored?
  *   {"days":90}                               sync (default)
+ *   {"from":"2025-01-01"}                     sync everything since a date
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -260,19 +261,38 @@ Deno.serve(async (req: Request) => {
       }, 400);
     }
 
+    // `from` (YYYY-MM-DD) syncs everything since that date — how the full
+    // history is backfilled. Otherwise `days` back from today, 90 by default.
     const daysBack = Number(body.days ?? 90);
-    const params = new URLSearchParams({
-      from: new Date(Date.now() - daysBack * 86400_000).toISOString().split("T")[0],
-      to: new Date().toISOString().split("T")[0],
-      count: "1000",
-    });
+    const from: string = typeof body.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.from)
+      ? body.from
+      : new Date(Date.now() - daysBack * 86400_000).toISOString().split("T")[0];
 
-    const revRes = await fetch(`${REVOLUT_BASE}/transactions?${params}`, {
-      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-    });
-    if (!revRes.ok) throw new Error(`Revolut API error ${revRes.status}: ${await revRes.text()}`);
-
-    const transactions = await revRes.json() as Record<string, unknown>[];
+    // Revolut returns at most `count` transactions per call, newest first.
+    // One call used to be the whole sync, so any window holding more than
+    // 1,000 silently lost its oldest rows. Page backwards: each next call ends
+    // where the oldest one so far was created, until a page comes back short.
+    const PAGE = 1000;
+    const transactions: Record<string, unknown>[] = [];
+    const seenIds = new Set<string>();
+    let to = new Date(Date.now() + 86400_000).toISOString();
+    for (let page = 0; page < 50; page++) {
+      const params = new URLSearchParams({ from, to, count: String(PAGE) });
+      const revRes = await fetch(`${REVOLUT_BASE}/transactions?${params}`, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      });
+      if (!revRes.ok) throw new Error(`Revolut API error ${revRes.status}: ${await revRes.text()}`);
+      const batch = await revRes.json() as Record<string, unknown>[];
+      let oldest = to;
+      for (const tx of batch) {
+        const id = tx.id as string;
+        if (!seenIds.has(id)) { seenIds.add(id); transactions.push(tx); }
+        const created = tx.created_at as string;
+        if (created && created < oldest) oldest = created;
+      }
+      if (batch.length < PAGE || oldest === to) break;
+      to = oldest;
+    }
 
     const rows: Record<string, unknown>[] = [];
     let skipped = 0;
