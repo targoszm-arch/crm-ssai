@@ -113,6 +113,9 @@ verify_jwt = true
 [functions.sync-gmail-receipts]
 verify_jwt = true
 
+[functions.find-receipts]
+verify_jwt = true
+
 [functions.sync-revolut]
 verify_jwt = true
 

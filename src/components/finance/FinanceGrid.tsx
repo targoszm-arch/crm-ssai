@@ -28,6 +28,7 @@ import {
 } from "@/components/finance/financeUtils";
 import { financeGridTheme, financeGridThemeDark } from "@/components/finance/gridTheme";
 import { FinanceBulkActionBar } from "@/components/finance/FinanceBulkActionBar";
+import { ListCellEditor, listEditorKeys, type ListGroup } from "@/components/finance/ListCellEditor";
 
 /**
  * The transactions ledger, on a real data grid.
@@ -67,7 +68,7 @@ function useIsDark(): boolean {
   return dark;
 }
 
-const CATEGORY_VALUES = ["", ...ACCOUNTING_CATEGORIES.flatMap(g => g.options.map(o => o.value))];
+const CATEGORY_GROUPS: ListGroup[] = ACCOUNTING_CATEGORIES.map(g => ({ label: g.group, options: g.options }));
 
 /** Cents -> euro, with an em dash for "nothing here" rather than EUR 0.00. */
 const money = (p: ValueFormatterParams) =>
@@ -106,8 +107,11 @@ export function FinanceGrid({ rows, taxRates, search, onGridReady, onDisplayedRo
     selectAll: "filtered" as const,
   }), []);
 
-  const taxRateNames = useMemo(
-    () => ["", ...taxRates.filter(r => r.is_active).map(r => r.name)],
+  const taxRateGroups = useMemo<ListGroup[]>(
+    () => [{
+      options: taxRates.filter(r => r.is_active)
+        .map(r => ({ value: r.name, label: `${r.name} (${Number(r.percent)}%)` })),
+    }],
     [taxRates],
   );
 
@@ -202,16 +206,20 @@ export function FinanceGrid({ rows, taxRates, search, onGridReady, onDisplayedRo
     {
       field: "accounting_category", headerName: "Accounting Category", width: 190,
       editable: true,
-      cellEditor: "agSelectCellEditor",
-      cellEditorParams: { values: CATEGORY_VALUES },
+      cellEditor: ListCellEditor,
+      cellEditorPopup: true,
+      suppressKeyboardEvent: listEditorKeys,
+      cellEditorParams: { groups: CATEGORY_GROUPS, emptyLabel: "Unposted" },
       valueFormatter: p =>
         p.value ? (ACCOUNTING_CATEGORY_LABELS[p.value as string] ?? String(p.value)) : "Unposted",
     },
     {
       field: "tax_rate_name", headerName: "Tax Rate", width: 130,
       editable: true,
-      cellEditor: "agSelectCellEditor",
-      cellEditorParams: { values: taxRateNames },
+      cellEditor: ListCellEditor,
+      cellEditorPopup: true,
+      suppressKeyboardEvent: listEditorKeys,
+      cellEditorParams: { groups: taxRateGroups, emptyLabel: "No rate" },
       valueFormatter: p => (p.value ? String(p.value) : "No rate"),
     },
     {
@@ -288,7 +296,7 @@ export function FinanceGrid({ rows, taxRates, search, onGridReady, onDisplayedRo
         </Button>
       ),
     },
-  ], [taxRateNames, toggleReconciled]);
+  ], [taxRateGroups, toggleReconciled]);
 
   const defaultColDef = useMemo<ColDef>(() => ({
     sortable: true,
@@ -330,6 +338,12 @@ export function FinanceGrid({ rows, taxRates, search, onGridReady, onDisplayedRo
         animateRows={false}
         suppressCellFocus={false}
         stopEditingWhenCellsLoseFocus
+        // One click opens the dropdown. The default is a double-click to start
+        // editing and another click to open the list, and a double-click that
+        // lands as two single clicks just moves focus — several clicks for one
+        // choice. Only the category and tax-rate columns are editable, so
+        // nothing else changes behaviour.
+        singleClickEdit
         rowHeight={40}
         headerHeight={38}
         overlayNoRowsTemplate="No transactions match these filters."

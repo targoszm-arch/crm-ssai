@@ -320,11 +320,18 @@ Deno.serve(async (req: Request) => {
       const description = (tx.reference as string) ?? (tx.description as string)
         ?? (merchant?.name as string) ?? legDescription ?? "Revolut transaction";
 
+      const counterpartyName = (merchant?.name as string) ?? (counterparty?.name as string)
+        ?? legDescription ?? null;
+      // A Stripe payout arriving is the same money as the Stripe charges that
+      // sync-stripe-income already books as income; booking the deposit as
+      // income too counted EUR 11,002 twice.
+      const fromStripe = /^payment from stripe/i.test(counterpartyName ?? description);
+
       rows.push({
         user_id: user.id,
         source: "revolut",
         source_id: tx.id as string,
-        type: mapType(tx.type as string, rawAmount, legs),
+        type: fromStripe && rawAmount > 0 ? "transfer" : mapType(tx.type as string, rawAmount, legs),
         amount_cents: amountCents,
         currency,
         amount_eur_cents: amountEurCents,
@@ -336,8 +343,7 @@ Deno.serve(async (req: Request) => {
         // Falls back to the leg description so the table has something to show
         // and so the supplier rules have something to match on. A row with no
         // name is invisible to both.
-        counterparty_name: (merchant?.name as string) ?? (counterparty?.name as string)
-          ?? legDescription ?? null,
+        counterparty_name: counterpartyName,
         counterparty_country: (merchant?.country as string) ?? null,
         // A bank feed does not know a tax position; that is set at reconciliation.
         vat_treatment: null,
@@ -347,7 +353,25 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (rows.length === 0) return json({ synced: 0, skipped, message: "No new completed transactions" });
+    // Rows she deleted stay deleted. ON CONFLICT DO NOTHING protects rows that
+    // still exist; a deleted one has nothing to conflict with, so without this
+    // every sync re-inserted the pocket transfers she had cleared out.
+    const tombstoned = new Set<string>();
+    {
+      const { data: tomb, error: tombErr } = await sb
+        .from("finance_sync_tombstones").select("source_id").eq("source", "revolut");
+      if (tombErr) throw tombErr;
+      for (const t of tomb ?? []) tombstoned.add(t.source_id as string);
+    }
+    const before = rows.length;
+    const live = rows.filter(r => !tombstoned.has(r.source_id as string));
+    const deletedSkipped = before - live.length;
+    rows.length = 0;
+    rows.push(...live);
+
+    if (rows.length === 0) {
+      return json({ synced: 0, skipped, deleted_skipped: deletedSkipped, message: "No new completed transactions" });
+    }
 
     const { error: upsertErr } = await sb
       .from("finance_transactions")
@@ -360,7 +384,7 @@ Deno.serve(async (req: Request) => {
       .upsert(rows, { onConflict: "source,source_id", ignoreDuplicates: true });
     if (upsertErr) throw upsertErr;
 
-    return json({ synced: rows.length, skipped });
+    return json({ synced: rows.length, skipped, deleted_skipped: deletedSkipped, from });
   } catch (err) {
     console.error("sync-revolut error:", err);
     return json({ error: String(err) }, 500);
