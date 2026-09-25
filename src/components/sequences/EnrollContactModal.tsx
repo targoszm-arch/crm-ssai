@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -253,7 +252,7 @@ export function EnrollContactModal({ open, onOpenChange, sequence }: EnrollConta
 
           {/* CRM Contacts Tab */}
           <TabsContent value="crm" className="mt-0">
-            <ScrollArea className="h-[300px] border rounded-lg">
+            <div className="h-[300px] border rounded-lg overflow-y-auto">
               {contactsLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -298,12 +297,12 @@ export function EnrollContactModal({ open, onOpenChange, sequence }: EnrollConta
                   ))}
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </TabsContent>
 
           {/* LMS Customers Tab */}
           <TabsContent value="lms" className="mt-0">
-            <ScrollArea className="h-[300px] border rounded-lg">
+            <div className="h-[300px] border rounded-lg overflow-y-auto">
               {lmsLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -356,7 +355,7 @@ export function EnrollContactModal({ open, onOpenChange, sequence }: EnrollConta
                   ))}
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </TabsContent>
         </Tabs>
 
