@@ -176,6 +176,29 @@ export function useDeleteTransaction() {
   });
 }
 
+/** One write for many rows: the same fields set on every selected id. */
+export function useBulkUpdateTransactions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, updates }: { ids: string[]; updates: Partial<FinanceTransaction> }) => {
+      const { error } = await supabase.from("finance_transactions").update(updates).in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance_transactions"] }),
+  });
+}
+
+export function useBulkDeleteTransactions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from("finance_transactions").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance_transactions"] }),
+  });
+}
+
 export function useUnreconciledGmailCount() {
   const { user } = useAuth();
   return useQuery({
