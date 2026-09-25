@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -40,6 +41,8 @@ interface ParsedRow {
   type: "income" | "expense" | "refund" | "fee" | "transfer";
   /** A card payment's original currency and amount, where it was not EUR. */
   original?: { currency: string; amount: string };
+  /** N26 only: which account or Space in the export the line belongs to. */
+  account?: string;
 }
 
 /** Minimal RFC4180 splitter — quoted fields may contain commas and newlines. */
@@ -164,6 +167,7 @@ async function parseN26(rows: string[][]): Promise<ParsedRow[]> {
   const amtCol = col("Amount (EUR)");
   const origAmtCol = col("Original Amount");
   const origCurCol = col("Original Currency");
+  const accountCol = col("Account Name");
 
   const out: ParsedRow[] = [];
   const occurrences = new Map<string, number>();
@@ -207,6 +211,7 @@ async function parseN26(rows: string[][]): Promise<ParsedRow[]> {
       original: origCur && origCur !== "EUR"
         ? { currency: origCur, amount: (r[origAmtCol] ?? "").trim() }
         : undefined,
+      account: accountCol !== -1 ? (r[accountCol] ?? "").trim() || undefined : undefined,
     });
   }
   return out;
@@ -313,6 +318,10 @@ export function ImportStatementDialog() {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<SourceKind>("revolut");
   const [rows, setRows] = useState<ParsedRow[]>([]);
+  // Everything the file parsed to, before the account filter below.
+  const [parsedAll, setParsedAll] = useState<ParsedRow[]>([]);
+  const [accounts, setAccounts] = useState<{ name: string; count: number }[]>([]);
+  const [chosenAccounts, setChosenAccounts] = useState<Set<string>>(new Set());
   const [fileName, setFileName] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [dupItems, setDupItems] = useState<DuplicateReviewItem[]>([]);
@@ -331,13 +340,37 @@ export function ImportStatementDialog() {
         if (detected === "n26") toast.info("This is an N26 export — importing it as N26.");
       }
       const parsed = await parseStatement(text, detected);
-      setRows(parsed);
+
+      // Which account each line came from. An N26 export can hold every
+      // account and Space the login can see — the second N26 file uploaded
+      // was 490 lines of a personal account (Bills, Living Expenses,
+      // Healthcare) and not one line of the company's, and nothing here
+      // looked. With one account in the file it is pre-selected; with more,
+      // none is, and she ticks the business one before anything imports.
+      const counts = new Map<string, number>();
+      for (const r of parsed) if (r.account) counts.set(r.account, (counts.get(r.account) ?? 0) + 1);
+      const found = [...counts.entries()].map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count);
+      const chosen = new Set(found.length === 1 ? [found[0].name] : []);
+      setAccounts(found);
+      setChosenAccounts(chosen);
+      setParsedAll(parsed);
+      setRows(found.length === 0 ? parsed : parsed.filter(r => r.account && chosen.has(r.account)));
       setFileName(file.name);
       if (parsed.length === 0) toast.warning("No completed transactions found in that file.");
     } catch (e) {
       toast.error(String(e instanceof Error ? e.message : e));
       setRows([]);
+      setParsedAll([]);
+      setAccounts([]);
     }
+  };
+
+  const toggleAccount = (name: string, on: boolean) => {
+    const next = new Set(chosenAccounts);
+    if (on) next.add(name); else next.delete(name);
+    setChosenAccounts(next);
+    setRows(parsedAll.filter(r => r.account && next.has(r.account)));
   };
 
   /** Writes the given rows. Everything about identity is decided upstream. */
@@ -362,9 +395,11 @@ export function ImportStatementDialog() {
         subject: r.description,
         counterparty_name: r.counterparty_name,
         is_reconciled: false,
-        raw_data: r.original
-          ? { imported_from: fileName, original_currency: r.original.currency, original_amount: r.original.amount }
-          : { imported_from: fileName },
+        raw_data: {
+          imported_from: fileName,
+          ...(r.account ? { account_name: r.account } : {}),
+          ...(r.original ? { original_currency: r.original.currency, original_amount: r.original.amount } : {}),
+        },
       }));
 
       // Postgres rejects an ON CONFLICT DO UPDATE that would affect the same
@@ -395,6 +430,8 @@ export function ImportStatementDialog() {
       setDupItems([]);
       setOpen(false);
       setRows([]);
+      setParsedAll([]);
+      setAccounts([]);
       setFileName(null);
     } catch (e) {
       toast.error(`Import failed: ${String(e instanceof Error ? e.message : e)}`);
@@ -539,10 +576,39 @@ export function ImportStatementDialog() {
           )}
         </div>
 
+        {accounts.length > 0 && (
+          <div className={`shrink-0 rounded-md border p-3 text-sm ${
+            accounts.length > 1 ? "border-amber-300 bg-amber-50 dark:bg-amber-950/30" : ""}`}>
+            {accounts.length > 1 ? (
+              <p className="mb-2 font-medium">
+                This file holds {accounts.length} accounts. Tick only the company's —
+                personal accounts and Spaces do not belong in the books.
+              </p>
+            ) : (
+              <p className="mb-2 text-muted-foreground">
+                Account in this file — untick it if it is not the company's.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {accounts.map(a => (
+                <label key={a.name} className="flex cursor-pointer items-center gap-2">
+                  <Checkbox
+                    checked={chosenAccounts.has(a.name)}
+                    onCheckedChange={v => toggleAccount(a.name, v === true)}
+                  />
+                  {a.name} <span className="text-muted-foreground">({a.count})</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="min-h-0 flex-1 overflow-auto rounded-md border">
           {rows.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">
-              Choose a CSV to preview what will be imported.
+              {parsedAll.length > 0
+                ? "No account selected — tick the company's account above."
+                : "Choose a CSV to preview what will be imported."}
             </p>
           ) : (
             <Table>

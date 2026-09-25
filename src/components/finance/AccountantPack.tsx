@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { centsToEur, getVatPeriods } from "@/components/finance/financeUtils";
+import { centsToEur, getVatPeriods, isExcludedFromAccounts } from "@/components/finance/financeUtils";
 import {
   FinanceTransaction, FinanceVatReturn, useSetVatReturnStatus,
 } from "@/components/finance/useFinanceTransactions";
@@ -59,6 +59,7 @@ function buildMonths(txs: FinanceTransaction[]): MonthRow[] {
     // 179 of these were typed income or expense and put EUR 38,846 of internal
     // churn through both columns of the accountant's pivot.
     if (t.type === "transfer") continue;
+    if (isExcludedFromAccounts(t)) continue;
     const key = t.transaction_date.slice(0, 7);
     if (!byMonth.has(key)) {
       const [y, m] = key.split("-");
@@ -199,7 +200,8 @@ export function AccountantPack({
     const out: PeriodFigures[] = [];
     for (const year of [...years].sort((a, b) => a - b)) {
       for (const p of getVatPeriods(year)) {
-        const inPeriod = allTxs.filter(t => t.transaction_date >= p.start && t.transaction_date <= p.end);
+        const inPeriod = allTxs.filter(t =>
+          t.transaction_date >= p.start && t.transaction_date <= p.end && !isExcludedFromAccounts(t));
         const outputVat = inPeriod
           .filter(t => t.type === "income")
           .reduce((s, t) => s + (t.vat_collected_cents || vatEur(t)), 0);

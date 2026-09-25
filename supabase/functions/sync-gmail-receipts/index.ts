@@ -48,7 +48,48 @@ const AMOUNT_PATTERNS = [
   /([\d,]+\.?\d{0,2})\s*EUR/gi,
 ];
 
+// ── Is this email a receipt at all? ──────────────────────────────────────────
+//
+// The searches above are deliberately wide ("statement", "payment", any PDF
+// from noreply), so they catch a great deal that is not a purchase: bank T&C
+// updates, newsletters, a sales ROI calculator, a cold pitch. Taking the first
+// euro figure out of those and booking it as an expense put EUR 675,000 of
+// fiction into the ledger by Sep 2026 — an ROI report's "save EUR 85,938",
+// Revolut's savings terms as EUR 100,000, a Seedcorn congratulations as
+// EUR 50,000. The email is still stored, with its PDF; only its amount is
+// withheld until the subject says it is a receipt.
+//
+// Tested against the 780 rows harvested before this existed: it rejects all
+// of the mis-parses above and keeps every receipt that was matched to a bank
+// payment. What it misses (a "you're all set" from Slack, an event
+// registration) lands at EUR 0 with a hint — and the bank line carries that
+// money regardless. A missed receipt costs a manual entry; a false one costs
+// the P&L.
+const RECEIPT_SUBJECT =
+  /\b(receipt|invoice|payment|paid|order|billing|bill|charge|charged|subscription|renewal|refund|credit note|purchase|e-?ticket|ticket|faktura|rachunek|rechnung|factura|facture)\b/i;
+const NOT_A_RECEIPT =
+  /(terms|t&cs|update to your|updating our|congratulations|report|webinar|invest|newsletter|policy|proposal|avatar is ready)/i;
+
+function looksLikeReceipt(subject: string, from: string, mailbox: string | null): boolean {
+  // Her own outgoing mail — an invoice she sent, a forward — is not a
+  // purchase she made. A forwarded receipt duplicates the original anyway.
+  const sender = (from.match(/<([^>]+)>/)?.[1] ?? from).trim().toLowerCase();
+  if (mailbox && sender === mailbox.toLowerCase()) return false;
+  return RECEIPT_SUBJECT.test(subject) && !NOT_A_RECEIPT.test(subject);
+}
+
+// A receipt states its total next to a label. Prefer that to the first euro
+// figure in the text, which is as often a line item, a "was" price or an
+// upsell.
+const TOTAL_PATTERN =
+  /\b(?:grand total|total paid|amount paid|total due|amount due|total charged|total)\s*:?\s*(?:€|EUR)\s*([\d,]+\.?\d{0,2})/i;
+
 function extractAmount(text: string): number | null {
+  const total = TOTAL_PATTERN.exec(text);
+  if (total) {
+    const val = parseFloat(total[1].replace(/,/g, ""));
+    if (!isNaN(val) && val > 0 && val < 1_000_000) return val;
+  }
   for (const pattern of AMOUNT_PATTERNS) {
     pattern.lastIndex = 0;
     const match = pattern.exec(text);
@@ -347,7 +388,9 @@ Deno.serve(async (req: Request) => {
         const bodyText = extractBody(msgData.payload ?? {});
         const snippetText = msgData.snippet ?? "";
         const searchText = `${subject} ${snippetText} ${bodyText}`;
-        const amount = extractAmount(searchText);
+        const parsedAmount = extractAmount(searchText);
+        const isReceipt = looksLikeReceipt(subject, from, mailboxAddress);
+        const amount = isReceipt ? parsedAmount : null;
 
         // Try to download PDF attachment and store in Supabase Storage
         let pdfStoragePath: string | null = null;
@@ -379,7 +422,11 @@ Deno.serve(async (req: Request) => {
 
         const notesObj: Record<string, string> = {};
         if (pdfStoragePath) notesObj.pdf_path = pdfStoragePath;
-        if (amount === null) notesObj.hint = "Amount not parsed — update manually";
+        if (!isReceipt) {
+          notesObj.hint = parsedAmount !== null
+            ? `Not recognised as a receipt, so EUR ${parsedAmount} found in it was not booked. Enter the amount if this is a real purchase.`
+            : "Not recognised as a receipt — enter the amount if this is a real purchase";
+        } else if (amount === null) notesObj.hint = "Amount not parsed — update manually";
 
         const upsertRow: Record<string, unknown> = {
           user_id: user.id,
@@ -416,6 +463,8 @@ Deno.serve(async (req: Request) => {
             from,
             snippet: snippetText.slice(0, 200),
             has_pdf: pdfStoragePath !== null,
+            looks_like_receipt: isReceipt,
+            parsed_amount: parsedAmount,
           },
         };
 
