@@ -2,7 +2,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Campaign } from "@/hooks/useCampaigns";
 import { useActivities } from "@/hooks/useActivities";
@@ -181,7 +180,7 @@ export function CampaignDetailSheet({ campaign, open, onOpenChange }: CampaignDe
           </TabsList>
           
           <TabsContent value="replies" className="flex-1 overflow-hidden mt-4">
-            <ScrollArea className="h-[400px]">
+            <div className="h-[400px] overflow-y-auto">
               {messagesLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
@@ -229,11 +228,11 @@ export function CampaignDetailSheet({ campaign, open, onOpenChange }: CampaignDe
                   <p className="text-sm">No replies yet</p>
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </TabsContent>
 
           <TabsContent value="leads" className="flex-1 overflow-hidden mt-4">
-            <ScrollArea className="h-[400px]">
+            <div className="h-[400px] overflow-y-auto">
               {leadsLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
@@ -262,11 +261,11 @@ export function CampaignDetailSheet({ campaign, open, onOpenChange }: CampaignDe
                   <p className="text-sm">No leads found</p>
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </TabsContent>
 
           <TabsContent value="activity" className="flex-1 overflow-hidden mt-4">
-            <ScrollArea className="h-[400px]">
+            <div className="h-[400px] overflow-y-auto">
               {activitiesLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
@@ -298,7 +297,7 @@ export function CampaignDetailSheet({ campaign, open, onOpenChange }: CampaignDe
                   <p className="text-sm">No activity recorded</p>
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </TabsContent>
         </Tabs>
       </SheetContent>

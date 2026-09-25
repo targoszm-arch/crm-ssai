@@ -7,7 +7,6 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ColumnDefinition, ColumnPreference } from "@/hooks/useColumnPreferences";
 
 interface ColumnSelectorProps {
@@ -63,7 +62,7 @@ export function ColumnSelector({
             Toggle visibility and reorder columns
           </p>
         </div>
-        <ScrollArea className="h-[300px]">
+        <div className="h-[300px] overflow-y-auto">
           <div className="p-2 space-y-1">
             {sortedColumns.map((col, index) => (
               <div
@@ -114,7 +113,7 @@ export function ColumnSelector({
               </div>
             ))}
           </div>
-        </ScrollArea>
+        </div>
         <Separator />
         <div className="p-3">
           <p className="text-xs text-muted-foreground">
