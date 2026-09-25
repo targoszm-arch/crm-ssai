@@ -1738,6 +1738,27 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_sync_tombstones: {
+        Row: {
+          deleted_at: string
+          source: string
+          source_id: string
+          user_id: string
+        }
+        Insert: {
+          deleted_at?: string
+          source: string
+          source_id: string
+          user_id: string
+        }
+        Update: {
+          deleted_at?: string
+          source?: string
+          source_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       finance_tax_rates: {
         Row: {
           applies_to: string

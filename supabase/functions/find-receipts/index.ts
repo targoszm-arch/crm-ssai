@@ -67,6 +67,20 @@ function amountForms(cents: number): string[] {
   ])];
 }
 
+/**
+ * True when one of the amount forms appears as a whole number in the text.
+ * A plain substring test let EUR 2.40 match "EUR 12.40" or "2.405", which is
+ * enough on its own to clear the attach threshold and pin the wrong email to
+ * the row. So the amount may not be preceded by a digit or a separator that
+ * would make it part of a longer number, nor followed by another digit.
+ */
+function amountAppears(text: string, forms: string[]): boolean {
+  return forms.some(f => {
+    const escaped = f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?<![\\d.,])${escaped}(?!\\d)`).test(text);
+  });
+}
+
 const ymd = (d: Date) => `${d.getUTCFullYear()}/${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 
 // deno-lint-ignore no-explicit-any
@@ -280,7 +294,7 @@ Deno.serve(async (req: Request) => {
         const from = getHeader(headers, "from");
         const text = `${subject} ${msg.snippet ?? ""} ${extractBody(msg.payload ?? {})}`;
 
-        const amountFound = [...forms, ...eurForms].some(f => text.includes(f));
+        const amountFound = amountAppears(text, [...forms, ...eurForms]);
         const lcFrom = from.toLowerCase();
         const lcSubject = subject.toLowerCase();
         let score = 0;

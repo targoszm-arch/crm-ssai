@@ -370,13 +370,18 @@ export default function FinancePage() {
   // gain. Three days of overlap catch transactions that completed after the
   // last sync. Deleted rows are also tombstoned server-side, so the overlap
   // cannot bring those back either. With nothing stored yet, the whole history.
-  const syncStartFor = (source: string, fallback: string): string => {
+  const syncStartFor = (
+    source: string,
+    fallback: string,
+    overlapDays = 3,
+    include: (t: FinanceTransaction) => boolean = () => true,
+  ): string => {
     const latest = allTxs
-      .filter(t => t.source === source)
+      .filter(t => t.source === source && include(t))
       .reduce<string | null>((m, t) => (m === null || t.transaction_date > m ? t.transaction_date : m), null);
     if (!latest) return fallback;
     const d = new Date(`${latest}T00:00:00Z`);
-    d.setUTCDate(d.getUTCDate() - 3);
+    d.setUTCDate(d.getUTCDate() - overlapDays);
     return d.toISOString().slice(0, 10);
   };
 
@@ -386,7 +391,13 @@ export default function FinancePage() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
-      const since = syncStartFor("stripe", "2025-01-01");
+      // Anchored on charges only: a charge row's date is Stripe's `created`,
+      // the same field `created[gte]` filters on, whereas a payout row's date
+      // is its arrival date and would push the window past charges created
+      // before it. Fourteen days of overlap because the function keeps only
+      // succeeded charges, and a bank-debit charge can take that long to
+      // succeed after it is created; a shorter window would skip it forever.
+      const since = syncStartFor("stripe", "2025-01-01", 14, t => !(t.source_id ?? "").startsWith("payout_"));
       const { data: fnData, error } = await supabase.functions.invoke("sync-stripe-income", {
         body: { since_timestamp: Math.floor(new Date(`${since}T00:00:00Z`).getTime() / 1000) },
       });
