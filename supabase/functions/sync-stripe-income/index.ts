@@ -64,32 +64,46 @@ Deno.serve(async (req: Request) => {
     if (authError || !user) throw new Error("Unauthorized");
 
     const body = await req.json().catch(() => ({}));
-    const limit = Math.min(body.limit ?? 100, 100);
     // Optional: sync from a specific date
     const sinceTs = body.since_timestamp ? parseInt(body.since_timestamp) : undefined;
 
-    // Fetch Stripe charges
-    const chargesParams = new URLSearchParams({
-      limit: String(limit),
-      expand: ["data.customer", "data.balance_transaction"].join(","),
-    });
-    if (sinceTs) chargesParams.set("created[gte]", String(sinceTs));
+    // Stripe list endpoints return one page and a `has_more` flag. This used
+    // to read the first page only, so anything beyond the latest 100 charges
+    // (50 payouts) was never synced. Walk every page with `starting_after`.
+    //
+    // `expand[]` must be repeated, one field per entry. It was sent as a
+    // single comma-joined `expand=data.customer,data.balance_transaction`,
+    // which Stripe rejects outright — every sync failed with a bare 400.
+    // deno-lint-ignore no-explicit-any
+    async function listAll(path: string, base: Record<string, string>, expand: string[] = []): Promise<any[]> {
+      // deno-lint-ignore no-explicit-any
+      const out: any[] = [];
+      let startingAfter: string | null = null;
+      for (let page = 0; page < 50; page++) {
+        const params = new URLSearchParams({ limit: "100", ...base });
+        for (const e of expand) params.append("expand[]", e);
+        if (sinceTs) params.set("created[gte]", String(sinceTs));
+        if (startingAfter) params.set("starting_after", startingAfter);
+        const res = await fetch(`https://api.stripe.com/v1/${path}?${params}`, {
+          headers: { Authorization: `Bearer ${stripeKey}` },
+        });
+        if (!res.ok) {
+          // Stripe says exactly what it objected to; a bare status code hid it.
+          const detail = await res.json().catch(() => null);
+          throw new Error(`Stripe API error ${res.status} on ${path}: ${detail?.error?.message ?? "no detail"}`);
+        }
+        const json = await res.json();
+        out.push(...(json.data ?? []));
+        if (!json.has_more || !json.data?.length) break;
+        startingAfter = json.data[json.data.length - 1].id;
+      }
+      return out;
+    }
 
-    const chargesRes = await fetch(
-      `https://api.stripe.com/v1/charges?${chargesParams}`,
-      { headers: { Authorization: `Bearer ${stripeKey}` } }
-    );
-    if (!chargesRes.ok) throw new Error(`Stripe API error: ${chargesRes.status}`);
-    const chargesData = await chargesRes.json();
-
-    // Also fetch payouts (actual money to bank)
-    const payoutsParams = new URLSearchParams({ limit: "50" });
-    if (sinceTs) payoutsParams.set("created[gte]", String(sinceTs));
-    const payoutsRes = await fetch(
-      `https://api.stripe.com/v1/payouts?${payoutsParams}`,
-      { headers: { Authorization: `Bearer ${stripeKey}` } }
-    );
-    const payoutsData = payoutsRes.ok ? await payoutsRes.json() : { data: [] };
+    const chargesData = { data: await listAll("charges", {}, ["data.customer", "data.balance_transaction"]) };
+    // Payouts stay best-effort, as before: a key without payout access still
+    // syncs the charges, which are the income.
+    const payoutsData = { data: await listAll("payouts", {}).catch(() => []) };
 
     const upsertRows: Record<string, unknown>[] = [];
 
@@ -139,7 +153,10 @@ Deno.serve(async (req: Request) => {
         user_id: user.id,
         source: "stripe",
         source_id: `payout_${payout.id}`,
-        type: "fee",
+        // Money moving from the Stripe balance to her own bank account: not a
+        // cost and not a sale. Typed "fee" it was counted as a purchase in the
+        // Accountant Pack, so every payout inflated expenses by its full amount.
+        type: "transfer",
         category: "stripe_payout",
         amount_cents: payout.amount,
         currency: payout.currency.toUpperCase(),
