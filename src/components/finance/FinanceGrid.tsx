@@ -27,6 +27,7 @@ import {
   centsToEur, ACCOUNTING_CATEGORIES, ACCOUNTING_CATEGORY_LABELS,
 } from "@/components/finance/financeUtils";
 import { financeGridTheme, financeGridThemeDark } from "@/components/finance/gridTheme";
+import { FinanceBulkActionBar } from "@/components/finance/FinanceBulkActionBar";
 
 /**
  * The transactions ledger, on a real data grid.
@@ -89,6 +90,21 @@ export function FinanceGrid({ rows, taxRates, search, onGridReady, onDisplayedRo
   const deleteTx = useDeleteTransaction();
   const isDark = useIsDark();
   const [pendingDelete, setPendingDelete] = useState<FinanceTransaction | null>(null);
+  const [gridApi, setGridApi] = useState<GridApi<FinanceTransaction> | null>(null);
+  const [selected, setSelected] = useState<FinanceTransaction[]>([]);
+  const clearSelection = useCallback(() => gridApi?.deselectAll(), [gridApi]);
+
+  // Checkbox column, pinned left beside the date. Click-to-select is off so a
+  // click into an editable cell edits it rather than changing the selection;
+  // the header box selects what the current filters show, not rows hidden by
+  // them, so a bulk action never reaches a row that is not on screen.
+  const rowSelection = useMemo(() => ({
+    mode: "multiRow" as const,
+    checkboxes: true,
+    headerCheckbox: true,
+    enableClickSelection: false,
+    selectAll: "filtered" as const,
+  }), []);
 
   const taxRateNames = useMemo(
     () => ["", ...taxRates.filter(r => r.is_active).map(r => r.name)],
@@ -285,7 +301,9 @@ export function FinanceGrid({ rows, taxRates, search, onGridReady, onDisplayedRo
   }), []);
 
   return (
-    <div className="h-full w-full">
+    <div className="flex h-full w-full flex-col">
+      <FinanceBulkActionBar selected={selected} taxRates={taxRates} onClear={clearSelection} />
+      <div className="min-h-0 flex-1">
       <AgGridReact<FinanceTransaction>
         theme={isDark ? financeGridThemeDark : financeGridTheme}
         rowData={rows}
@@ -296,7 +314,11 @@ export function FinanceGrid({ rows, taxRates, search, onGridReady, onDisplayedRo
         getRowId={p => p.data.id}
         quickFilterText={search}
         onCellValueChanged={onCellValueChanged}
+        rowSelection={rowSelection}
+        selectionColumnDef={{ pinned: "left", width: 44 }}
+        onSelectionChanged={e => setSelected(e.api.getSelectedRows())}
         onGridReady={(e: GridReadyEvent<FinanceTransaction>) => {
+          setGridApi(e.api);
           onGridReady?.(e.api);
           onDisplayedRowsChanged?.(e.api.getDisplayedRowCount());
         }}
@@ -312,6 +334,7 @@ export function FinanceGrid({ rows, taxRates, search, onGridReady, onDisplayedRo
         headerHeight={38}
         overlayNoRowsTemplate="No transactions match these filters."
       />
+      </div>
 
       <AlertDialog
         open={pendingDelete !== null}
