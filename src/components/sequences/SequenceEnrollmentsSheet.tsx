@@ -8,7 +8,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import {
   DropdownMenu,
@@ -101,7 +100,7 @@ export function SequenceEnrollmentsSheet({
           </div>
         </div>
 
-        <ScrollArea className="h-[calc(100vh-250px)]">
+        <div className="h-[calc(100vh-250px)] overflow-y-auto">
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -222,7 +221,7 @@ export function SequenceEnrollmentsSheet({
               })}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </SheetContent>
     </Sheet>
   );
