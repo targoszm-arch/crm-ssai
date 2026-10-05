@@ -136,9 +136,12 @@ export function useCreateContact() {
   
   return useMutation({
     mutationFn: async (contact: ContactInsert) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       const { data, error } = await supabase
         .from("contacts")
-        .insert(contact)
+        .insert({ ...contact, user_id: user.id })
         .select()
         .single();
       
